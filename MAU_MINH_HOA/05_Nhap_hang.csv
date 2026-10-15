@@ -1,0 +1,3 @@
+﻿Mã phiếu nhập,Ngày đặt hàng,Ngày thực nhận,Mã nguyên liệu,Số lượng thực nhận,Đơn vị,Giá vốn mỗi đơn vị cơ sở (đồng),Mã chứng từ nguồn
+PO001,2026-10-09,2026-10-10,ING001,10000,g,30,invoice_demo_001
+PO002,2026-10-10,2026-10-11,ING002,5000,ml,15,invoice_demo_002

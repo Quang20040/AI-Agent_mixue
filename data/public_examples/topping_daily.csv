@@ -1,0 +1,4 @@
+﻿business_date,store_id,prepared_ingredient_id,prepared_qty,wasted_qty,unit,carry_in_qty,carry_out_qty,reason,source_id
+2026-10-10,STORE_DEMO,ING001,5000,800,g,0,0,,closing_20261010
+2026-10-11,STORE_DEMO,ING001,6000,1500,g,0,0,,closing_20261011
+2026-10-12,STORE_DEMO,ING001,5000,300,g,0,0,,closing_20261012

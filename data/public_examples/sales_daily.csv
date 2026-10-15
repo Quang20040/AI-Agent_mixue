@@ -1,0 +1,4 @@
+﻿business_date,store_id,sku_id,quantity_sold,revenue_vnd,source_id,verification_status
+2026-10-10,STORE_DEMO,SKU001,42,1218000,report_20261010,verified
+2026-10-10,STORE_DEMO,SKU002,25,375000,report_20261010,verified
+2026-10-11,STORE_DEMO,SKU001,38,1102000,report_20261011,verified

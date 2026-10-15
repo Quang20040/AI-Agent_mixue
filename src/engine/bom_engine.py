@@ -1,0 +1,200 @@
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+
+from datetime import date
+from decimal import Decimal
+import pandas as pd
+from sqlalchemy import func
+from src.database import SessionLocal
+from src.models import (
+    MenuItem, Ingredient, RecipeBOM, SalesDaily, Purchase, StockCount, ToppingDaily
+)
+
+class BOMEngine:
+    def __init__(self, db_session=None):
+        self.db = db_session or SessionLocal()
+
+    def close(self):
+        if self.db:
+            self.db.close()
+
+    def get_sales_summary(self, start_date=None, end_date=None):
+        """Aggregate sales revenue, quantity, and top SKUs."""
+        query = self.db.query(
+            SalesDaily.business_date,
+            SalesDaily.sku_id,
+            MenuItem.sku_name,
+            MenuItem.variant,
+            SalesDaily.quantity_sold,
+            SalesDaily.revenue_vnd
+        ).join(MenuItem, SalesDaily.sku_id == MenuItem.sku_id)
+
+        if start_date:
+            query = query.filter(SalesDaily.business_date >= start_date)
+        if end_date:
+            query = query.filter(SalesDaily.business_date <= end_date)
+
+        rows = query.all()
+        df = pd.DataFrame(rows, columns=[
+            "business_date", "sku_id", "sku_name", "variant", "quantity_sold", "revenue_vnd"
+        ])
+        if df.empty:
+            return df
+        df["revenue_vnd"] = df["revenue_vnd"].astype(float)
+        df["quantity_sold"] = df["quantity_sold"].astype(int)
+        return df
+
+    def get_daily_revenue_breakdown(self, start_date=None, end_date=None):
+        """Aggregate daily revenue, cups sold, AOV, DoD growth, and top-selling SKU per day."""
+        sales_df = self.get_sales_summary(start_date=start_date, end_date=end_date)
+        if sales_df.empty:
+            return pd.DataFrame()
+
+        dow_map = {
+            0: "Thứ 2", 1: "Thứ 3", 2: "Thứ 4", 3: "Thứ 5",
+            4: "Thứ 6", 5: "Thứ 7", 6: "Chủ Nhật"
+        }
+
+        daily = sales_df.groupby("business_date").agg({
+            "revenue_vnd": "sum",
+            "quantity_sold": "sum"
+        }).reset_index().sort_values(by="business_date", ascending=True)
+
+        daily["date_dt"] = pd.to_datetime(daily["business_date"])
+        daily["day_of_week"] = daily["date_dt"].dt.dayofweek.map(dow_map)
+        daily["avg_price_per_cup"] = (daily["revenue_vnd"] / daily["quantity_sold"]).round(0)
+        daily["dod_growth_pct"] = (daily["revenue_vnd"].pct_change() * 100).round(1).fillna(0.0)
+
+        top_sku_per_day = {}
+        for b_date, grp in sales_df.groupby("business_date"):
+            best_row = grp.sort_values(by="quantity_sold", ascending=False).iloc[0]
+            top_sku_per_day[b_date] = f"{best_row['sku_name']} ({int(best_row['quantity_sold'])} ly)"
+
+        daily["top_seller"] = daily["business_date"].map(top_sku_per_day)
+        daily.drop(columns=["date_dt"], inplace=True)
+        return daily
+
+    def calculate_theoretical_consumption(self, start_date=None, end_date=None):
+        """BOM Explosion: Explode daily sales into theoretical ingredient usage."""
+        query = self.db.query(
+            SalesDaily.business_date,
+            SalesDaily.sku_id,
+            MenuItem.sku_name,
+            SalesDaily.quantity_sold,
+            RecipeBOM.ingredient_id,
+            Ingredient.ingredient_name,
+            Ingredient.ingredient_group,
+            RecipeBOM.quantity_per_item,
+            RecipeBOM.unit
+        ).join(MenuItem, SalesDaily.sku_id == MenuItem.sku_id)\
+         .join(RecipeBOM, SalesDaily.sku_id == RecipeBOM.sku_id)\
+         .join(Ingredient, RecipeBOM.ingredient_id == Ingredient.ingredient_id)
+
+        if start_date:
+            query = query.filter(SalesDaily.business_date >= start_date)
+        if end_date:
+            query = query.filter(SalesDaily.business_date <= end_date)
+
+        rows = query.all()
+        if not rows:
+            return pd.DataFrame()
+
+        df = pd.DataFrame(rows, columns=[
+            "business_date", "sku_id", "sku_name", "quantity_sold",
+            "ingredient_id", "ingredient_name", "ingredient_group",
+            "quantity_per_item", "unit"
+        ])
+        df["quantity_sold"] = df["quantity_sold"].astype(float)
+        df["quantity_per_item"] = df["quantity_per_item"].astype(float)
+        df["theoretical_usage"] = df["quantity_sold"] * df["quantity_per_item"]
+
+        # Aggregate by ingredient
+        agg = df.groupby(["ingredient_id", "ingredient_name", "ingredient_group", "unit"], as_index=False).agg({
+            "theoretical_usage": "sum"
+        })
+        agg["theoretical_usage"] = agg["theoretical_usage"].round(2)
+        agg = agg.sort_values(by="theoretical_usage", ascending=False)
+        return agg
+
+    def get_topping_waste_summary(self, start_date=None, end_date=None):
+        """Analyze prepared vs wasted quantities for toppings."""
+        query = self.db.query(
+            ToppingDaily.prepared_ingredient_id,
+            Ingredient.ingredient_name,
+            func.sum(ToppingDaily.prepared_qty).label("total_prepared"),
+            func.sum(ToppingDaily.wasted_qty).label("total_wasted"),
+            ToppingDaily.unit
+        ).join(Ingredient, ToppingDaily.prepared_ingredient_id == Ingredient.ingredient_id)
+
+        if start_date:
+            query = query.filter(ToppingDaily.business_date >= start_date)
+        if end_date:
+            query = query.filter(ToppingDaily.business_date <= end_date)
+
+        query = query.group_by(ToppingDaily.prepared_ingredient_id, Ingredient.ingredient_name, ToppingDaily.unit)
+        rows = query.all()
+        if not rows:
+            return pd.DataFrame()
+
+        df = pd.DataFrame(rows, columns=[
+            "prepared_ingredient_id", "ingredient_name", "total_prepared", "total_wasted", "unit"
+        ])
+        df["total_prepared"] = df["total_prepared"].astype(float)
+        df["total_wasted"] = df["total_wasted"].astype(float)
+        df["total_used"] = df["total_prepared"] - df["total_wasted"]
+        df["waste_rate_pct"] = ((df["total_wasted"] / df["total_prepared"]) * 100).round(2)
+        df = df.sort_values(by="waste_rate_pct", ascending=False)
+        return df
+
+    def calculate_inventory_reconciliation(self):
+        """Variance analysis comparing theoretical usage, purchases, waste, and stock counts."""
+        # 1. Total purchases received per ingredient
+        purch_query = self.db.query(
+            Purchase.ingredient_id,
+            func.sum(Purchase.quantity_received).label("total_purchased"),
+            Purchase.unit
+        ).group_by(Purchase.ingredient_id, Purchase.unit)
+        purch_df = pd.DataFrame(purch_query.all(), columns=["ingredient_id", "total_purchased", "unit"])
+        if not purch_df.empty:
+            purch_df["total_purchased"] = purch_df["total_purchased"].astype(float)
+
+        # 2. Latest stock count per ingredient
+        latest_count_date = self.db.query(func.max(StockCount.business_date)).scalar()
+        stk_query = self.db.query(
+            StockCount.ingredient_id,
+            StockCount.quantity_counted.label("actual_stock_count"),
+            StockCount.unit
+        ).filter(StockCount.business_date == latest_count_date)
+        stk_df = pd.DataFrame(stk_query.all(), columns=["ingredient_id", "actual_stock_count", "unit"])
+        if not stk_df.empty:
+            stk_df["actual_stock_count"] = stk_df["actual_stock_count"].astype(float)
+
+        # 3. Theoretical consumption
+        cons_df = self.calculate_theoretical_consumption()
+
+        # Merge for reconciliation
+        merged = pd.merge(stk_df, purch_df, on=["ingredient_id", "unit"], how="left")
+        merged = pd.merge(merged, cons_df[["ingredient_id", "ingredient_name", "theoretical_usage"]], on="ingredient_id", how="left")
+        merged = merged.fillna(0)
+
+        merged["expected_stock"] = merged["total_purchased"] - merged["theoretical_usage"]
+        merged["variance"] = merged["actual_stock_count"] - merged["expected_stock"]
+        merged["variance_pct"] = (merged["variance"] / merged["total_purchased"].replace(0, 1) * 100).round(2)
+
+        return merged
+
+if __name__ == "__main__":
+    engine = BOMEngine()
+    print("=== THEORETICAL CONSUMPTION (TOP 10) ===")
+    cons = engine.calculate_theoretical_consumption()
+    print(cons.head(10).to_string(index=False))
+
+    print("\n=== TOPPING WASTE SUMMARY ===")
+    waste = engine.get_topping_waste_summary()
+    print(waste.to_string(index=False))
+
+    print("\n=== INVENTORY RECONCILIATION ===")
+    recon = engine.calculate_inventory_reconciliation()
+    print(recon.head(10).to_string(index=False))
+    engine.close()

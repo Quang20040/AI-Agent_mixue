@@ -1,0 +1,4 @@
+﻿recipe_id,sku_id,ingredient_id,quantity_per_item,unit,effective_from,effective_to,is_optional
+RCP001v1,SKU001,ING001,30,g,2026-09-01,,false
+RCP001v1,SKU001,ING002,40,ml,2026-09-01,,false
+RCP002v1,SKU002,ING003,1,pcs,2026-09-01,,false

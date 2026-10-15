@@ -1,0 +1,3 @@
+﻿count_id,counted_at,business_date,ingredient_id,quantity_counted,unit,verified_by_role
+CNT001,2026-10-10T22:00:00+07:00,2026-10-10,ING001,3500,g,manager
+CNT002,2026-10-11T22:00:00+07:00,2026-10-11,ING001,2100,g,manager

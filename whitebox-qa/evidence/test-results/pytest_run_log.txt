@@ -1,0 +1,72 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.12.6, pytest-8.4.2, pluggy-1.6.0 -- C:\Users\Admin\AppData\Local\Programs\Python\Python312\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\Admin\OneDrive\Desktop\DATN\AI-Agent_mixue
+plugins: anyio-4.12.1, langsmith-0.12.6, asyncio-1.4.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 46 items
+
+tests/test_agent.py::test_agent_sales_tool PASSED                        [  2%]
+tests/test_agent.py::test_agent_forecast_tool PASSED                     [  4%]
+tests/test_agent.py::test_agent_prep_tool PASSED                         [  6%]
+tests/test_agent.py::test_agent_replenishment_tool PASSED                [  8%]
+tests/test_agent.py::test_sticker_decoder_numeric_code PASSED            [ 10%]
+tests/test_agent.py::test_rbac_approval_enforcement PASSED               [ 13%]
+tests/test_agent.py::test_agent_staff_can_query_recipes_and_prep PASSED  [ 15%]
+tests/test_agent.py::test_agent_staff_cannot_query_sales_or_inventory_or_po PASSED [ 17%]
+tests/test_agent.py::test_agent_admin_can_query_all_topics PASSED        [ 19%]
+tests/test_agent.py::test_agent_salary_guardrail PASSED                  [ 21%]
+tests/test_agent.py::test_agent_admin_deep_queries PASSED                [ 23%]
+tests/test_agent.py::test_agent_date_aware_sales_query PASSED            [ 26%]
+tests/test_agent.py::test_agent_conversation_memory_follow_up PASSED     [ 28%]
+tests/test_agent.py::test_agent_targeted_concise_qa PASSED               [ 30%]
+tests/test_bom.py::test_sales_summary_non_empty PASSED                   [ 32%]
+tests/test_bom.py::test_theoretical_consumption_units_and_positivity PASSED [ 34%]
+tests/test_bom.py::test_topping_waste_summary PASSED                     [ 36%]
+tests/test_bom.py::test_inventory_reconciliation PASSED                  [ 39%]
+tests/test_daily_stock_crud.py::test_cell_manual_update_and_delete PASSED [ 41%]
+tests/test_daily_stock_crud.py::test_movement_create_update_delete PASSED [ 43%]
+tests/test_daily_stock_crud.py::test_matrix_calculation_reflects_changes PASSED [ 45%]
+tests/test_dashboard.py::test_unauthenticated_login_screen PASSED        [ 47%]
+tests/test_dashboard.py::test_dashboard_admin_full_access PASSED         [ 50%]
+tests/test_dashboard.py::test_dashboard_staff_restricted_access PASSED   [ 52%]
+tests/test_dashboard.py::test_dashboard_logout_flow PASSED               [ 54%]
+tests/test_employee_rbac.py::test_create_employee_flow PASSED            [ 56%]
+tests/test_employee_rbac.py::test_password_change_validation PASSED      [ 58%]
+tests/test_employee_rbac.py::test_admin_reset_password_flow PASSED       [ 60%]
+tests/test_employee_rbac.py::test_get_all_employees_includes_fields PASSED [ 63%]
+tests/test_employee_rbac.py::test_daily_stock_matrix_and_export PASSED   [ 65%]
+tests/test_employee_rbac.py::test_maker_checker_stock_approval_workflow PASSED [ 67%]
+tests/test_employee_rbac.py::test_manual_stock_editing_and_batch_editor PASSED [ 69%]
+tests/test_forecasting.py::test_forecast_demand_all_skus PASSED          [ 71%]
+tests/test_forecasting.py::test_backtest_metrics_validity PASSED         [ 73%]
+tests/test_optimizer.py::test_topping_prep_batch_rounding PASSED         [ 76%]
+tests/test_optimizer.py::test_replenishment_po_pack_rounding PASSED      [ 78%]
+tests/test_optimizer.py::test_validator_rejects_negative_or_invalid_unit PASSED [ 80%]
+tests/test_retro_15days_evaluation.py::test_day04_system_prompt_5_blocks PASSED [ 82%]
+tests/test_retro_15days_evaluation.py::test_day11_red_teaming_5_adversarial_vectors PASSED [ 84%]
+tests/test_retro_15days_evaluation.py::test_day03_08_react_evidence_tracing_and_grounding PASSED [ 86%]
+tests/test_retro_15days_evaluation.py::test_day01_04_targeted_concise_response_token_saving PASSED [ 89%]
+tests/test_retro_15days_evaluation.py::test_day05_11_human_in_the_loop_governance PASSED [ 91%]
+tests/test_shift_closing.py::test_90_days_sales_data_coverage PASSED     [ 93%]
+tests/test_shift_closing.py::test_shift_reports_seed_and_closing_summary FAILED [ 95%]
+tests/test_shift_closing.py::test_shift_ai_ocr_extraction PASSED         [ 97%]
+tests/test_shift_closing.py::test_agent_targeted_shift_revenue_qa FAILED [100%]
+
+================================== FAILURES ===================================
+_________________ test_shift_reports_seed_and_closing_summary _________________
+tests\test_shift_closing.py:67: in test_shift_reports_seed_and_closing_summary
+    assert toi["signed_by"] == "An"
+E   AssertionError: assert 'Anh' == 'An'
+E     
+E     - An
+E     + Anh
+E     ?   +
+____________________ test_agent_targeted_shift_revenue_qa _____________________
+tests\test_shift_closing.py:124: in test_agent_targeted_shift_revenue_qa
+    assert "Khá»›p tuyá»‡t Ä‘á»‘i" in r_close["text"]
+E   AssertionError: assert 'Khá»›p tuyá»‡t Ä‘á»‘i' in 'ðŸ“Š **BÃ¡o CÃ¡o Tá»•ng Há»£p Chá»‘t Ca Cuá»‘i NgÃ y 14/10/2026:**\n\n- **ðŸ’Ž Tá»•ng thá»±c thu vá»:** **9,877,000 Ä‘**\n- **Tiá»n máº·t gom cáº£ ngÃ y:** **3,260,000 Ä‘** (KÃ©t cá»‘ Ä‘á»‹nh: 1,000,000 Ä‘)\n- **Chuyá»ƒn khoáº£n ngÃ¢n hÃ ng:** **6,377,000 Ä‘**\n- **á»¨ng dá»¥ng giao hÃ ng:** ShopeeFood 115,000 Ä‘ | GrabFood 104,000 Ä‘\n- **Khoáº£n chi phÃ¡t sinh trong ca:** **56,000 Ä‘** (ship sáº¡c pin, ship Ä‘Æ¡n)\n- **NgÆ°á»i chá»‘t sá»• & cáº§m tiá»n máº·t:** **Anh**\n- **Äá»‘i soÃ¡t mÃ¡y POS:** Doanh thu POS **10,119,000 Ä‘** (Thá»±c thu POS: **10,119,000 Ä‘** âž” Lá»‡ch -242,000 Ä‘ so vá»›i mÃ¡y POS)'
+=========================== short test summary info ===========================
+FAILED tests/test_shift_closing.py::test_shift_reports_seed_and_closing_summary
+FAILED tests/test_shift_closing.py::test_agent_targeted_shift_revenue_qa - As...
+================== 2 failed, 44 passed in 203.59s (0:03:23) ===================

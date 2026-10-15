@@ -1,0 +1,314 @@
+{
+  "DK1": {
+    "name": "Kem ốc quế",
+    "source_name": "Kem Ốc Quế Mixue",
+    "source_page": "https://mixuevietnam.net/",
+    "source_url": "https://mixuevietnam.net/wp-content/uploads/2024/07/Kem-Oc-Que-500x500.jpg",
+    "file": "products/DK1.webp",
+    "variant_note": ""
+  },
+  "DK2": {
+    "name": "Super sundae Dâu tây",
+    "source_name": "Super Sundae Dâu Tây",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt36qy88pa42@resize_w400_nl",
+    "file": "products/DK2.webp",
+    "variant_note": ""
+  },
+  "DK3": {
+    "name": "Super sundae Việt Quất",
+    "source_name": "Super Sundae Buff Xanh",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mq0xm1xbr7ym67@resize_w400_nl",
+    "file": "products/DK3.webp",
+    "variant_note": "Ảnh phiên bản Việt quất hiện tại"
+  },
+  "DK4": {
+    "name": "Super sundae Đào Hồng",
+    "source_name": "Super Sundae Đào Hồng",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt38sqpxjh5f@resize_w400_nl",
+    "file": "products/DK4.webp",
+    "variant_note": ""
+  },
+  "DK5": {
+    "name": "Super sundae Đào Vàng",
+    "source_name": "Super Sundae Đào Vàng",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt376jb9j4cc@resize_w400_nl",
+    "file": "products/DK5.webp",
+    "variant_note": ""
+  },
+  "DK6": {
+    "name": "Super sundae Ococo",
+    "source_name": "Super Sundae O-coco",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt398cibrfb9@resize_w400_nl",
+    "file": "products/DK6.webp",
+    "variant_note": ""
+  },
+  "DK7": {
+    "name": "Lucky sundae Dâu tây",
+    "source_name": "Lucky Sundae Dâu Tây",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt37pe9tla95@resize_w400_nl",
+    "file": "products/DK7.webp",
+    "variant_note": ""
+  },
+  "DK8": {
+    "name": "Lucky sundae Ococo",
+    "source_name": "Lucky Sundae O-coco",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt3ac1ab6548@resize_w400_nl",
+    "file": "products/DK8.webp",
+    "variant_note": ""
+  },
+  "DK9": {
+    "name": "Super sundae Trân châu đường đen",
+    "source_name": "Super Sundae Trân Châu Đường Đen",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt38c4vo5ndb@resize_w400_nl",
+    "file": "products/DK9.webp",
+    "variant_note": ""
+  },
+  "DK10": {
+    "name": "Super sundae Xoài",
+    "source_name": "Super Sundae Xoài",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt3585vua50b@resize_w400_nl",
+    "file": "products/DK10.webp",
+    "variant_note": ""
+  },
+  "TS1": {
+    "name": "Trà sữa trân châu",
+    "source_name": "Trà Sữa Trân Châu",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt3k8cmz9c3c@resize_w400_nl",
+    "file": "products/TS1.webp",
+    "variant_note": ""
+  },
+  "TS2": {
+    "name": "Trà sữa trân châu đường đen",
+    "source_name": "Trà Sữa Trân Châu Đường Đen",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt3ilaptkyb9@resize_w400_nl",
+    "file": "products/TS2.webp",
+    "variant_note": ""
+  },
+  "TS3": {
+    "name": "Trà sữa 2J",
+    "source_name": "Trà Sữa 2J",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt3j5hlclc45@resize_w400_nl",
+    "file": "products/TS3.webp",
+    "variant_note": ""
+  },
+  "TS4": {
+    "name": "Trà sữa thạch dừa",
+    "source_name": "Trà Sữa Thạch Dừa",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt3eqpfhmo1f@resize_w400_nl",
+    "file": "products/TS4.webp",
+    "variant_note": ""
+  },
+  "TS5": {
+    "name": "Trà sữa thạch đường đen",
+    "source_name": "Trà Sữa Thạch Đường Đen",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt3hy8wu1a48@resize_w400_nl",
+    "file": "products/TS5.webp",
+    "variant_note": ""
+  },
+  "TS6": {
+    "name": "Trà sữa Ococo",
+    "source_name": "Trà sữa O-coco",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt3bu6vpcf18@resize_w400_nl",
+    "file": "products/TS6.webp",
+    "variant_note": ""
+  },
+  "TS7": {
+    "name": "Trà sữa Caramel",
+    "source_name": "Trà Sữa Caramel",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt3jpbfoct30@resize_w400_nl",
+    "file": "products/TS7.webp",
+    "variant_note": ""
+  },
+  "TS8": {
+    "name": "Trà sữa 2J size L",
+    "source_name": "Trà Sữa 2J",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt3j5hlclc45@resize_w400_nl",
+    "file": "products/TS8.webp",
+    "variant_note": ""
+  },
+  "TS9": {
+    "name": "Trà sữa thạch dừa size L",
+    "source_name": "Trà Sữa Thạch Dừa",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt3eqpfhmo1f@resize_w400_nl",
+    "file": "products/TS9.webp",
+    "variant_note": ""
+  },
+  "TS10": {
+    "name": "Trà sữa thạch đường đen size L",
+    "source_name": "Trà Sữa Thạch Đường Đen",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt3hy8wu1a48@resize_w400_nl",
+    "file": "products/TS10.webp",
+    "variant_note": ""
+  },
+  "TS11": {
+    "name": "Trà sữa Bá Vương",
+    "source_name": "Trà Sữa Bá Vương",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt3cfvofm333@resize_w400_nl",
+    "file": "products/TS11.webp",
+    "variant_note": ""
+  },
+  "THQ1": {
+    "name": "Nước chanh tươi lạnh",
+    "source_name": "Nước Chanh Tươi Lạnh",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt3nhbqozy9a@resize_w400_nl",
+    "file": "products/THQ1.webp",
+    "variant_note": ""
+  },
+  "THQ2": {
+    "name": "Trà xanh chanh",
+    "source_name": "Trà Xanh Chanh",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt3mzl8tfydf@resize_w400_nl",
+    "file": "products/THQ2.webp",
+    "variant_note": ""
+  },
+  "THQ3": {
+    "name": "Trà xanh hoa đào",
+    "source_name": "Trà Xanh Hoa Đào",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt3r9v1tsda2@resize_w400_nl",
+    "file": "products/THQ3.webp",
+    "variant_note": ""
+  },
+  "THQ4": {
+    "name": "Trà đào bigsize",
+    "source_name": "Trà Đào Bigsize",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt3p8ay3gv0b@resize_w400_nl",
+    "file": "products/THQ4.webp",
+    "variant_note": ""
+  },
+  "THQ5": {
+    "name": "Trà đào dâu tây",
+    "source_name": "Trà Đào Dâu Tây",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt3pvb1bls85@resize_w400_nl",
+    "file": "products/THQ5.webp",
+    "variant_note": ""
+  },
+  "THQ6": {
+    "name": "Trà cam dâu tây",
+    "source_name": "Trà Cam Dâu Tây",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt3o2zeosuc1@resize_w400_nl",
+    "file": "products/THQ6.webp",
+    "variant_note": ""
+  },
+  "THQ7": {
+    "name": "Trà cam vàng",
+    "source_name": "Trà Cam Vàng 9999",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt3mbzw3da5a@resize_w400_nl",
+    "file": "products/THQ7.webp",
+    "variant_note": ""
+  },
+  "THQ8": {
+    "name": "Trà Việt Quất",
+    "source_name": "Trà Việt Quất Triple Kill",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mq0xm8qaxtz6bc@resize_w400_nl",
+    "file": "products/THQ8.webp",
+    "variant_note": "Ảnh phiên bản Việt quất hiện tại"
+  },
+  "THQ9": {
+    "name": "Chanh leo bách hương",
+    "source_name": "Chanh Leo Bách Hương",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt3qc8cjyndb@resize_w400_nl",
+    "file": "products/THQ9.webp",
+    "variant_note": ""
+  },
+  "THQ10": {
+    "name": "Trà xoài chanh leo",
+    "source_name": "Trà Xoài Chanh Leo",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt3qu0ivi875@resize_w400_nl",
+    "file": "products/THQ10.webp",
+    "variant_note": ""
+  },
+  "THQ11": {
+    "name": "Trà chanh lô hội",
+    "source_name": "Trà Chanh Lô Hội",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt3lbcabcw27@resize_w400_nl",
+    "file": "products/THQ11.webp",
+    "variant_note": ""
+  },
+  "THQ12": {
+    "name": "Liên minh cam xoài",
+    "source_name": "Liên Minh Cam Xoài",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt3ku05csgae@resize_w400_nl",
+    "file": "products/THQ12.webp",
+    "variant_note": ""
+  },
+  "ST1": {
+    "name": "Sữa thạch dâu tây",
+    "source_name": "Sữa Thạch Dâu Tây",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt3ec02dc2a7@resize_w400_nl",
+    "file": "products/ST1.webp",
+    "variant_note": ""
+  },
+  "ST2": {
+    "name": "Sữa Việt Quất",
+    "source_name": "Sữa Việt Quất Hồi Mana",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mq0xm87pt7gr32@resize_w400_nl",
+    "file": "products/ST2.webp",
+    "variant_note": "Ảnh phiên bản Việt quất hiện tại"
+  },
+  "ST3": {
+    "name": "Dương chi cam lộ",
+    "source_name": "Dương Chi Cam Lộ",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt3omznf9n79@resize_w400_nl",
+    "file": "products/ST3.webp",
+    "variant_note": ""
+  },
+  "CF1": {
+    "name": "Cà phê latte kem tươi",
+    "source_name": "Cafe Latte Kem Tươi",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mpjt3uk5kaof89@resize_w400_nl",
+    "file": "products/CF1.webp",
+    "variant_note": ""
+  },
+  "CF2": {
+    "name": "Cà phê latte",
+    "source_name": "Cafe Latte",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mq565tjarcwdcf@resize_w400_nl",
+    "file": "products/CF2.webp",
+    "variant_note": ""
+  },
+  "CF3": {
+    "name": "Americano",
+    "source_name": "Americano",
+    "source_page": "https://mixuevn.net/",
+    "source_url": "https://down-vn.img.susercontent.com/file/vn-11134517-81ztc-mq565uo6jbpr4f@resize_w400_nl",
+    "file": "products/CF3.webp",
+    "variant_note": ""
+  }
+}

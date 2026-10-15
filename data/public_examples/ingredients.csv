@@ -1,0 +1,4 @@
+﻿ingredient_id,ingredient_name,base_unit,unit_cost_vnd,ingredient_group,shelf_life_rule_id
+ING001,Topping A,g,30,prepared_topping,RULE_A
+ING002,Nguyen Lieu B,ml,15,syrup,
+ING003,Ly Dung,pcs,700,packaging,
