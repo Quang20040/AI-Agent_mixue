@@ -1,12 +1,12 @@
 """Mixue presentation components; business data comes from the existing engines."""
 import base64
 import json
+import unicodedata
+from datetime import datetime
 from functools import lru_cache
 from html import escape
 from pathlib import Path
-import unicodedata
 
-import pandas as pd
 import streamlit as st
 
 HERE = Path(__file__).resolve().parent
@@ -247,6 +247,7 @@ def _apply_login_session(user):
     st.session_state["user_title"] = user["title"]
     st.session_state["user_badge"] = user["badge"]
     st.session_state["must_change_password"] = bool(user.get("must_change_password", False))
+    st.session_state["last_activity"] = datetime.now()
 
 
 def render_force_change_password_screen():
@@ -314,7 +315,7 @@ def render_login_screen():
         render_brand_hero(login=True)
     with c_card:
         st.markdown(
-            f'''
+            '''
             <div class="login-welcome"><span>CHÀO MỪNG TRỞ LẠI ✦</span><h2>Ca làm vui vẻ<br>bắt đầu từ đây.</h2><p>Đăng nhập để cùng Tuyết Vương chăm sóc cửa hàng Mixue 39 Tôn Quang Phiệt.</p></div>
             ''',
             unsafe_allow_html=True
@@ -330,13 +331,16 @@ def render_login_screen():
                 submitted = st.form_submit_button("Đăng nhập vào Hệ thống 🚀", type="primary", use_container_width=True)
 
                 if submitted:
-                    user = verify_user(username, password)
-                    if user:
-                        _apply_login_session(user)
-                        st.success(f"Đăng nhập thành công! Xin chào {user['name']}.")
-                        st.rerun()
+                    if not username.strip() or not password.strip():
+                        st.warning("⚠️ Vui lòng nhập đầy đủ Tên đăng nhập và Mật khẩu.")
                     else:
-                        st.error("Tên đăng nhập hoặc mật khẩu không chính xác! Vui lòng thử lại.")
+                        user = verify_user(username.strip(), password.strip())
+                        if user:
+                            _apply_login_session(user)
+                            st.success(f"Đăng nhập thành công! Xin chào {user['name']}.")
+                            st.rerun()
+                        else:
+                            st.error("Tên đăng nhập hoặc mật khẩu không chính xác! Vui lòng thử lại.")
 
         st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
 
@@ -416,9 +420,8 @@ def _render_chat_conversation(agent, role, user_name, history_height=250, key_su
 
     if prompt:
         st.session_state.chat_history_vi.append({'role': 'user', 'content': prompt})
-        with history:
-            with st.chat_message('user'):
-                st.markdown(prompt)
+        with history, st.chat_message('user'):
+            st.markdown(prompt)
         thinking_slot.markdown(
             f'''<div class="snowking-thinking-card">
             {snow_king_image(42, mode="thinking")}
@@ -442,12 +445,11 @@ def _render_chat_conversation(agent, role, user_name, history_height=250, key_su
             reply_msg = {'role': 'assistant', 'content': 'Mình chưa truy xuất được dữ liệu. Bạn hãy thử lại hoặc kiểm tra kết nối dữ liệu cửa hàng.'}
         st.session_state.chat_history_vi.append(reply_msg)
         thinking_slot.empty()
-        with history:
-            with st.chat_message('assistant', avatar=assistant_avatar):
-                st.markdown(reply_msg['content'])
-                if reply_msg.get('evidence'):
-                    with st.expander('Nguồn dữ liệu'):
-                        st.write(reply_msg['evidence'])
+        with history, st.chat_message('assistant', avatar=assistant_avatar):
+            st.markdown(reply_msg['content'])
+            if reply_msg.get('evidence'):
+                with st.expander('Nguồn dữ liệu'):
+                    st.write(reply_msg['evidence'])
 
 
 def render_chat(agent, role, user_name, mode="auto"):

@@ -1,18 +1,22 @@
-# -*- coding: utf-8 -*-
-"""Unit tests for Shift Closing & Revenue Extraction (Chốt Ca Bằng Ảnh & Đối Soát)."""
+import os
+import sys
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from datetime import date
 
 import pytest
-from datetime import date
 from sqlalchemy import func
 
-from src.database import SessionLocal
-from src.models import SalesDaily
-from src.engine.shift_service import (
-    get_all_shift_reports, get_daily_closing_summary,
-    extract_shift_data_from_image, save_or_update_shift_report,
-    SHIFT_PHOTOS_DIR
-)
 from src.agent.mixue_agent import MixueOperationsAgent
+from src.database import SessionLocal
+from src.engine.shift_service import (
+    SHIFT_PHOTOS_DIR,
+    extract_shift_data_from_image,
+    get_all_shift_reports,
+    get_daily_closing_summary,
+)
+from src.models import SalesDaily
 
 
 @pytest.fixture

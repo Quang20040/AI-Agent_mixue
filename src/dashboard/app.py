@@ -1,37 +1,56 @@
-# -*- coding: utf-8 -*-
 """BeverageOps AI — Giao diện Quản trị Vận hành Chi nhánh Mixue 39 Tôn Quang Phiệt.
 
 Thiết kế nhận diện thương hiệu Tuyết Vương (Snow King / 雪王) và phong cách ứng dụng My Mixue.
 Đồng bộ 100% tiếng Việt chuyên ngành F&B, tối ưu hiệu năng và kiểm soát lỗi toàn diện.
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from datetime import date, timedelta
+from datetime import date, datetime
+
 import pandas as pd
 import streamlit as st
 
-from src.database import SessionLocal
-from src.models import MenuItem
-from src.engine.bom_engine import BOMEngine
-from src.engine.forecasting import ForecastingEngine
-from src.engine.optimizer import OptimizerEngine
-from src.engine.validator import IndependentPlanValidator
 from src.agent.mixue_agent import MixueOperationsAgent
-from src.dashboard.brand_ui import install_brand, render_home, render_chat, asset, snow_king_image, render_login_screen, render_force_change_password_screen
 from src.auth import (
-    verify_user, is_admin_role, is_staff_role, get_allowed_pages, can_access_page,
-    get_all_employees, create_employee, reset_employee_password, can_manage_inventory
+    can_access_page,
+    create_employee,
+    get_all_employees,
+    get_allowed_pages,
+    is_admin_role,
+    reset_employee_password,
 )
-from src.engine.daily_stock_service import (
-    get_stock_matrix_df, create_stock_request, get_pending_requests,
-    approve_stock_request, reject_stock_request, get_user_requests, generate_excel_export,
-    update_stock_cell_manually, update_stock_matrix_from_editor, COLUMN_TO_MOVEMENT_MAP,
-    delete_stock_movement, update_stock_movement, get_cell_value, get_all_movements_detailed
+from src.dashboard.brand_ui import (
+    install_brand,
+    render_chat,
+    render_force_change_password_screen,
+    render_home,
+    render_login_screen,
+    snow_king_image,
 )
 from src.dashboard.shift_closing_ui import render_shift_closing_view
+from src.database import SessionLocal
+from src.engine.bom_engine import BOMEngine
+from src.engine.daily_stock_service import (
+    COLUMN_TO_MOVEMENT_MAP,
+    approve_stock_request,
+    create_stock_request,
+    delete_stock_movement,
+    generate_excel_export,
+    get_all_movements_detailed,
+    get_cell_value,
+    get_pending_requests,
+    get_stock_matrix_df,
+    get_user_requests,
+    reject_stock_request,
+    update_stock_cell_manually,
+    update_stock_matrix_from_editor,
+    update_stock_movement,
+)
+from src.models import MenuItem
 
 # ==============================================================================
 # CẤU HÌNH TRANG STREAMLIT
@@ -65,6 +84,20 @@ agent = get_operations_agent()
 if not st.session_state.get("authenticated", False):
     render_login_screen()
     st.stop()
+
+# Kiểm tra thời gian chờ phiên làm việc (Session Idle Timeout: 15 phút)
+SESSION_TIMEOUT_MINUTES = 15
+last_activity = st.session_state.get("last_activity")
+now_dt = datetime.now()
+if last_activity is not None and isinstance(last_activity, datetime):
+    if (now_dt - last_activity).total_seconds() > SESSION_TIMEOUT_MINUTES * 60:
+        for k in ["authenticated", "user", "username", "user_role", "user_name", "user_title", "user_badge", "must_change_password", "main_navigation", "last_activity"]:
+            st.session_state.pop(k, None)
+        st.warning(f"Phiên làm việc đã hết hạn do không hoạt động quá {SESSION_TIMEOUT_MINUTES} phút. Vui lòng đăng nhập lại.")
+        render_login_screen()
+        st.stop()
+
+st.session_state["last_activity"] = now_dt
 
 # Kiểm tra yêu cầu đổi mật khẩu lần đầu (bắt buộc gồm đúng 6 chữ số)
 if st.session_state.get("must_change_password", False):
@@ -160,7 +193,7 @@ with st.sidebar:
         st.info("ℹ️ **Thẩm quyền NHÂN VIÊN:** Tra cứu thực đơn, công thức pha chế (BOM), tem ly và hỏi Tuyết Vương về công thức/sơ chế.")
 
     if st.button("🚪 Đăng xuất khỏi Hệ thống", key="btn_logout", use_container_width=True):
-        for k in ["authenticated", "user", "username", "user_role", "user_name", "user_title", "user_badge", "must_change_password", "main_navigation", "chat_history_vi"]:
+        for k in ["authenticated", "user", "username", "user_role", "user_name", "user_title", "user_badge", "must_change_password", "main_navigation", "chat_history_vi", "last_activity"]:
             st.session_state.pop(k, None)
         st.rerun()
 
@@ -586,11 +619,22 @@ with st.container(key="workspace"):
                 # Khóa các cột tính toán/công thức tự động, chỉ cho phép sửa các ô ngày tháng và tồn thực tế
                 disabled_cols = [c for c in cols_show if c not in COLUMN_TO_MOVEMENT_MAP]
 
+                # Ràng buộc dữ liệu: chỉ cho phép nhập số dương/không âm (>= 0.0)
+                stock_col_config = {
+                    c: st.column_config.NumberColumn(
+                        min_value=0.0,
+                        step=0.5,
+                        format="%.1f"
+                    )
+                    for c in cols_show if c in COLUMN_TO_MOVEMENT_MAP
+                }
+
                 edited_matrix = st.data_editor(
                     matrix_df[cols_show],
                     use_container_width=True,
                     hide_index=True,
                     disabled=disabled_cols,
+                    column_config=stock_col_config,
                     key=f"stock_editor_{view_mode}"
                 )
 
@@ -881,7 +925,7 @@ with st.container(key="workspace"):
             if v_status == "VERIFIED":
                 st.success(f"✅ **KẾ HOẠCH ĐÃ THẨM ĐỊNH HỢP LỆ** (Mã dự thảo: `{plan['draft_plan_id']}` | Kiểm định: Đạt chuẩn mẻ làm tròn & an toàn thực phẩm)")
             else:
-                st.error(f"❌ **KẾ HOẠCH BỊ TỪ CHỐI DO VI PHẠM QUY CHUẨN**")
+                st.error("❌ **KẾ HOẠCH BỊ TỪ CHỐI DO VI PHẠM QUY CHUẨN**")
 
             prep_table = pd.DataFrame(plan["recommendations"])
             prep_table_display = prep_table.rename(columns={
@@ -1038,6 +1082,7 @@ with st.container(key="workspace"):
                     if res["status"] == "SUCCESS":
                         st.session_state["sticker_result"] = res
                     else:
+                        st.session_state.pop("sticker_result", None)
                         st.error(res["message"])
 
                 # Hiển thị tem dán chuẩn thực tế chi nhánh 39 Tôn Quang Phiệt

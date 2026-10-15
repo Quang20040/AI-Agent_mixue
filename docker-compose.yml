@@ -3,9 +3,9 @@ services:
     image: postgres:16
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:?Run setup_local.py first}
-      POSTGRES_USER: ${POSTGRES_USER:?Run setup_local.py first}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run setup_local.py first}
+      POSTGRES_DB: ${POSTGRES_DB:-beverageops}
+      POSTGRES_USER: ${POSTGRES_USER:-mixue_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mixue_secret_2026}
       TZ: Asia/Ho_Chi_Minh
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
@@ -16,6 +16,22 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mixue_admin}:${POSTGRES_PASSWORD:-mixue_secret_2026}@postgres:5432/${POSTGRES_DB:-beverageops}
+      TZ: Asia/Ho_Chi_Minh
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./data:/app/data
+
 volumes:
   postgres_data:
-

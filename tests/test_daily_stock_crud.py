@@ -1,16 +1,13 @@
-# -*- coding: utf-8 -*-
 """Kiểm thử tự động các chức năng Sửa, Xóa và Cập nhật Sổ thẻ kho (Daily Stock CRUD)."""
 from datetime import date
-import pytest
+
 from src.engine.daily_stock_service import (
     create_stock_request,
-    approve_stock_request,
     delete_stock_movement,
-    update_stock_movement,
-    update_stock_cell_manually,
     get_cell_value,
     get_stock_matrix_df,
-    get_all_movements_detailed
+    update_stock_cell_manually,
+    update_stock_movement,
 )
 
 

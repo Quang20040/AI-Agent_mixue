@@ -1,15 +1,22 @@
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from datetime import date
-from decimal import Decimal
 import pandas as pd
 from sqlalchemy import func
+
 from src.database import SessionLocal
 from src.models import (
-    MenuItem, Ingredient, RecipeBOM, SalesDaily, Purchase, StockCount, ToppingDaily
+    Ingredient,
+    MenuItem,
+    Purchase,
+    RecipeBOM,
+    SalesDaily,
+    StockCount,
+    ToppingDaily,
 )
+
 
 class BOMEngine:
     def __init__(self, db_session=None):
@@ -170,17 +177,42 @@ class BOMEngine:
         if not stk_df.empty:
             stk_df["actual_stock_count"] = stk_df["actual_stock_count"].astype(float)
 
-        # 3. Theoretical consumption
+        # 3. Initial (earliest) stock count per ingredient as opening balance
+        earliest_count_date = self.db.query(func.min(StockCount.business_date)).scalar()
+        if earliest_count_date and earliest_count_date < latest_count_date:
+            init_stk_query = self.db.query(
+                StockCount.ingredient_id,
+                StockCount.quantity_counted.label("initial_stock"),
+                StockCount.unit
+            ).filter(StockCount.business_date == earliest_count_date)
+            init_stk_df = pd.DataFrame(init_stk_query.all(), columns=["ingredient_id", "initial_stock", "unit"])
+            if not init_stk_df.empty:
+                init_stk_df["initial_stock"] = init_stk_df["initial_stock"].astype(float)
+        else:
+            init_stk_df = pd.DataFrame(columns=["ingredient_id", "initial_stock", "unit"])
+
+        # 4. Theoretical consumption
         cons_df = self.calculate_theoretical_consumption()
 
         # Merge for reconciliation
         merged = pd.merge(stk_df, purch_df, on=["ingredient_id", "unit"], how="left")
+        if not init_stk_df.empty:
+            merged = pd.merge(merged, init_stk_df, on=["ingredient_id", "unit"], how="left")
+        else:
+            merged["initial_stock"] = 0.0
         merged = pd.merge(merged, cons_df[["ingredient_id", "ingredient_name", "theoretical_usage"]], on="ingredient_id", how="left")
         merged = merged.fillna(0)
 
-        merged["expected_stock"] = merged["total_purchased"] - merged["theoretical_usage"]
-        merged["variance"] = merged["actual_stock_count"] - merged["expected_stock"]
-        merged["variance_pct"] = (merged["variance"] / merged["total_purchased"].replace(0, 1) * 100).round(2)
+        # Formula: Expected = Initial Stock + Total Purchases - Theoretical Usage
+        merged["expected_stock"] = (merged["initial_stock"] + merged["total_purchased"] - merged["theoretical_usage"]).round(2)
+        merged["variance"] = (merged["actual_stock_count"] - merged["expected_stock"]).round(2)
+        
+        # Calculate sensible denominator: initial_stock + total_purchased
+        base_denom = merged["initial_stock"] + merged["total_purchased"]
+        base_denom = base_denom.replace(0, float("nan"))
+        base_denom = base_denom.fillna(merged["theoretical_usage"].replace(0, float("nan")))
+        base_denom = base_denom.fillna(merged["actual_stock_count"].replace(0, 1.0))
+        merged["variance_pct"] = ((merged["variance"] / base_denom) * 100).round(2).fillna(0.0)
 
         return merged
 

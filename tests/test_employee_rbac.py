@@ -1,21 +1,21 @@
-# -*- coding: utf-8 -*-
 """Kiểm thử tự động tính năng Quản lý nhân viên & Luồng đổi mật khẩu 6 số bắt buộc."""
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import pytest
+
+from src.auth import (
+    change_user_password,
+    create_employee,
+    get_all_employees,
+    is_staff_role,
+    reset_employee_password,
+    verify_user,
+)
 from src.database import SessionLocal
 from src.models import User
-from src.auth import (
-    verify_user,
-    create_employee,
-    change_user_password,
-    reset_employee_password,
-    get_all_employees,
-    is_admin_role,
-    is_staff_role
-)
 
 
 @pytest.fixture(autouse=True)
@@ -113,7 +113,12 @@ def test_get_all_employees_includes_fields():
 def test_daily_stock_matrix_and_export():
     """Kiểm tra ghi nhận xuất/nhập kho và xuất file Excel ma trận kho."""
     from datetime import date
-    from src.engine.daily_stock_service import get_stock_matrix_df, record_daily_movement, generate_excel_export
+
+    from src.engine.daily_stock_service import (
+        generate_excel_export,
+        get_stock_matrix_df,
+        record_daily_movement,
+    )
 
     # Ghi nhận xuất kho
     res = record_daily_movement(
@@ -151,10 +156,13 @@ def test_daily_stock_matrix_and_export():
 def test_maker_checker_stock_approval_workflow():
     """Kiểm tra quy trình kiểm soát kho 2 bước (Nhân viên đề xuất -> Quản lý duyệt)."""
     from datetime import date
+
     from src.engine.daily_stock_service import (
-        create_stock_request, get_pending_requests,
-        approve_stock_request, reject_stock_request,
-        get_user_requests, get_stock_matrix_df
+        approve_stock_request,
+        create_stock_request,
+        get_pending_requests,
+        get_user_requests,
+        reject_stock_request,
     )
 
     # 1. Nhân viên chính thức tạo đề xuất lệnh xuất kho
@@ -222,7 +230,9 @@ def test_maker_checker_stock_approval_workflow():
 def test_manual_stock_editing_and_batch_editor():
     """Kiểm tra chức năng sửa số liệu kho trực tiếp bằng tay (từng ô và cả bảng editor)."""
     from src.engine.daily_stock_service import (
-        get_stock_matrix_df, update_stock_cell_manually, update_stock_matrix_from_editor
+        get_stock_matrix_df,
+        update_stock_cell_manually,
+        update_stock_matrix_from_editor,
     )
 
     # 1. Sửa bằng tay 1 ô: Cập nhật T5 1/10 cho Ốc quế (Mã 1) thành 3.0

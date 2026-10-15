@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Giao diện Quản lý & Trích xuất Báo Cáo Chốt Ca Bằng Ảnh (Shift Closing UI).
 
 Hỗ trợ:
@@ -8,15 +7,20 @@ Hỗ trợ:
 - Bảng tổng kết 3 ca và đối soát doanh thu cuối ngày với máy POS.
 """
 
-import os
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
+
 import pandas as pd
 import streamlit as st
 
 from src.engine.shift_service import (
-    get_all_shift_reports, get_daily_closing_summary, extract_shift_data_from_image,
-    save_or_update_shift_report, delete_shift_report, SHIFT_DEFINITIONS, SHIFT_PHOTOS_DIR
+    SHIFT_DEFINITIONS,
+    SHIFT_PHOTOS_DIR,
+    delete_shift_report,
+    extract_shift_data_from_image,
+    get_all_shift_reports,
+    get_daily_closing_summary,
+    save_or_update_shift_report,
 )
 
 

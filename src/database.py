@@ -1,9 +1,9 @@
-# -*- coding: utf-8 -*-
 """Database configuration and session management.
 Supports PostgreSQL if available or SQLite local fallback.
 """
 import os
 from pathlib import Path
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 

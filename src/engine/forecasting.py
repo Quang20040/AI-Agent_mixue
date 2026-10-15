@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Forecasting Engine with Seasonal Naive, Moving Average, and Rolling-Origin Backtesting.
 
 Follows BeverageOps AI specifications:
@@ -8,15 +7,17 @@ Follows BeverageOps AI specifications:
 - Model Selection via rolling-origin backtest
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 from datetime import date, timedelta
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Any
+
 import numpy as np
 import pandas as pd
-from sqlalchemy import func
+
 from src.database import SessionLocal
 from src.models import MenuItem, SalesDaily
 
@@ -49,14 +50,22 @@ class ForecastingEngine:
         self.df["business_date"] = pd.to_datetime(self.df["business_date"]).dt.date
         self.dates = sorted(self.df["business_date"].unique())
         self.skus = sorted(self.df["sku_id"].unique())
+        self._sku_series = {}
+        for sku, grp in self.df.groupby("sku_id"):
+            sub = grp.sort_values("business_date")
+            self._sku_series[sku] = pd.Series(data=sub["quantity_sold"].values, index=sub["business_date"])
 
-    def get_sku_history(self, sku_id: str, up_to_date: Optional[date] = None) -> pd.Series:
-        """Returns time series of sales quantity up to up_to_date."""
-        sub = self.df[self.df["sku_id"] == sku_id]
+    def get_sku_history(self, sku_id: str, up_to_date: date | None = None) -> pd.Series:
+        """Returns time series of sales quantity up to up_to_date (O(1) lookup)."""
+        s = getattr(self, "_sku_series", {}).get(sku_id)
+        if s is None or s.empty:
+            sub = self.df[self.df["sku_id"] == sku_id]
+            if up_to_date:
+                sub = sub[sub["business_date"] <= up_to_date]
+            sub = sub.sort_values("business_date")
+            return pd.Series(data=sub["quantity_sold"].values, index=sub["business_date"])
         if up_to_date:
-            sub = sub[sub["business_date"] <= up_to_date]
-        sub = sub.sort_values("business_date")
-        s = pd.Series(data=sub["quantity_sold"].values, index=sub["business_date"])
+            return s[s.index <= up_to_date]
         return s
 
     # --- FORECAST BASELINES ---
@@ -90,7 +99,7 @@ class ForecastingEngine:
         recent_matches = matches[-weeks:]
         return float(np.mean(recent_matches))
 
-    def predict_sku_single(self, sku_id: str, target_date: date, model: str = "day_of_week_ma") -> Dict[str, Any]:
+    def predict_sku_single(self, sku_id: str, target_date: date, model: str = "day_of_week_ma") -> dict[str, Any]:
         """Predicts sales for one SKU on target_date."""
         history = self.get_sku_history(sku_id, up_to_date=target_date - timedelta(days=1))
         
@@ -133,7 +142,7 @@ class ForecastingEngine:
 
     # --- ROLLING-ORIGIN BACKTESTING ---
 
-    def run_backtest(self, start_eval_day: int = 15) -> Dict[str, Any]:
+    def run_backtest(self, start_eval_day: int = 15) -> dict[str, Any]:
         """Runs rolling-origin 1-day ahead backtest for all models across days 15..end.
         
         Calculates:
@@ -141,6 +150,11 @@ class ForecastingEngine:
         - WAPE: Weighted Absolute Percentage Error = sum(|actual - pred|) / sum(actual)
         - Bias: sum(pred - actual) / sum(actual)
         """
+        if not hasattr(self, "_backtest_cache"):
+            self._backtest_cache = {}
+        if start_eval_day in self._backtest_cache:
+            return self._backtest_cache[start_eval_day]
+
         if len(self.dates) <= start_eval_day:
             return {"error": "Insufficient history for backtest"}
 
@@ -195,15 +209,17 @@ class ForecastingEngine:
         # Determine best model
         best_model = min(metrics.keys(), key=lambda m: metrics[m]["WAPE_pct"])
 
-        return {
+        res = {
             "evaluation_period": f"{eval_dates[0]} to {eval_dates[-1]} ({len(eval_dates)} days)",
             "total_skus": len(self.skus),
             "aggregate_metrics": metrics,
             "best_model": best_model,
             "per_sku_metrics": self._summarize_per_sku_metrics(per_sku_results, models)
         }
+        self._backtest_cache[start_eval_day] = res
+        return res
 
-    def _summarize_per_sku_metrics(self, per_sku_results: dict, models: list) -> List[Dict[str, Any]]:
+    def _summarize_per_sku_metrics(self, per_sku_results: dict, models: list) -> list[dict[str, Any]]:
         sku_name_map = dict(self.df[["sku_id", "sku_name"]].drop_duplicates().values)
         summary = []
         for sku, model_data in per_sku_results.items():
@@ -219,11 +235,17 @@ class ForecastingEngine:
             summary.append(row)
         return summary
 
-    def forecast_demand(self, target_date: Optional[date] = None, horizon_days: int = 1, model: str = "auto") -> pd.DataFrame:
+    def forecast_demand(self, target_date: date | None = None, horizon_days: int = 1, model: str = "auto") -> pd.DataFrame:
         """Forecasts demand for all SKUs for target_date (D+1).
         
         If model == 'auto', selects the model with lowest WAPE from backtest.
         """
+        if not hasattr(self, "_forecast_cache"):
+            self._forecast_cache = {}
+        cache_key = (str(target_date), horizon_days, model)
+        if cache_key in self._forecast_cache:
+            return self._forecast_cache[cache_key].copy()
+
         if not target_date:
             last_date = self.dates[-1] if self.dates else date.today()
             target_date = last_date + timedelta(days=1)
@@ -252,6 +274,7 @@ class ForecastingEngine:
                 })
 
         df_res = pd.DataFrame(forecast_rows)
+        self._forecast_cache[cache_key] = df_res.copy()
         return df_res
 
 

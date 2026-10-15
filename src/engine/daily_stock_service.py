@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Dịch vụ Quản lý Sổ Xuất - Nhập - Tồn Kho Hàng Ngày (Mixue Daily Stock Matrix - 31 Ngày).
 
 Mô phỏng đầy đủ 31 ngày của tháng 10/2026 chuẩn theo mẫu ảnh Google Sheets của quán Mixue 39 Tôn Quang Phiệt.
@@ -7,16 +6,17 @@ Tích hợp quy trình phê duyệt lệnh kho (Maker-Checker):
 - Quản lý / Chủ quán: Kiểm duyệt và phê duyệt -> Ghi nhận vào file/sổ kho và ma trận.
 """
 
-from datetime import date, datetime
-from typing import List, Dict, Any, Optional, Tuple
 import io
+from datetime import date, datetime, timedelta
+from typing import Any
+
 import pandas as pd
 from openpyxl import Workbook
-from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
-from src.database import SessionLocal, engine, Base
-from src.models import DailyStockMovement, Ingredient
 from src.auth import is_admin_role
+from src.database import Base, SessionLocal, engine
+from src.models import DailyStockMovement, Ingredient
 
 # Đảm bảo bảng luôn tồn tại
 Base.metadata.create_all(bind=engine)
@@ -233,8 +233,8 @@ def create_stock_request(
     quantity: float,
     recorded_by: str,
     user_role: str,
-    notes: Optional[str] = None
-) -> Dict[str, Any]:
+    notes: str | None = None
+) -> dict[str, Any]:
     """Tạo đề xuất lệnh xuất/nhập kho.
     - Quản lý / Chủ quán: Tự động DUYỆT NGAY và ghi thẳng vào sổ kho.
     - Nhân viên chính thức: Tạo lệnh ở trạng thái PENDING chờ Quản lý duyệt.
@@ -253,6 +253,25 @@ def create_stock_request(
 
     db = SessionLocal()
     try:
+        # Idempotency / Double-click check: reject duplicate identical requests within 3 seconds
+        recent_cutoff = datetime.now() - timedelta(seconds=3)
+        duplicate = db.query(DailyStockMovement).filter(
+            DailyStockMovement.business_date == business_date,
+            DailyStockMovement.ingredient_id == str(ingredient_id),
+            DailyStockMovement.movement_type == clean_type,
+            DailyStockMovement.recorded_by == recorded_by,
+            DailyStockMovement.quantity == quantity,
+            DailyStockMovement.created_at >= recent_cutoff
+        ).first()
+
+        if duplicate:
+            return {
+                "status": "DUPLICATE",
+                "request_id": duplicate.id,
+                "is_approved": duplicate.status == "APPROVED",
+                "message": f"⚠️ Lệnh kho tương tự vừa được tạo cách đây vài giây (Mã lệnh: #{duplicate.id}). Vui lòng không nhấn liên tục để tránh trùng lặp dữ liệu."
+            }
+
         ing = db.query(Ingredient).filter(Ingredient.ingredient_id == str(ingredient_id)).first()
         ing_name = ing.ingredient_name if ing else f"Mã {ingredient_id}"
 
@@ -284,7 +303,7 @@ def create_stock_request(
         }
     except Exception as e:
         db.rollback()
-        return {"status": "ERROR", "message": f"Lỗi cơ sở dữ liệu: {str(e)}"}
+        return {"status": "ERROR", "message": f"Lỗi cơ sở dữ liệu: {e!s}"}
     finally:
         db.close()
 
@@ -295,8 +314,8 @@ def record_daily_movement(
     movement_type: str,
     quantity: float,
     recorded_by: str = "admin",
-    notes: Optional[str] = None
-) -> Dict[str, Any]:
+    notes: str | None = None
+) -> dict[str, Any]:
     """Ghi nhận trực tiếp lệnh kho (tự động duyệt cho admin hoặc tương thích ngược)."""
     return create_stock_request(
         business_date=business_date,
@@ -309,7 +328,7 @@ def record_daily_movement(
     )
 
 
-def get_pending_requests() -> List[Dict[str, Any]]:
+def get_pending_requests() -> list[dict[str, Any]]:
     """Lấy danh sách các lệnh xuất/nhập kho đang chờ Quản lý duyệt."""
     db = SessionLocal()
     try:
@@ -338,7 +357,7 @@ def get_pending_requests() -> List[Dict[str, Any]]:
         db.close()
 
 
-def approve_stock_request(request_id: int, admin_username: str) -> Tuple[bool, str]:
+def approve_stock_request(request_id: int, admin_username: str) -> tuple[bool, str]:
     """Quản lý / Chủ quán duyệt lệnh xuất/nhập kho của nhân viên."""
     db = SessionLocal()
     try:
@@ -358,12 +377,12 @@ def approve_stock_request(request_id: int, admin_username: str) -> Tuple[bool, s
         return True, f"Đã phê duyệt lệnh #{request_id}: {rec.movement_type} {rec.quantity} món '{ing_name}' của nhân viên '{rec.recorded_by}'. Dữ liệu đã được ghi vào sổ kho 31 ngày."
     except Exception as e:
         db.rollback()
-        return False, f"Lỗi phê duyệt: {str(e)}"
+        return False, f"Lỗi phê duyệt: {e!s}"
     finally:
         db.close()
 
 
-def reject_stock_request(request_id: int, admin_username: str, reason: str = "") -> Tuple[bool, str]:
+def reject_stock_request(request_id: int, admin_username: str, reason: str = "") -> tuple[bool, str]:
     """Quản lý từ chối lệnh xuất/nhập kho của nhân viên."""
     db = SessionLocal()
     try:
@@ -378,12 +397,12 @@ def reject_stock_request(request_id: int, admin_username: str, reason: str = "")
         return True, f"Đã từ chối lệnh kho #{request_id}. Lệnh này sẽ không được ghi vào sổ kho."
     except Exception as e:
         db.rollback()
-        return False, f"Lỗi từ chối: {str(e)}"
+        return False, f"Lỗi từ chối: {e!s}"
     finally:
         db.close()
 
 
-def get_user_requests(username: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
+def get_user_requests(username: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
     """Lấy danh sách các lệnh của nhân viên để theo dõi trạng thái duyệt."""
     db = SessionLocal()
     try:
@@ -413,7 +432,7 @@ def get_user_requests(username: Optional[str] = None, limit: int = 50) -> List[D
         db.close()
 
 
-COLUMN_TO_MOVEMENT_MAP: Dict[str, Tuple[str, str]] = {
+COLUMN_TO_MOVEMENT_MAP: dict[str, tuple[str, str]] = {
     "Tồn T9": ("2026-09-30", "INITIAL"),
     "Nhập 1/10": ("2026-10-01", "IN"),
     "T5 1/10": ("2026-10-01", "OUT"),
@@ -453,7 +472,7 @@ COLUMN_TO_MOVEMENT_MAP: Dict[str, Tuple[str, str]] = {
 }
 
 
-def delete_stock_movement(movement_id: int, admin_username: str = "admin") -> Tuple[bool, str]:
+def delete_stock_movement(movement_id: int, admin_username: str = "admin") -> tuple[bool, str]:
     """Xóa bỏ hoàn toàn một bản ghi giao dịch kho theo ID (Sổ kho tự động tính toán lại ngay)."""
     db = SessionLocal()
     try:
@@ -472,7 +491,7 @@ def delete_stock_movement(movement_id: int, admin_username: str = "admin") -> Tu
         return True, f"Đã xóa thành công lệnh #{movement_id}: {type_str} {qty:g} món '{ing_name}' (Ngày {date_str})."
     except Exception as e:
         db.rollback()
-        return False, f"Lỗi xóa bản ghi: {str(e)}"
+        return False, f"Lỗi xóa bản ghi: {e!s}"
     finally:
         db.close()
 
@@ -481,9 +500,9 @@ def update_stock_movement(
     movement_id: int,
     new_quantity: float,
     admin_username: str = "admin",
-    new_date: Optional[date] = None,
-    notes: Optional[str] = None
-) -> Tuple[bool, str]:
+    new_date: date | None = None,
+    notes: str | None = None
+) -> tuple[bool, str]:
     """Sửa đổi trực tiếp thông tin số lượng/ngày của một bản ghi giao dịch kho."""
     db = SessionLocal()
     try:
@@ -506,12 +525,12 @@ def update_stock_movement(
         return True, f"Đã cập nhật lệnh #{movement_id} ({ing_name}): số lượng đổi từ {old_qty:g} sang {float(new_quantity):g}."
     except Exception as e:
         db.rollback()
-        return False, f"Lỗi cập nhật: {str(e)}"
+        return False, f"Lỗi cập nhật: {e!s}"
     finally:
         db.close()
 
 
-def get_cell_value(ingredient_id: str, column_name: str) -> Optional[float]:
+def get_cell_value(ingredient_id: str, column_name: str) -> float | None:
     """Lấy số lượng hiện tại được duyệt trong cơ sở dữ liệu của một ô cụ thể."""
     if column_name not in COLUMN_TO_MOVEMENT_MAP:
         return None
@@ -532,7 +551,7 @@ def get_cell_value(ingredient_id: str, column_name: str) -> Optional[float]:
         db.close()
 
 
-def get_all_movements_detailed(limit: int = 300) -> List[Dict[str, Any]]:
+def get_all_movements_detailed(limit: int = 300) -> list[dict[str, Any]]:
     """Lấy toàn bộ danh sách giao dịch kho chi tiết để hỗ trợ xem, sửa và xóa trực tiếp."""
     db = SessionLocal()
     try:
@@ -576,7 +595,7 @@ def update_stock_cell_manually(
     column_name: str,
     new_value: Any,
     updated_by: str = "admin"
-) -> Tuple[bool, str]:
+) -> tuple[bool, str]:
     """Cập nhật hoặc xóa giá trị một ô bằng tay (Manual Cell Update / Delete)."""
     if column_name not in COLUMN_TO_MOVEMENT_MAP:
         return False, f"Cột '{column_name}' là cột công thức tự động, không thể sửa trực tiếp."
@@ -586,7 +605,7 @@ def update_stock_cell_manually(
 
     # Xử lý các giá trị xóa / rỗng / NaN
     is_delete = False
-    new_qty: Optional[float] = None
+    new_qty: float | None = None
 
     if new_value is None or pd.isna(new_value):
         is_delete = True
@@ -645,7 +664,7 @@ def update_stock_cell_manually(
             return True, f"Đã lưu giá trị {new_qty:g} vào ô '{column_name}' của '{ing_name}'."
     except Exception as e:
         db.rollback()
-        return False, f"Lỗi cập nhật: {str(e)}"
+        return False, f"Lỗi cập nhật: {e!s}"
     finally:
         db.close()
 
@@ -654,8 +673,8 @@ def update_stock_matrix_from_editor(
     edited_df: pd.DataFrame,
     original_df: pd.DataFrame,
     updated_by: str = "admin",
-    editor_session_data: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
+    editor_session_data: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """Cập nhật hàng loạt các thay đổi từ bảng chỉnh sửa trực tiếp (st.data_editor).
     Hỗ trợ đọc trực tiếp delta từ st.session_state[editor_key]['edited_rows'] và so sánh DataFrame.
     """
@@ -762,8 +781,8 @@ def get_stock_matrix_df(year: int = 2026, month: int = 10) -> pd.DataFrame:
                 DailyStockMovement.status == "APPROVED"
             ).all()
 
-            in_by_date: Dict[str, float] = {}
-            out_by_date: Dict[str, float] = {}
+            in_by_date: dict[str, float] = {}
+            out_by_date: dict[str, float] = {}
             for m in approved_movs:
                 d_str = m.business_date.strftime("%Y-%m-%d")
                 if m.movement_type == "IN":
@@ -822,7 +841,7 @@ def get_stock_matrix_df(year: int = 2026, month: int = 10) -> pd.DataFrame:
             out_29 = out_by_date.get("2026-10-29", 0.0)
             out_30 = out_by_date.get("2026-10-30", 0.0)
             out_31 = out_by_date.get("2026-10-31", 0.0)
-            xuat_w5 = out_26 + out_27 + out_28 + out_29 + out_30 + out_31
+            _xuat_w5 = out_26 + out_27 + out_28 + out_29 + out_30 + out_31
 
             # Tổng hợp cả tháng trong thời gian thực (Real-time)
             tong_nhap = sum(in_by_date.values())

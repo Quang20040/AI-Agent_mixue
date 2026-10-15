@@ -1,12 +1,21 @@
-# -*- coding: utf-8 -*-
 """SQLAlchemy ORM models for BeverageOps AI."""
 from datetime import date, datetime
-from decimal import Decimal
+
 from sqlalchemy import (
-    Column, String, Integer, Numeric, Boolean, Date, DateTime, ForeignKey, Index
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
 )
 from sqlalchemy.orm import relationship
+
 from src.database import Base
+
 
 class MenuItem(Base):
     __tablename__ = "menu_items"

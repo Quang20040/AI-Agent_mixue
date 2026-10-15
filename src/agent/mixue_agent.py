@@ -1,29 +1,24 @@
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-import json
 import re
 import uuid
-from datetime import date, datetime, timedelta
-from typing import Dict, List, Optional, Any, Union, Tuple
+from datetime import date, datetime
+from typing import Any
+
 import pandas as pd
 
+from src.auth import get_all_employees
 from src.database import SessionLocal
-from src.models import (
-    MenuItem, Ingredient, RecipeBOM, SalesDaily, Purchase, StockCount, ToppingDaily
-)
 from src.engine.bom_engine import BOMEngine
+from src.engine.daily_stock_service import get_pending_requests, get_stock_matrix_df
 from src.engine.forecasting import ForecastingEngine
 from src.engine.optimizer import OptimizerEngine
+from src.engine.shift_service import get_daily_closing_summary
 from src.engine.validator import IndependentPlanValidator
-from src.auth import get_all_employees
-from src.engine.daily_stock_service import (
-    get_stock_matrix_df, get_pending_requests, COLUMN_TO_MOVEMENT_MAP
-)
-from src.engine.shift_service import (
-    get_all_shift_reports, get_daily_closing_summary, SHIFT_DEFINITIONS
-)
+from src.models import Ingredient, MenuItem, RecipeBOM, SalesDaily
 
 # --- STICKER / LABEL DECODER DICTIONARY ---
 SUGAR_LEVELS = {
@@ -60,7 +55,7 @@ def _normalize_vn(text: str) -> str:
     return ''.join(c for c in unicodedata.normalize('NFD', text.lower().replace('đ', 'd')) if unicodedata.category(c) != 'Mn').strip()
 
 
-def _parse_query_date_range(query: str) -> Tuple[Optional[str], Optional[str]]:
+def _parse_query_date_range(query: str) -> tuple[str | None, str | None]:
     """Phân tích và trích xuất ngày hoặc khoảng ngày từ câu hỏi tiếng Việt.
     Hỗ trợ:
     - Khoảng ngày: 'từ 01/10 đến 05/10', 'từ ngày 1-10 đến ngày 5-10'
@@ -216,7 +211,7 @@ Bạn được trang bị 8 công cụ vận hành:
 
     # --- AGENT TOOLS (CONTRACTS V1) ---
 
-    def tool_get_daily_sales(self, start_date: Optional[str] = None, end_date: Optional[str] = None) -> Dict[str, Any]:
+    def tool_get_daily_sales(self, start_date: str | None = None, end_date: str | None = None) -> dict[str, Any]:
         """Tool: Query historical sales and revenue summary."""
         s_date = date.fromisoformat(start_date) if start_date else None
         e_date = date.fromisoformat(end_date) if end_date else None
@@ -268,7 +263,7 @@ Bạn được trang bị 8 công cụ vận hành:
             "source_refs": ["table:daily_sales", "model:MenuItem"]
         }
 
-    def tool_get_topping_waste_summary(self, start_date: Optional[str] = None, end_date: Optional[str] = None) -> Dict[str, Any]:
+    def tool_get_topping_waste_summary(self, start_date: str | None = None, end_date: str | None = None) -> dict[str, Any]:
         """Tool: Query topping preparation and waste metrics."""
         s_date = date.fromisoformat(start_date) if start_date else None
         e_date = date.fromisoformat(end_date) if end_date else None
@@ -288,7 +283,7 @@ Bạn được trang bị 8 công cụ vận hành:
             "source_refs": ["table:topping_daily", "model:ToppingDaily"]
         }
 
-    def tool_get_inventory_position(self) -> Dict[str, Any]:
+    def tool_get_inventory_position(self) -> dict[str, Any]:
         """Tool: Query stock reconciliation and variance between theoretical BOM usage and stock counts."""
         df = self.bom_engine.calculate_inventory_reconciliation()
         if df.empty:
@@ -302,7 +297,7 @@ Bạn được trang bị 8 công cụ vận hành:
             "source_refs": ["table:stock_counts", "table:purchases", "calculation:BOM_explosion"]
         }
 
-    def tool_forecast_demand(self, target_date: Optional[str] = None, horizon_days: int = 1) -> Dict[str, Any]:
+    def tool_forecast_demand(self, target_date: str | None = None, horizon_days: int = 1) -> dict[str, Any]:
         """Tool: Run forecast engine for D+1 demand across all 39 menu items."""
         t_date = date.fromisoformat(target_date) if target_date else None
         fc_df = self.forecast_engine.forecast_demand(t_date, horizon_days=horizon_days, model="auto")
@@ -320,7 +315,7 @@ Bạn được trang bị 8 công cụ vận hành:
             "source_refs": ["engine:forecasting", "model:moving_average_7d"]
         }
 
-    def tool_optimize_topping_prep(self, target_date: Optional[str] = None, buffer_pct: float = 0.10) -> Dict[str, Any]:
+    def tool_optimize_topping_prep(self, target_date: str | None = None, buffer_pct: float = 0.10) -> dict[str, Any]:
         """Tool: Generate topping preparation plan with batch rounding and policy checks."""
         t_date = date.fromisoformat(target_date) if target_date else (date(2026, 10, 13))
         fc_df = self.forecast_engine.forecast_demand(t_date, horizon_days=1, model="auto")
@@ -351,7 +346,7 @@ Bạn được trang bị 8 công cụ vận hành:
             "source_refs": ["engine:optimizer", "policy:SOP_Mixue_shelf_life"]
         }
 
-    def tool_optimize_replenishment(self, target_date: Optional[str] = None) -> Dict[str, Any]:
+    def tool_optimize_replenishment(self, target_date: str | None = None) -> dict[str, Any]:
         """Tool: Generate replenishment purchase order draft for raw materials."""
         t_date = date.fromisoformat(target_date) if target_date else (date(2026, 10, 13))
         fc_df = self.forecast_engine.forecast_demand(t_date, horizon_days=1, model="auto")
@@ -386,7 +381,7 @@ Bạn được trang bị 8 công cụ vận hành:
             "source_refs": ["engine:optimizer", "table:stock_counts", "lead_time:2d"]
         }
 
-    def tool_decode_recipe_or_sticker(self, code: str) -> Dict[str, Any]:
+    def tool_decode_recipe_or_sticker(self, code: str) -> dict[str, Any]:
         """Tool: Decode cup sticker numeric code or look up recipe BOM for a SKU."""
         clean_code = (code or "").strip().upper()
         import re
@@ -493,7 +488,7 @@ Bạn được trang bị 8 công cụ vận hành:
             "message": f"Không tìm thấy công thức SKU hoặc quy tắc mã tem cho '{code}'."
         }
 
-    def tool_approve_plan(self, draft_plan_id: str, user_role: str, user_name: str = "Manager") -> Dict[str, Any]:
+    def tool_approve_plan(self, draft_plan_id: str, user_role: str, user_name: str = "Manager") -> dict[str, Any]:
         """Tool: Approval gate enforcing RBAC. Only Manager, Owner, or Admin can approve plans."""
         clean_role = user_role.strip().upper()
         if clean_role not in ["MANAGER", "OWNER", "ADMIN"]:
@@ -538,7 +533,7 @@ Bạn được trang bị 8 công cụ vận hành:
 
     # --- AGENT DISPATCHER, GUARDRAILS & NATURAL LANGUAGE INTERFACE ---
 
-    def tool_check_guardrail(self, query: str, user_name: str = "Bạn") -> Optional[Dict[str, Any]]:
+    def tool_check_guardrail(self, query: str, user_name: str = "Bạn") -> dict[str, Any] | None:
         """Guardrail tool (Theo Ngày 11 AI Thực Chiến): Kiểm soát an toàn đa lớp ở Input (Prompt Injection, Rò rỉ thông tin, Lương/thưởng, Chủ đề ngoài luồng)."""
         q = _normalize_vn(query)
         q_raw = query.lower()
@@ -551,10 +546,10 @@ Bạn được trang bị 8 công cụ vận hành:
         ]
         if any(kw in q or kw in q_raw for kw in injection_keywords):
             msg = (
-                f"🛡️ **Cảnh Báo An Toàn Hệ Thống (Prompt Injection Guardrail - Ngày 11):**\n\n"
-                f"Phát hiện nỗ lực can thiệp hoặc ghi đè chỉ dẫn hệ thống (Jailbreak / Prompt Injection). "
-                f"Theo nguyên tắc **Defense in Depth** của kiến trúc AI Thực Chiến, Tuyết Vương AI từ chối thực thi yêu cầu này.\n\n"
-                f"Tôi chỉ thực thi các tác vụ hợp lệ liên quan đến điều phối quầy bar và sổ kho Mixue 39 Tôn Quang Phiệt."
+                "🛡️ **Cảnh Báo An Toàn Hệ Thống (Prompt Injection Guardrail - Ngày 11):**\n\n"
+                "Phát hiện nỗ lực can thiệp hoặc ghi đè chỉ dẫn hệ thống (Jailbreak / Prompt Injection). "
+                "Theo nguyên tắc **Defense in Depth** của kiến trúc AI Thực Chiến, Tuyết Vương AI từ chối thực thi yêu cầu này.\n\n"
+                "Tôi chỉ thực thi các tác vụ hợp lệ liên quan đến điều phối quầy bar và sổ kho Mixue 39 Tôn Quang Phiệt."
             )
             return {
                 "text": msg,
@@ -570,10 +565,10 @@ Bạn được trang bị 8 công cụ vận hành:
         ]
         if any(kw in q for kw in secret_keywords):
             msg = (
-                f"🛡️ **Cảnh Báo Bảo Mật Thông Tin (Credential & Secret Protection):**\n\n"
-                f"Mật khẩu tài khoản, mã băm (password hash) và các khóa bảo mật hệ thống được bảo vệ nghiêm ngặt. "
-                f"Tuyết Vương AI không bao giờ trích xuất hoặc cung cấp thông tin xác thực này trong hội thoại.\n\n"
-                f"Nếu cần cấp lại mật khẩu cho nhân viên, Quản lý vui lòng thao tác trực tiếp tại tab **'👥 Quản lý nhân viên'**."
+                "🛡️ **Cảnh Báo Bảo Mật Thông Tin (Credential & Secret Protection):**\n\n"
+                "Mật khẩu tài khoản, mã băm (password hash) và các khóa bảo mật hệ thống được bảo vệ nghiêm ngặt. "
+                "Tuyết Vương AI không bao giờ trích xuất hoặc cung cấp thông tin xác thực này trong hội thoại.\n\n"
+                "Nếu cần cấp lại mật khẩu cho nhân viên, Quản lý vui lòng thao tác trực tiếp tại tab **'👥 Quản lý nhân viên'**."
             )
             return {
                 "text": msg,
@@ -609,9 +604,9 @@ Bạn được trang bị 8 công cụ vận hành:
         out_of_scope_keywords = ["thoi tiet", "chinh tri", "bong da", "tin tuc", "ca nhac", "phim", "nguoi yeu", "toan hoc"]
         if any(kw in q for kw in out_of_scope_keywords):
             msg = (
-                f"ℹ️ **Chủ đề nằm ngoài phạm vi hỗ trợ:**\n\n"
-                f"Tuyết Vương AI là trợ lý chuyên sâu về **nghiệp vụ vận hành cửa hàng đồ uống Mixue 39 Tôn Quang Phiệt** (công thức, tem ly, sơ chế, tồn kho, dự báo bán hàng). Tôi không thể hỗ trợ các thông tin ngoài lĩnh vực vận hành F&B của cửa hàng.\n\n"
-                f"Bạn có thể hỏi tôi về: công thức pha chế, định lượng mẻ sơ chế, giải mã tem dán ly hoặc tình hình tồn kho nhé!"
+                "ℹ️ **Chủ đề nằm ngoài phạm vi hỗ trợ:**\n\n"
+                "Tuyết Vương AI là trợ lý chuyên sâu về **nghiệp vụ vận hành cửa hàng đồ uống Mixue 39 Tôn Quang Phiệt** (công thức, tem ly, sơ chế, tồn kho, dự báo bán hàng). Tôi không thể hỗ trợ các thông tin ngoài lĩnh vực vận hành F&B của cửa hàng.\n\n"
+                "Bạn có thể hỏi tôi về: công thức pha chế, định lượng mẻ sơ chế, giải mã tem dán ly hoặc tình hình tồn kho nhé!"
             )
             return {
                 "text": msg,
@@ -622,7 +617,7 @@ Bạn được trang bị 8 công cụ vận hành:
 
         return None
 
-    def tool_get_employees_overview(self, query: str = "") -> Dict[str, Any]:
+    def tool_get_employees_overview(self, query: str = "") -> dict[str, Any]:
         """Tool: Tra cứu danh sách nhân sự, phân quyền tài khoản hoặc số lượng nhân viên theo đúng trọng tâm câu hỏi."""
         employees = get_all_employees()
         q = (query or "").lower()
@@ -743,7 +738,7 @@ Bạn được trang bị 8 công cụ vận hành:
             f"- **Tổng số nhân sự:** **{total_emp} người** (Quản trị: {len(admin_emps)} | Chính thức: {len(official_emps)} | Thử việc: {len(probation_emps)})\n"
             f"- **Số tài khoản chưa đổi mật khẩu:** **{need_pw_change} tài khoản**\n\n"
             f"**Chi tiết danh sách nhân viên:**\n" + "\n".join(lines) + "\n\n"
-            f"*💡 Quản lý có thể thêm nhân viên mới hoặc Reset mật khẩu về 123456 tại tab '👥 Quản lý nhân viên'.*"
+            "*💡 Quản lý có thể thêm nhân viên mới hoặc Reset mật khẩu về 123456 tại tab '👥 Quản lý nhân viên'.*"
         )
         return {
             "text": msg,
@@ -752,7 +747,7 @@ Bạn được trang bị 8 công cụ vận hành:
             "evidence_refs": ["table:users", "auth:get_all_employees"]
         }
 
-    def tool_get_daily_stock_matrix_info(self, query: str = "") -> Dict[str, Any]:
+    def tool_get_daily_stock_matrix_info(self, query: str = "") -> dict[str, Any]:
         """Tool: Tra cứu số liệu Sổ thẻ kho điện tử 31 ngày (Tháng 10/2026) và các lệnh kho chờ duyệt."""
         q_norm = _normalize_vn(query)
 
@@ -766,7 +761,7 @@ Bạn được trang bị 8 công cụ vận hành:
                 msg = (
                     f"### 📋 Có {len(pending)} lệnh xuất/nhập kho đang chờ Quản lý duyệt:\n\n" +
                     "\n".join(p_lines) +
-                    f"\n\n*👉 Quản lý hãy vào tab 'Báo cáo & kho' -> '📋 Duyệt Lệnh Kho' để bấm Duyệt, Từ chối hoặc Xóa.*"
+                    "\n\n*👉 Quản lý hãy vào tab 'Báo cáo & kho' -> '📋 Duyệt Lệnh Kho' để bấm Duyệt, Từ chối hoặc Xóa.*"
                 )
             return {
                 "text": msg,
@@ -833,7 +828,7 @@ Bạn được trang bị 8 công cụ vận hành:
             f"- **Tổng xuất dùng quầy:** **{total_out:,.1f} kiện/thùng**\n"
             f"- **Tổng tồn kho lũy kế:** **{total_stock:,.1f} kiện/thùng**\n\n"
             f"**Top mặt hàng có lượng tồn lớn nhất:**\n" + "\n".join(stock_lines) +
-            f"\n\n*👉 Quản lý có thể xem toàn bộ bảng ma trận 31 ngày, sửa xóa ô bằng tay hoặc tải file Excel tại tab 'Báo cáo & kho'.*"
+            "\n\n*👉 Quản lý có thể xem toàn bộ bảng ma trận 31 ngày, sửa xóa ô bằng tay hoặc tải file Excel tại tab 'Báo cáo & kho'.*"
         )
         return {
             "text": msg,
@@ -842,21 +837,21 @@ Bạn được trang bị 8 công cụ vận hành:
             "evidence_refs": ["table:daily_stock_movements", "ledger:Mixue_October_2026"]
         }
 
-    def tool_get_store_and_project_info(self) -> Dict[str, Any]:
+    def tool_get_store_and_project_info(self) -> dict[str, Any]:
         """Tool: Tra cứu thông tin hồ sơ cửa hàng Mixue 39 Tôn Quang Phiệt và kiến trúc đồ án BeverageOps AI."""
         msg = (
-            f"### 🍦 Hồ Sơ Cửa Hàng & Hệ Thống BeverageOps AI\n\n"
-            f"- **Tên cửa hàng:** Chi nhánh Mixue 39 Tôn Quang Phiệt\n"
-            f"- **Mã chi nhánh:** `2132` (Mã hệ thống: `MX-2132`)\n"
-            f"- **Địa chỉ:** Số 39 Tôn Quang Phiệt, P. Cổ Nhuế 1, Q. Bắc Từ Liêm, TP. Hà Nội\n"
-            f"- **Chủ cửa hàng (Owner):** Nguyễn Hạnh Chi\n"
-            f"- **Quản lý điều hành (Store Manager):** Bùi Văn Quang\n\n"
-            f"**Kiến trúc Hệ thống BeverageOps AI (Đồ Án Tốt Nghiệp 2026):**\n"
-            f"1. **BOM & Analytics Engine:** Quy đổi 39 SKU bán hàng qua định lượng nguyên liệu lý thuyết.\n"
-            f"2. **Forecasting Engine:** Dự báo nhu cầu bán ngày mai (D+1) với sai số WAPE 20.27% (Moving Average 7D & Seasonal Naive).\n"
-            f"3. **Optimization Engine:** Tối ưu hóa số mẻ nấu trân châu/thạch theo hạn sử dụng 4 giờ và lập dự thảo đơn nhập hàng (PO).\n"
-            f"4. **Daily Stock Matrix:** Sổ thẻ kho điện tử ma trận đầy đủ 31 ngày tháng 10/2026, hỗ trợ Maker-Checker 2 bước và sửa xóa thủ công.\n"
-            f"5. **Tác tử Tuyết Vương AI:** Hỗ trợ điều phối vận hành dựa trên bằng chứng (Evidence-Driven) và giám sát con người (Human-in-the-Loop)."
+            "### 🍦 Hồ Sơ Cửa Hàng & Hệ Thống BeverageOps AI\n\n"
+            "- **Tên cửa hàng:** Chi nhánh Mixue 39 Tôn Quang Phiệt\n"
+            "- **Mã chi nhánh:** `2132` (Mã hệ thống: `MX-2132`)\n"
+            "- **Địa chỉ:** Số 39 Tôn Quang Phiệt, P. Cổ Nhuế 1, Q. Bắc Từ Liêm, TP. Hà Nội\n"
+            "- **Chủ cửa hàng (Owner):** Nguyễn Hạnh Chi\n"
+            "- **Quản lý điều hành (Store Manager):** Bùi Văn Quang\n\n"
+            "**Kiến trúc Hệ thống BeverageOps AI (Đồ Án Tốt Nghiệp 2026):**\n"
+            "1. **BOM & Analytics Engine:** Quy đổi 39 SKU bán hàng qua định lượng nguyên liệu lý thuyết.\n"
+            "2. **Forecasting Engine:** Dự báo nhu cầu bán ngày mai (D+1) với sai số WAPE 20.27% (Moving Average 7D & Seasonal Naive).\n"
+            "3. **Optimization Engine:** Tối ưu hóa số mẻ nấu trân châu/thạch theo hạn sử dụng 4 giờ và lập dự thảo đơn nhập hàng (PO).\n"
+            "4. **Daily Stock Matrix:** Sổ thẻ kho điện tử ma trận đầy đủ 31 ngày tháng 10/2026, hỗ trợ Maker-Checker 2 bước và sửa xóa thủ công.\n"
+            "5. **Tác tử Tuyết Vương AI:** Hỗ trợ điều phối vận hành dựa trên bằng chứng (Evidence-Driven) và giám sát con người (Human-in-the-Loop)."
         )
         return {
             "text": msg,
@@ -865,7 +860,7 @@ Bạn được trang bị 8 công cụ vận hành:
             "evidence_refs": ["profile:Mixue_Store_2132", "docs:01_PRD_BeverageOps_AI.md"]
         }
 
-    def tool_get_sales_analytics(self, query: str = "") -> Dict[str, Any]:
+    def tool_get_sales_analytics(self, query: str = "") -> dict[str, Any]:
         """Tool: Tra cứu phân tích chi tiết doanh số, ngày cao nhất, ngày thấp nhất, giá bán trung bình."""
         from sqlalchemy import func
         db = self.db
@@ -928,7 +923,7 @@ Bạn được trang bị 8 công cụ vận hành:
             "evidence_refs": ["table:sales_daily", "pos:daily_revenue_aggregation"]
         }
 
-    def tool_get_shift_revenue(self, query: str = "") -> Dict[str, Any]:
+    def tool_get_shift_revenue(self, query: str = "") -> dict[str, Any]:
         """Tool: Tra cứu doanh thu các ca làm việc (Ca sáng, Ca chiều, Ca tối) và tổng thu cuối ngày đối soát POS."""
         q = (query or "").lower()
         q_norm = _normalize_vn(q)
@@ -1048,7 +1043,7 @@ Bạn được trang bị 8 công cụ vận hành:
             "evidence_refs": [f"shift_reports:{target_date}", f"pos_slip:{target_date}", f"signed_by:{signer}"]
         }
 
-    def tool_search_project_kb(self, query: str, is_admin: bool = True) -> Optional[Dict[str, Any]]:
+    def tool_search_project_kb(self, query: str, is_admin: bool = True) -> dict[str, Any] | None:
         """Tool: Tra cứu thông tin sâu trong cơ sở dữ liệu dự án khi người dùng hỏi các câu hỏi chung."""
         q_norm = _normalize_vn(query)
 
@@ -1087,7 +1082,7 @@ Bạn được trang bị 8 công cụ vận hành:
 
         return None
 
-    def _format_sales_response(self, res: Dict[str, Any], query: str = "", sub_intent: Optional[str] = None, prefix: str = "") -> Tuple[str, str]:
+    def _format_sales_response(self, res: dict[str, Any], query: str = "", sub_intent: str | None = None, prefix: str = "") -> tuple[str, str]:
         """Định dạng phản hồi bán hàng đúng trọng tâm câu hỏi của người dùng (Hỏi gì trả lời đấy).
         
         Trả về tuple: (câu_trả_lời_markdown, effective_sub_intent)
@@ -1217,7 +1212,7 @@ Bạn được trang bị 8 công cụ vận hành:
             msg += "**Top 5 món bán chạy nhất:**\n" + "\n".join(top_lines)
         return msg, "full_report"
 
-    def process_query(self, user_query: str, user_role: str = "MANAGER", user_name: str = "Quản lý", chat_history: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    def process_query(self, user_query: str, user_role: str = "MANAGER", user_name: str = "Quản lý", chat_history: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         """Processes a natural language query from the user, routes to appropriate tools, and builds response with evidence."""
         q = user_query.lower()
         q_norm = _normalize_vn(q)
@@ -1414,12 +1409,12 @@ Bạn được trang bị 8 công cụ vận hành:
             if is_admin:
                 v_status_vi = "ĐÃ THẨM ĐỊNH ĐẠT CHUẨN ✅" if res['verification']['status'] == "VERIFIED" else "TỪ CHỐI VI PHẠM ❌"
                 summary_lines = [f"- **{r['ingredient_name']}**: Cần nấu **{r['num_batches']} mẻ** ({r['recommended_prep_qty']:,} {r['unit']}) | Dự báo nhu cầu: {r['forecasted_demand']:,} {r['unit']} (Hạn dùng: {r['shelf_life_rule']})" for r in evidence]
-                msg = f"### 🥣 Kế hoạch sơ chế Topping ngày mai (D+1)\n\n" + "\n".join(summary_lines)
+                msg = "### 🥣 Kế hoạch sơ chế Topping ngày mai (D+1)\n\n" + "\n".join(summary_lines)
                 msg += f"\n\n**Mã dự thảo:** `{res['draft_plan_id']}` (Trạng thái: Chờ duyệt | Thẩm định: **{v_status_vi}**)"
             else:
                 summary_lines = [f"- **{r['ingredient_name']}**: 1 mẻ chuẩn nấu **{r['batch_size']:,} {r['unit']}** | Hạn dùng SOP: **{r['shelf_life_rule']}**" for r in evidence]
-                msg = f"### 🥣 Kế hoạch sơ chế Topping & Quy chuẩn Quầy Bar (SOP Mixue)\n\n" + "\n".join(summary_lines)
-                msg += f"\n\n*💡 Quy chuẩn SOP Mixue: Nhân viên tuân thủ đúng định lượng từng mẻ và đổ bỏ khi hết hạn bảo quản. Kế hoạch số mẻ trong ca do Quản lý phê duyệt.*"
+                msg = "### 🥣 Kế hoạch sơ chế Topping & Quy chuẩn Quầy Bar (SOP Mixue)\n\n" + "\n".join(summary_lines)
+                msg += "\n\n*💡 Quy chuẩn SOP Mixue: Nhân viên tuân thủ đúng định lượng từng mẻ và đổ bỏ khi hết hạn bảo quản. Kế hoạch số mẻ trong ca do Quản lý phê duyệt.*"
             return {
                 "text": msg,
                 "tool_called": "optimize_topping_prep",
@@ -1434,7 +1429,7 @@ Bạn được trang bị 8 công cụ vận hành:
             crit_count = res["critical_shortage_count"]
             prio_vi = {"CRITICAL": "🚨 Nguy cấp (Hết hàng)", "REORDER": "📦 Cần nhập", "OK": "✅ Đủ hàng"}
             summary_lines = [f"- **{p['ingredient_name']}**: Đặt **{p['packs_to_order']} gói/thùng** ({p['recommended_order_qty']:,} {p['unit']}) | Tồn kho: {p['current_on_hand']:,} {p['unit']} | Mức ưu tiên: **{prio_vi.get(p['priority'], p['priority'])}**" for p in top[:7]]
-            msg = f"### 📦 Đề xuất Đơn nhập hàng (Dự thảo PO)\n\n"
+            msg = "### 📦 Đề xuất Đơn nhập hàng (Dự thảo PO)\n\n"
             msg += f"Phát hiện **{crit_count} mặt hàng nguy cấp** có tồn kho dưới thời gian giao hàng (Lead Time: 2 ngày).\n\n" + "\n".join(summary_lines)
             msg += f"\n\n**Mã dự thảo:** `{res['draft_plan_id']}` (Cần Quản lý phê duyệt)"
             return {
@@ -1530,7 +1525,7 @@ Bạn được trang bị 8 công cụ vận hành:
             res = self.tool_get_topping_waste_summary()
             high = res["highest_waste_item"]
             all_t = [f"- **{t['ingredient_name']}**: Chuẩn bị {t['total_prepared']:,} {t['unit']} | Hủy {t['total_wasted']:,} {t['unit']} (**Tỷ lệ hủy: {t['waste_rate_pct']}%**)" for t in res["all_toppings"]]
-            msg = f"### ⚠️ Báo cáo Hao hụt & Hủy Topping (30 ngày)\n\n"
+            msg = "### ⚠️ Báo cáo Hao hụt & Hủy Topping (30 ngày)\n\n"
             msg += f"Tỷ lệ hủy trung bình: **{res['average_waste_rate_pct']}%**.\n"
             msg += f"Topping có lượng hủy lớn nhất: **{high['ingredient_name']}** ({high['waste_rate_pct']}%).\n\n" + "\n".join(all_t)
             msg += "\n\n*Lưu ý: Hao hụt cao chủ yếu do quy định thời gian bảo quản (4 giờ / đổ bỏ cuối ngày). Việc chuyển sang mô hình tính mẻ theo dự báo sẽ giúp giảm lượng hủy thừa này.*"
@@ -1544,7 +1539,7 @@ Bạn được trang bị 8 công cụ vận hành:
         # 10. Inventory Reconciliation (Đối soát kiểm kê)
         if is_admin and any(w in q for w in ["đối soát", "kiểm kê", "lệch kho", "tồn kho"]):
             res = self.tool_get_inventory_position()
-            msg = f"### 🔍 Đối soát Kho & Chênh lệch Kiểm kê (30 ngày)\n\n"
+            msg = "### 🔍 Đối soát Kho & Chênh lệch Kiểm kê (30 ngày)\n\n"
             msg += f"Tổng số mặt hàng đã kiểm kê: **{res['total_items_counted']}**.\n\n"
             for d in res.get("discrepancies_sample", [])[:5]:
                 msg += f"- **{d['ingredient_name']}**: Mua {d['total_purchased']:,} | Dùng BOM {d['theoretical_usage']:,} | Tồn kiểm kê {d['actual_stock_count']:,} | Lệch: **{d['variance']:,} {d['unit']} ({d['variance_pct']}%)**\n"
@@ -1598,11 +1593,11 @@ Bạn được trang bị 8 công cụ vận hành:
         # Default fallback
         if not is_admin:
             msg = f"Xin chào {user_name}! Tôi là **Trợ lý Tuyết Vương AI** của cửa hàng **Mixue 39 Tôn Quang Phiệt** (Mã CH: 2132).\n\n"
-            msg += f"Với vai trò **Nhân viên quầy / Pha chế**, tôi sẵn sàng hỗ trợ bạn:\n"
-            msg += f"1. 🍵 **Tra cứu công thức pha chế:** Định lượng chuẩn SOP các món trà sữa, kem, trà trái cây (Ví dụ: `Công thức TS1`, `Công thức DK1`).\n"
-            msg += f"2. 🏷️ **Giải mã tem dán ly:** Phân tích mã tem 5 chữ số đường, đá, topping (Ví dụ: `24101`).\n"
-            msg += f"3. 🥣 **Quy chuẩn sơ chế:** Định lượng nấu mẻ trân châu, thạch và thời gian bảo quản an toàn thực phẩm.\n\n"
-            msg += f"*Lưu ý: Các tác vụ về doanh số, tồn kho, đơn nhập hàng và nhân sự chỉ dành cho Quản lý / Chủ quán (Admin).*"
+            msg += "Với vai trò **Nhân viên quầy / Pha chế**, tôi sẵn sàng hỗ trợ bạn:\n"
+            msg += "1. 🍵 **Tra cứu công thức pha chế:** Định lượng chuẩn SOP các món trà sữa, kem, trà trái cây (Ví dụ: `Công thức TS1`, `Công thức DK1`).\n"
+            msg += "2. 🏷️ **Giải mã tem dán ly:** Phân tích mã tem 5 chữ số đường, đá, topping (Ví dụ: `24101`).\n"
+            msg += "3. 🥣 **Quy chuẩn sơ chế:** Định lượng nấu mẻ trân châu, thạch và thời gian bảo quản an toàn thực phẩm.\n\n"
+            msg += "*Lưu ý: Các tác vụ về doanh số, tồn kho, đơn nhập hàng và nhân sự chỉ dành cho Quản lý / Chủ quán (Admin).*"
             return {
                 "text": msg,
                 "tool_called": "staff_overview",
@@ -1612,13 +1607,13 @@ Bạn được trang bị 8 công cụ vận hành:
 
         sales_summary = self.tool_get_daily_sales()
         msg = f"Xin chào {user_name}! Tôi là **Trợ lý Tuyết Vương AI** của cửa hàng **Mixue 39 Tôn Quang Phiệt** (Mã CH: 2132).\n\n"
-        msg += f"Tôi có thể tra cứu và giải đáp mọi thông tin dữ liệu trong dự án cho Quản trị viên:\n"
-        msg += f"1. 👥 **Quản lý nhân sự:** Tra cứu danh sách nhân viên, tài khoản và trạng thái mật khẩu.\n"
-        msg += f"2. 📦 **Sổ thẻ kho 31 ngày:** Xem số tồn, nhập, xuất của 12 mặt hàng hoặc kiểm tra lệnh kho chờ duyệt.\n"
-        msg += f"3. 📈 **Dự báo nhu cầu (D+1):** Dự đoán sản lượng 39 SKU ngày mai để chuẩn bị quầy.\n"
-        msg += f"4. 🥣 **Kế hoạch sơ chế & Đơn nhập PO:** Tính số mẻ nấu theo hạn dùng 4h và đề xuất hàng cần nhập.\n"
-        msg += f"5. 💰 **Báo cáo doanh số chi tiết:** Ngày doanh thu cao/thấp nhất, top món bán chạy, giá bán trung bình (AOV).\n"
-        msg += f"6. 🍵 **Công thức & Tem ly:** Tra cứu 39 món thực đơn và giải mã mã tem dán ly.\n\n"
+        msg += "Tôi có thể tra cứu và giải đáp mọi thông tin dữ liệu trong dự án cho Quản trị viên:\n"
+        msg += "1. 👥 **Quản lý nhân sự:** Tra cứu danh sách nhân viên, tài khoản và trạng thái mật khẩu.\n"
+        msg += "2. 📦 **Sổ thẻ kho 31 ngày:** Xem số tồn, nhập, xuất của 12 mặt hàng hoặc kiểm tra lệnh kho chờ duyệt.\n"
+        msg += "3. 📈 **Dự báo nhu cầu (D+1):** Dự đoán sản lượng 39 SKU ngày mai để chuẩn bị quầy.\n"
+        msg += "4. 🥣 **Kế hoạch sơ chế & Đơn nhập PO:** Tính số mẻ nấu theo hạn dùng 4h và đề xuất hàng cần nhập.\n"
+        msg += "5. 💰 **Báo cáo doanh số chi tiết:** Ngày doanh thu cao/thấp nhất, top món bán chạy, giá bán trung bình (AOV).\n"
+        msg += "6. 🍵 **Công thức & Tem ly:** Tra cứu 39 món thực đơn và giải mã mã tem dán ly.\n\n"
         msg += f"**Dữ liệu thực tế:** 30 ngày kinh doanh (Tổng doanh thu: {sales_summary.get('total_revenue_vnd', 0):,} đ | {sales_summary.get('total_quantity_sold', 0):,} ly bán)."
         return {
             "text": msg,

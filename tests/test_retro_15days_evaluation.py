@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Bộ kiểm thử Đánh giá & Benchmarking theo Khung 15 Ngày AI Thực Chiến (Phase 1).
 
 Bao gồm:
@@ -9,11 +8,13 @@ Bao gồm:
 5. Ngày 05 & 11: Human-in-the-Loop Governance & Maker-Checker.
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import pytest
+
 from src.agent.mixue_agent import MixueOperationsAgent
 
 

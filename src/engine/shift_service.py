@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Dịch vụ Quản lý & Trích xuất Doanh thu Chốt Ca (Shift Revenue Service).
 
 Chức năng:
@@ -8,13 +7,11 @@ Chức năng:
 4. Đối soát chênh lệch tự động giữa số tiền thực thu tại ca và doanh thu máy POS.
 """
 
-import os
-import re
 import json
 import uuid
 from datetime import date, datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Union, Tuple
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 SHIFT_DATA_FILE = ROOT / "data" / "shift_reports.json"
@@ -47,7 +44,7 @@ SHIFT_DEFINITIONS = {
 }
 
 
-def _load_raw_shift_data() -> List[Dict[str, Any]]:
+def _load_raw_shift_data() -> list[dict[str, Any]]:
     """Đọc toàn bộ báo cáo ca từ file JSON persistent."""
     if not SHIFT_DATA_FILE.exists():
         initial_data = _get_seed_shift_reports()
@@ -61,7 +58,7 @@ def _load_raw_shift_data() -> List[Dict[str, Any]]:
         return _get_seed_shift_reports()
 
 
-def _save_raw_shift_data(data: List[Dict[str, Any]]) -> bool:
+def _save_raw_shift_data(data: list[dict[str, Any]]) -> bool:
     """Lưu toàn bộ báo cáo ca vào file JSON persistent."""
     try:
         SHIFT_DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -73,7 +70,7 @@ def _save_raw_shift_data(data: List[Dict[str, Any]]) -> bool:
         return False
 
 
-def _get_seed_shift_reports() -> List[Dict[str, Any]]:
+def _get_seed_shift_reports() -> list[dict[str, Any]]:
     """Khởi tạo dữ liệu thực tế mẫu từ các bức ảnh sổ chốt ngày 14/10/2026 của cửa hàng Mixue 39 Tôn Quang Phiệt."""
     return [
         {
@@ -161,7 +158,7 @@ def _get_seed_shift_reports() -> List[Dict[str, Any]]:
     ]
 
 
-def get_all_shift_reports(business_date: Optional[Union[str, date]] = None) -> List[Dict[str, Any]]:
+def get_all_shift_reports(business_date: str | date | None = None) -> list[dict[str, Any]]:
     """Lấy danh sách tất cả các báo cáo ca, có thể lọc theo ngày."""
     data = _load_raw_shift_data()
     if not business_date:
@@ -172,7 +169,7 @@ def get_all_shift_reports(business_date: Optional[Union[str, date]] = None) -> L
     return sorted(filtered, key=lambda x: x.get("shift_code", ""))
 
 
-def get_shift_report_by_id(report_id: str) -> Optional[Dict[str, Any]]:
+def get_shift_report_by_id(report_id: str) -> dict[str, Any] | None:
     """Tìm một báo cáo ca theo ID."""
     data = _load_raw_shift_data()
     for r in data:
@@ -181,7 +178,7 @@ def get_shift_report_by_id(report_id: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def save_or_update_shift_report(report_dict: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:
+def save_or_update_shift_report(report_dict: dict[str, Any]) -> tuple[bool, str, dict[str, Any]]:
     """Lưu mới hoặc cập nhật một báo cáo chốt ca."""
     data = _load_raw_shift_data()
     rep_id = report_dict.get("id")
@@ -210,7 +207,10 @@ def save_or_update_shift_report(report_dict: Dict[str, Any]) -> Tuple[bool, str,
     updated = False
     for idx, item in enumerate(data):
         if item.get("id") == rep_id or (item.get("business_date") == report_dict.get("business_date") and item.get("shift_code") == report_dict.get("shift_code")):
-            data[idx] = report_dict
+            merged_item = dict(item)
+            merged_item.update(report_dict)
+            data[idx] = merged_item
+            report_dict = merged_item
             updated = True
             break
 
@@ -224,7 +224,7 @@ def save_or_update_shift_report(report_dict: Dict[str, Any]) -> Tuple[bool, str,
     return False, "Lỗi ghi dữ liệu vào hệ thống lưu trữ.", report_dict
 
 
-def delete_shift_report(report_id: str) -> Tuple[bool, str]:
+def delete_shift_report(report_id: str) -> tuple[bool, str]:
     """Xóa một báo cáo chốt ca theo ID."""
     data = _load_raw_shift_data()
     new_data = [r for r in data if r.get("id") != report_id]
@@ -234,7 +234,7 @@ def delete_shift_report(report_id: str) -> Tuple[bool, str]:
     return ok, "Đã xóa báo cáo chốt ca thành công." if ok else "Lỗi khi lưu dữ liệu."
 
 
-def get_daily_closing_summary(business_date: Union[str, date]) -> Dict[str, Any]:
+def get_daily_closing_summary(business_date: str | date) -> dict[str, Any]:
     """Tính toán và đối soát bảng tổng hợp doanh thu cuối ngày cho toàn bộ các ca."""
     d_str = business_date.isoformat() if isinstance(business_date, date) else str(business_date)
     shifts = get_all_shift_reports(d_str)
@@ -271,9 +271,10 @@ def get_daily_closing_summary(business_date: Union[str, date]) -> Dict[str, Any]
 
     # Lấy doanh thu POS từ CSDL nếu có
     pos_rev = 0
+    from sqlalchemy import func
+
     from src.database import SessionLocal
     from src.models import SalesDaily
-    from sqlalchemy import func
 
     db = SessionLocal()
     try:
@@ -317,10 +318,10 @@ def get_daily_closing_summary(business_date: Union[str, date]) -> Dict[str, Any]
     }
 
 
-def extract_shift_data_from_image(image_bytes: Optional[bytes] = None,
-                                   image_path: Optional[str] = None,
-                                   shift_hint: Optional[str] = None,
-                                   target_date: Optional[str] = None) -> Dict[str, Any]:
+def extract_shift_data_from_image(image_bytes: bytes | None = None,
+                                   image_path: str | None = None,
+                                   shift_hint: str | None = None,
+                                   target_date: str | None = None) -> dict[str, Any]:
     """Agent AI: Trích xuất thông tin doanh thu từ ảnh sổ chốt ca hoặc hóa đơn POS.
     
     Tự động nhận diện:
@@ -331,7 +332,7 @@ def extract_shift_data_from_image(image_bytes: Optional[bytes] = None,
     - Tổng thu về thực tế.
     - Chữ ký xác nhận người giao ca.
     """
-    extracted: Dict[str, Any] = {
+    extracted: dict[str, Any] = {
         "status": "SUCCESS",
         "business_date": target_date or date.today().isoformat(),
         "shift_code": shift_hint or "CA_SANG",

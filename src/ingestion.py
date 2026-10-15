@@ -1,15 +1,22 @@
-# -*- coding: utf-8 -*-
 """Data ingestion pipeline: imports validated CSV files from DU_LIEU_CAN_NHAP into database."""
 import csv
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
+
 from sqlalchemy.orm import Session
-from src.database import engine, Base, SessionLocal
+
+from scripts.tieng_viet import COT, TEP, chuan_hoa
+from src.database import Base, SessionLocal, engine
 from src.models import (
-    MenuItem, Ingredient, RecipeBOM, SalesDaily, Purchase, StockCount, ToppingDaily
+    Ingredient,
+    MenuItem,
+    Purchase,
+    RecipeBOM,
+    SalesDaily,
+    StockCount,
+    ToppingDaily,
 )
-from scripts.tieng_viet import TEP, COT, chuan_hoa
 
 ROOT = Path(__file__).resolve().parents[1]
 

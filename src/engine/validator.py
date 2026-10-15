@@ -1,9 +1,10 @@
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from datetime import date
-from typing import Dict, List, Any, Tuple
+from typing import Any, ClassVar
+
 from src.database import SessionLocal
 from src.models import Ingredient
 
@@ -21,7 +22,7 @@ class IndependentPlanValidator:
     7. Human-in-the-Loop Governance: requires_manager_approval is strictly True
     """
 
-    ALLOWED_UNITS = {"g", "ml", "pcs", "cái"}
+    ALLOWED_UNITS: ClassVar[set[str]] = {"g", "ml", "pcs", "cái"}
 
     def __init__(self, db_session=None):
         self.db = db_session or SessionLocal()
@@ -35,7 +36,7 @@ class IndependentPlanValidator:
         ings = self.db.query(Ingredient.ingredient_id, Ingredient.base_unit).all()
         self.valid_ingredients = {r[0]: r[1] for r in ings}
 
-    def verify_topping_prep_plan(self, prep_lines: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def verify_topping_prep_plan(self, prep_lines: list[dict[str, Any]]) -> dict[str, Any]:
         """Validates topping preparation recommendations."""
         violations = []
         warnings = []
@@ -92,7 +93,7 @@ class IndependentPlanValidator:
             "verifier": "IndependentPlanValidator_v1.0"
         }
 
-    def verify_replenishment_plan(self, po_lines: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def verify_replenishment_plan(self, po_lines: list[dict[str, Any]]) -> dict[str, Any]:
         """Validates replenishment purchase order lines."""
         violations = []
         warnings = []

@@ -1,6 +1,6 @@
-# -*- coding: utf-8 -*-
 """Kiểm thử tự động luồng Xác thực đăng nhập & Phân quyền RBAC trên Dashboard."""
 from pathlib import Path
+
 from streamlit.testing.v1 import AppTest
 
 APP = Path(__file__).resolve().parents[1] / 'src' / 'dashboard' / 'app.py'

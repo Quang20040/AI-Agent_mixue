@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Hệ thống Quản lý Người dùng & Phân quyền (RBAC) - Mixue 39 Tôn Quang Phiệt.
 
 Phân quyền 2 cấp độ:
@@ -16,15 +15,15 @@ Phân quyền 2 cấp độ:
 import hashlib
 import re
 from datetime import datetime
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Any
 
-from src.database import SessionLocal, Base, engine
+from src.database import Base, SessionLocal, engine
 from src.models import User
 
 # Đảm bảo bảng người dùng luôn tồn tại trong DB
 Base.metadata.create_all(bind=engine)
 
-ADMIN_PAGES: List[str] = [
+ADMIN_PAGES: list[str] = [
     "Trang chủ",
     "Báo cáo & kho",
     "Dự báo",
@@ -35,37 +34,66 @@ ADMIN_PAGES: List[str] = [
     "💬 Tuyết Vương AI"
 ]
 
-STAFF_OFFICIAL_PAGES: List[str] = [
+STAFF_OFFICIAL_PAGES: list[str] = [
     "Trang chủ",
     "Báo cáo & kho",
     "Tem & công thức",
     "💬 Tuyết Vương AI"
 ]
 
-STAFF_PROBATION_PAGES: List[str] = [
+STAFF_PROBATION_PAGES: list[str] = [
     "Trang chủ",
     "Tem & công thức",
     "💬 Tuyết Vương AI"
 ]
 
-STAFF_PAGES: List[str] = STAFF_OFFICIAL_PAGES
+STAFF_PAGES: list[str] = STAFF_OFFICIAL_PAGES
 
 
 
-def hash_password(password: str) -> str:
-    """Tạo mã băm SHA-256 cho mật khẩu."""
-    return hashlib.sha256(password.strip().encode("utf-8")).hexdigest()
+import secrets
 
 
-def check_password(plain_password: str, hashed_or_plain: str) -> bool:
-    """Kiểm tra mật khẩu nhập vào khớp với mật khẩu băm (hoặc plaintext fallback ban đầu)."""
-    if not hashed_or_plain or not plain_password:
+def hash_password(password: str, salt: str | None = None) -> str:
+    """Tạo mã băm bảo mật PBKDF2-HMAC-SHA256 với Salt ngẫu nhiên 16 bytes (chuẩn NIST/OWASP)."""
+    clean_pw = password.strip()
+    if not salt:
+        salt = secrets.token_hex(16)
+    key = hashlib.pbkdf2_hmac("sha256", clean_pw.encode("utf-8"), salt.encode("utf-8"), 100000)
+    return f"pbkdf2_sha256$100000${salt}${key.hex()}"
+
+
+def check_password(plain_password: str, hashed_password: str) -> bool:
+    """Kiểm tra mật khẩu bảo mật chống timing attack và bẻ khóa Rainbow table.
+    Hỗ trợ cả chuẩn PBKDF2 mới và chuẩn SHA-256 cũ (backward-compatible).
+    Tuyệt đối không cho phép plaintext fallback.
+    """
+    if not hashed_password or not plain_password:
         return False
     clean_plain = plain_password.strip()
-    return hash_password(clean_plain) == hashed_or_plain or clean_plain == hashed_or_plain
+
+    # 1. Định dạng PBKDF2 chuẩn bảo mật mới: pbkdf2_sha256$iterations$salt$hash
+    if hashed_password.startswith("pbkdf2_sha256$"):
+        parts = hashed_password.split("$")
+        if len(parts) == 4:
+            try:
+                iterations = int(parts[1])
+                salt = parts[2]
+                stored_hash = parts[3]
+                calculated = hashlib.pbkdf2_hmac("sha256", clean_plain.encode("utf-8"), salt.encode("utf-8"), iterations).hex()
+                return secrets.compare_digest(calculated, stored_hash)
+            except Exception:
+                return False
+
+    # 2. Định dạng SHA-256 cũ (chuyển tiếp an toàn cho tài khoản hiện có trong DB)
+    if len(hashed_password) == 64 and re.fullmatch(r"[0-9a-fA-F]{64}", hashed_password):
+        legacy_hash = hashlib.sha256(clean_plain.encode("utf-8")).hexdigest()
+        return secrets.compare_digest(legacy_hash, hashed_password)
+
+    return False
 
 
-def _get_role_metadata(role: str) -> Dict[str, str]:
+def _get_role_metadata(role: str) -> dict[str, str]:
     """Cung cấp metadata chức danh và huy hiệu theo vai trò."""
     r = (role or "").strip().upper()
     if r in ("ADMIN", "OWNER"):
@@ -159,7 +187,7 @@ def init_db_users():
 init_db_users()
 
 
-def verify_user(username: str, password: str) -> Optional[Dict[str, Any]]:
+def verify_user(username: str, password: str) -> dict[str, Any] | None:
     """Xác thực thông tin đăng nhập từ cơ sở dữ liệu."""
     if not username or not password:
         return None
@@ -178,15 +206,16 @@ def verify_user(username: str, password: str) -> Optional[Dict[str, Any]]:
         if not user:
             return None
 
-        # Cho phép các mật khẩu legacy như 123, mixue2132 cho admin hoặc staff demo
         valid = check_password(clean_pass, user.password_hash)
-        if not valid:
-            if is_admin_role(user.role) and clean_pass in ("123", "mixue2132", "admin123", "manager123"):
-                valid = True
-            elif clean_user == "nhanvien" and clean_pass in ("123", "123456", "staff123"):
-                valid = True
-
         if valid:
+            # Tự động nâng cấp hash mật khẩu cũ sang chuẩn PBKDF2 nếu chưa nâng cấp
+            if not user.password_hash.startswith("pbkdf2_"):
+                try:
+                    user.password_hash = hash_password(clean_pass)
+                    db.commit()
+                except Exception:
+                    db.rollback()
+
             meta = _get_role_metadata(user.role)
             return {
                 "username": user.username,
@@ -218,7 +247,7 @@ def is_staff_role(role: str) -> bool:
     return role.strip().upper() in ("STAFF", "STAFF_OFFICIAL", "STAFF_PROBATION", "TRAINEE")
 
 
-def get_allowed_pages(role: str) -> List[str]:
+def get_allowed_pages(role: str) -> list[str]:
     """Trả về danh sách các tab được phép truy cập theo phân quyền."""
     r = (role or "").strip().upper()
     if is_admin_role(r):
@@ -240,7 +269,7 @@ def can_access_page(role: str, page_name: str) -> bool:
     return page_name in allowed
 
 
-def change_user_password(username: str, old_password: str, new_password: str) -> Tuple[bool, str]:
+def change_user_password(username: str, old_password: str, new_password: str) -> tuple[bool, str]:
     """Đổi mật khẩu cho người dùng. Bắt buộc mật khẩu mới phải gồm đúng 6 chữ số và khác 123456."""
     clean_user = username.strip().lower()
     clean_old = old_password.strip()
@@ -275,12 +304,12 @@ def change_user_password(username: str, old_password: str, new_password: str) ->
         return True, "Đổi mật khẩu thành công! Mật khẩu mới gồm 6 chữ số đã được kích hoạt."
     except Exception as e:
         db.rollback()
-        return False, f"Lỗi hệ thống khi cập nhật mật khẩu: {str(e)}"
+        return False, f"Lỗi hệ thống khi cập nhật mật khẩu: {e!s}"
     finally:
         db.close()
 
 
-def create_employee(admin_username: str, username: str, full_name: str, phone: str, role: str) -> Tuple[bool, str]:
+def create_employee(admin_username: str, username: str, full_name: str, phone: str, role: str) -> tuple[bool, str]:
     """Đăng ký tài khoản nhân viên mới (Chỉ dành cho Admin/Quản lý). Mật khẩu mặc định là 123456."""
     clean_user = username.strip().lower()
     clean_name = full_name.strip()
@@ -317,12 +346,12 @@ def create_employee(admin_username: str, username: str, full_name: str, phone: s
         return True, f"Tạo tài khoản nhân viên '{clean_user}' thành công! Mật khẩu mặc định: 123456 (Bắt buộc đổi khi đăng nhập)."
     except Exception as e:
         db.rollback()
-        return False, f"Lỗi cơ sở dữ liệu khi tạo nhân viên: {str(e)}"
+        return False, f"Lỗi cơ sở dữ liệu khi tạo nhân viên: {e!s}"
     finally:
         db.close()
 
 
-def reset_employee_password(admin_username: str, target_username: str) -> Tuple[bool, str]:
+def reset_employee_password(admin_username: str, target_username: str) -> tuple[bool, str]:
     """Reset mật khẩu của nhân viên về mặc định 123456 và bật lại cờ bắt buộc đổi mật khẩu."""
     clean_target = target_username.strip().lower()
 
@@ -339,12 +368,12 @@ def reset_employee_password(admin_username: str, target_username: str) -> Tuple[
         return True, f"Đã reset mật khẩu của nhân viên '{user.full_name}' ({clean_target}) về mặc định: 123456. Nhân viên bắt buộc phải đổi mật khẩu gồm 6 chữ số khi đăng nhập lại."
     except Exception as e:
         db.rollback()
-        return False, f"Lỗi cơ sở dữ liệu khi reset mật khẩu: {str(e)}"
+        return False, f"Lỗi cơ sở dữ liệu khi reset mật khẩu: {e!s}"
     finally:
         db.close()
 
 
-def get_all_employees() -> List[Dict[str, Any]]:
+def get_all_employees() -> list[dict[str, Any]]:
     """Lấy danh sách toàn bộ tài khoản nhân viên phục vụ màn hình Quản lý nhân viên của Admin."""
     db = SessionLocal()
     try:

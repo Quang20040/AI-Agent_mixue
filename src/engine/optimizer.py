@@ -1,15 +1,20 @@
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 import math
-from datetime import date, timedelta
-from typing import Dict, List, Optional, Any
+from datetime import date
+from typing import Any
+
 import pandas as pd
 from sqlalchemy import func
+
 from src.database import SessionLocal
 from src.models import (
-    MenuItem, Ingredient, RecipeBOM, SalesDaily, Purchase, StockCount, ToppingDaily
+    Ingredient,
+    RecipeBOM,
+    StockCount,
 )
 
 # Standard Batch Sizes for Prepared Toppings / Semi-finished Products
@@ -141,8 +146,8 @@ class OptimizerEngine:
         target_date: date,
         ingredient_demand_df: pd.DataFrame,
         buffer_pct: float = 0.10,
-        usable_stock_map: Optional[Dict[str, float]] = None
-    ) -> List[Dict[str, Any]]:
+        usable_stock_map: dict[str, float] | None = None
+    ) -> list[dict[str, Any]]:
         """Generates daily preparation batch recommendations for toppings.
         
         Formula:
@@ -203,7 +208,7 @@ class OptimizerEngine:
         lead_time_days: int = 2,
         review_period_days: int = 7,
         safety_factor: float = 1.3
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Generates replenishment purchase order drafts for raw ingredients and disposables.
         
         Formula:
