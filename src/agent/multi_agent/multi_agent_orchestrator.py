@@ -8,6 +8,7 @@
 4. NLPSynthesizer: Xử lý ngôn ngữ tự nhiên, tổng hợp câu trả lời sâu sắc, minh bạch và đầy đủ dẫn chứng.
 """
 
+import re
 from typing import Any
 from pathlib import Path
 
@@ -22,7 +23,11 @@ def _norm(text: str) -> str:
     if not text:
         return ""
     t = text.lower().replace("đ", "d")
-    return "".join(c for c in unicodedata.normalize("NFD", t) if unicodedata.category(c) != "Mn").strip()
+    norm = "".join(c for c in unicodedata.normalize("NFD", t) if unicodedata.category(c) != "Mn").strip()
+    norm = re.sub(r"\bchan\s*trau\b", "tran chau", norm)
+    norm = re.sub(r"\bchan\s*chau\b", "tran chau", norm)
+    norm = re.sub(r"\btran\s*trau\b", "tran chau", norm)
+    return norm
 
 
 class MultiAgentOrchestrator:
@@ -49,15 +54,20 @@ class MultiAgentOrchestrator:
 
         # 0. RBAC Guardrail: Chặn Nhân viên truy cập dữ liệu doanh số, kho, đơn PO, nhân sự
         if not is_admin:
-            admin_restricted_topics = [
-                "doanh thu", "doanh so", "ban hang", "so ly", "so coc", "tien", "loi nhuan",
-                "thu duoc bao nhieu", "ban duoc bao nhieu", "ban chay nhat", "aov", "gia trung binh",
-                "du bao", "forecast", "du doan", "hao hut", "huy", "waste",
-                "doi soat", "kiem ke", "lech kho", "ton kho", "so kho", "the kho", "lenh kho",
-                "nhap hang", "dat hang", "po", "nhan vien", "nhan su", "tai khoan"
+            admin_restricted_patterns = [
+                r"\bdoanh\s+thu\b", r"\bdoanh\s+so\b", r"\bban\s+hang\b", r"\bso\s+ly\b", r"\bso\s+coc\b",
+                r"\btien\b", r"\bloi\s+nhuan\b", r"\bthu\s+duoc\s+bao\s+nhieu\b", r"\bban\s+duoc\s+bao\s+nhieu\b",
+                r"\bban\s+chay\s+nhat\b", r"\baov\b", r"\bgia\s+trung\s+binh\b",
+                r"\bdu\s+bao\b", r"\bforecast\b", r"\bdu\s+doan\b", r"\bhao\s+hut\b", r"\bwaste\b",
+                r"\bdoi\s+soat\b", r"\bkiem\s+ke\b", r"\blech\s+kho\b", r"\bton\s+kho\b", r"\bso\s+kho\b", r"\bthe\s+kho\b", r"\blenh\s+kho\b",
+                r"\bnhap\s+hang\b", r"\bdat\s+hang\b", r"\bpo\b", r"\bnhan\s+vien\b", r"\bnhan\s+su\b", r"\btai\s+khoan\b"
             ]
-            is_recipe_kw = any(w in q_norm for w in ["cong thuc", "pha che", "dinh luong", "lam mon", "tem", "ma tem"])
-            if any(w in q_norm for w in admin_restricted_topics) and not is_recipe_kw:
+            is_sop_allowed_kw = any(w in q_norm for w in [
+                "cong thuc", "pha che", "dinh luong", "lam mon", "tem", "ma tem",
+                "bao quan", "han dung", "thoi gian", "so che", "nau", "cach lam", "sop", "huong dan"
+            ])
+            has_admin_restriction = any(re.search(pat, q_norm) for pat in admin_restricted_patterns)
+            if has_admin_restriction and not is_sop_allowed_kw:
                 return {
                     "text": (
                         "🔒 **Quyền hạn bị giới hạn (Tài khoản Nhân viên):**\n\n"
@@ -78,25 +88,36 @@ class MultiAgentOrchestrator:
         bom_results: dict[str, Any] | None = None
         primary_tool = "multi_agent_search"
 
-        # 1. Phát hiện câu hỏi liên quan đến Công thức Pha chế (BOM) & Tem dán ly
-        is_recipe_query = any(w in q_norm for w in ["cong thuc", "dinh luong", "pha che", "nguyen lieu cua mon", "cach pha", "mon"])
-        is_sticker_query = any(w in q_norm for w in ["ma tem", "tem dan", "tem in", "giai ma tem", "ma ly"])
-        
-        # Kiểm tra mã tem 5 số
-        import re
-        code_match = re.search(r"\b(\d{5})\b", q)
-        if code_match and (is_sticker_query or "tem" in q_norm or "ly" in q_norm or len(q.split()) <= 4):
-            bom_results = self.bom_agent.decode_cup_sticker(code_match.group(1))
-            primary_tool = "decode_recipe_or_sticker"
+        # 1. Phát hiện câu hỏi liên quan đến Hướng dẫn nấu mẻ / Sơ chế Topping / Định nghĩa (SOP Prep Guide)
+        is_prep_sop_query = any(w in q_norm for w in [
+            "cach nau", "huong dan nau", "quy trinh nau", "cach lam", "nau the nao", "so che the nao",
+            "cach pha", "cach u", "huong dan so che", "quy trinh so che", "dinh nghia", "la gi", "luoc", "nau", "so che"
+        ])
+        if is_prep_sop_query or any(k in q_norm for k in ["tran chau", "chan trau", "thach dao", "thach duong den", "pudding", "kem tuoi", "u tra"]):
+            sop_res = self.bom_agent.get_sop_prep_guide(q)
+            if sop_res:
+                bom_results = sop_res
+                primary_tool = "get_sop_prep_guide"
 
-        elif is_recipe_query:
-            # Trích xuất tên món
-            matched_items = self.db_agent.query_menu_catalogue()
-            for it in matched_items:
-                if _norm(it["sku_name"]) in q_norm or _norm(it["sku_id"]) in q_norm:
-                    bom_results = self.bom_agent.get_recipe_details(it["sku_id"])
-                    primary_tool = "decode_recipe_or_sticker"
-                    break
+        # 2. Phát hiện câu hỏi liên quan đến Công thức Pha chế (BOM) & Tem dán ly (nếu chưa có kết quả sơ chế)
+        if not bom_results:
+            is_recipe_query = any(w in q_norm for w in ["cong thuc", "dinh luong", "pha che", "nguyen lieu cua mon", "cach pha", "mon"])
+            is_sticker_query = any(w in q_norm for w in ["ma tem", "tem dan", "tem in", "giai ma tem", "ma ly"])
+            
+            # Kiểm tra mã tem 5 số
+            code_match = re.search(r"\b(\d{5})\b", q)
+            if code_match and (is_sticker_query or "tem" in q_norm or "ly" in q_norm or len(q.split()) <= 4):
+                bom_results = self.bom_agent.decode_cup_sticker(code_match.group(1))
+                primary_tool = "decode_recipe_or_sticker"
+
+            elif is_recipe_query:
+                # Trích xuất tên món
+                matched_items = self.db_agent.query_menu_catalogue()
+                for it in matched_items:
+                    if _norm(it["sku_name"]) in q_norm or _norm(it["sku_id"]) in q_norm:
+                        bom_results = self.bom_agent.get_recipe_details(it["sku_id"])
+                        primary_tool = "decode_recipe_or_sticker"
+                        break
 
         # 2. Phát hiện câu hỏi liên quan đến Doanh số / Bán hàng (Chỉ Admin)
         is_sales_query = any(w in q_norm for w in [

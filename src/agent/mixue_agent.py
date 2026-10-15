@@ -50,11 +50,17 @@ TOPPING_CODES = {
 
 
 def _normalize_vn(text: str) -> str:
-    """Loại bỏ dấu tiếng Việt và chuẩn hóa chữ thường để tìm kiếm linh hoạt."""
+    """Loại bỏ dấu tiếng Việt, chuẩn hóa chữ thường và đồng bộ các lỗi chính tả phổ biến (ví dụ: chân trâu -> trân châu)."""
     import unicodedata
+    import re
     if not text:
         return ""
-    return ''.join(c for c in unicodedata.normalize('NFD', text.lower().replace('đ', 'd')) if unicodedata.category(c) != 'Mn').strip()
+    t = text.lower().replace('đ', 'd')
+    norm = ''.join(c for c in unicodedata.normalize('NFD', t) if unicodedata.category(c) != 'Mn').strip()
+    norm = re.sub(r'\bchan\s*trau\b', 'tran chau', norm)
+    norm = re.sub(r'\bchan\s*chau\b', 'tran chau', norm)
+    norm = re.sub(r'\btran\s*trau\b', 'tran chau', norm)
+    return norm
 
 
 def _parse_query_date_range(query: str) -> tuple[str | None, str | None]:
@@ -1646,10 +1652,6 @@ Bạn được trang bị 8 công cụ vận hành:
                 "evidence_refs": ["table:daily_sales", "table:recipe_bom", "table:stock_counts", "table:topping_daily"]
             }
 
-        # 13. Deep Project Knowledge Base Search (Quét sâu cơ sở dữ liệu dự án cho Admin)
-        kb_res = self.tool_search_project_kb(user_query, is_admin=is_admin)
-        if kb_res:
-            return kb_res
 
         # Kiểm tra nếu chỉ là câu chào hỏi xã giao đơn thuần
         is_simple_greeting = any(w == q_norm or w in q_norm.split() for w in [

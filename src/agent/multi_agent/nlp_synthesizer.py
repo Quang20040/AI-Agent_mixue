@@ -149,6 +149,44 @@ class NLPSynthesizer:
                     sec += f"- {r}\n"
                 sections.append(sec)
 
+            elif bom_results.get("type") == "SOP_PREP_GUIDE":
+                for ref in bom_results.get("evidence_refs", []):
+                    evidence_refs.append(ref)
+
+                sec = (
+                    f"### 🥣 Hướng Dẫn Nấu & Sơ Chế Chuẩn SOP: {bom_results['name']} (Mã: `{bom_results['code']}`)\n\n"
+                    f"**📖 Định nghĩa & Khái niệm:**\n"
+                    f"> {bom_results['definition']}\n\n"
+                )
+
+                # Bảng định lượng mẻ
+                batches = bom_results.get("batches", {})
+                if batches:
+                    sec += "**⚖️ Bảng Định Lượng Nguyên Liệu Chuẩn Theo Mẻ (Cửa hàng 2132):**\n\n"
+                    sec += "| Quy cách mẻ | Mã NL | Tên thành phần | Lượng chuẩn | Đơn vị | Sản lượng ước tính |\n"
+                    sec += "| :--- | :---: | :--- | :---: | :---: | :---: |\n"
+                    for b_name, items in batches.items():
+                        for it in items:
+                            cups_str = f"~{it['cups']} ly" if it.get("cups") else "Theo mẻ"
+                            sec += f"| **{b_name}** | `{it['ing_id']}` | {it['ing_name']} | **{it['qty']}** | {it['unit']} | {cups_str} |\n"
+                    sec += "\n"
+
+                # Các bước thao tác
+                steps = bom_results.get("steps", [])
+                if steps:
+                    sec += "**⏱️ Quy Trình Thao Tác Nấu & Sơ Chế Từng Bước (SOP Bar):**\n"
+                    for idx, stp in enumerate(steps, 1):
+                        sec += f"{idx}. {stp}\n"
+                    sec += "\n"
+
+                # Bảo quản & Hạn dùng
+                sec += (
+                    f"**🛡️ Quy Định Bảo Quản & Hạn Dùng An Toàn Thực Phẩm:**\n"
+                    f"- **Điều kiện bảo quản:** {bom_results['storage']}\n"
+                    f"- **Hạn sử dụng:** **{bom_results['shelf_life']}**\n"
+                )
+                sections.append(sec)
+
         # 3. Xử lý tri thức trích xuất từ Repo Docs, Báo cáo & Quy chuẩn CSV
         if docs_results:
             sec = "### 📚 Tri Thức & Quy Chuẩn Trích Xuất Từ Kho Tài Liệu Repo\n\n"

@@ -23,10 +23,14 @@ def _normalize(text: str) -> str:
     if not text:
         return ""
     text_lower = text.lower().replace("đ", "d")
-    return "".join(
+    norm = "".join(
         c for c in unicodedata.normalize("NFD", text_lower)
         if unicodedata.category(c) != "Mn"
     ).strip()
+    norm = re.sub(r"\bchan\s*trau\b", "tran chau", norm)
+    norm = re.sub(r"\bchan\s*chau\b", "tran chau", norm)
+    norm = re.sub(r"\btran\s*trau\b", "tran chau", norm)
+    return norm
 
 
 def _tokenize(text: str) -> list[str]:

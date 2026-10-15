@@ -62,12 +62,153 @@ SKU_PREFIX_MAP = {
 }
 
 
+from pathlib import Path
+import csv
+import re
+
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+
+SEMI_PRODUCT_SOP_INFO = {
+    "TP02": {
+        "code": "TP02",
+        "name": "Trân châu nguyên vị đã nấu (Trân châu đen)",
+        "definition": "Topping cốt lõi đặc trưng của Mixue được chế biến từ hạt trân châu đen sống (mã nguyên liệu kho: 12), qua quy trình luộc sôi - ủ nóng nở dẻo và ủ ngâm đường mật để hạt trân châu đạt độ bóng mịn, dẻo mềm bên ngoài và dai giòn đàn hồi bên trong.",
+        "storage": "Đậy nắp kín, bảo quản ở nhiệt độ phòng (nhiệt độ thường quầy bar, tránh gió quạt hoặc điều hòa thổi trực tiếp).",
+        "shelf_life": "4 giờ (Sau 4 tiếng trân châu bị lại gạo chai cứng, bắt buộc phải đổ bỏ hủy mẻ, tuyệt đối không bảo quản trong tủ lạnh hoặc tái sử dụng qua ngày).",
+        "steps": [
+            "Đun sôi nước sạch theo tỷ lệ quy chuẩn trong nồi nấu trân châu (4,000 ml nước cho 1 mẻ tiêu chuẩn 1,000 g trân châu; 3,000 ml nước cho nửa mẻ 500 g).",
+            "Khi nước sôi bùng, từ từ rải đều trân châu đen vào nồi, dùng vá khuấy đều một chiều liên tục chạm đáy nồi để các hạt không bị dính vào nhau hoặc bén đáy.",
+            "Nấu sôi đều trên lửa vừa trong đúng 35 phút (đảo nhẹ định kỳ 5-7 phút/lần).",
+            "Tắt bếp, đậy kín nắp vung và tiến hành ủ nóng trong 30 phút để hạt trân châu chín thấu tận tâm lõi.",
+            "Đổ trân châu ra rổ inox chuyên dụng, dùng 2,000 ml nước lọc nguội xả nhẹ để rửa sạch lớp nhớt bề mặt và làm hạt săn chắc lại.",
+            "Đổ trân châu đã ráo nước vào âu chứa topping, thêm đường mật (500 g đường mật cho 1 mẻ; 250 g cho nửa mẻ), dùng phới trộn đều và ủ đường trong 10 phút để ngấm vị ngọt thanh và tạo độ bóng mượt."
+        ],
+        "keywords": ["tran chau", "chan trau", "chan chau", "tran trau", "pearl", "boba", "tp02", "12"]
+    },
+    "TP03": {
+        "code": "TP03",
+        "name": "Thạch đường đen đã chế biến (Pudding đường đen)",
+        "definition": "Thạch topping thơm mùi đường đen truyền thống, mềm mượt và tan chảy trong miệng, được nấu từ bột pudding (mã 4) và syrup đường đen (NL03).",
+        "storage": "Đậy nắp kín ở nhiệt độ phòng (dùng trong ngày) hoặc đậy nắp bảo quản lạnh trong tủ mát.",
+        "shelf_life": "Đổ bỏ cuối ngày nếu ở nhiệt độ thường; 0+3 ngày nếu đậy nắp bảo quản ngăn mát tủ lạnh.",
+        "steps": [
+            "Đun sôi nước sạch (3,000 ml cho 1 mẻ tiêu chuẩn).",
+            "Từ từ đổ bột pudding (500 g) vào nồi nước sôi, dùng phới lồng khuấy đều theo một chiều trong 1 phút.",
+            "Rót syrup đường đen (500 g) vào hỗn hợp, tiếp tục khuấy đều cho tan hoàn toàn.",
+            "Rót hỗn hợp thạch ra khay/hộp đựng, hớt bọt bề mặt để mặt thạch mịn đẹp.",
+            "Để thạch nguội tự nhiên và đông lại trước khi sử dụng hoặc chuyển vào tủ mát."
+        ],
+        "keywords": ["thach duong den", "pudding duong den", "duong den", "tp03", "thach den"]
+    },
+    "TP04": {
+        "code": "TP04",
+        "name": "Thạch đào đã chế biến (Pudding đào)",
+        "definition": "Thạch trái cây vị đào tươi mát, màu vàng cam bắt mắt và vị ngọt dịu, nấu từ bột pudding (mã 4), đường mật (NL01) và mứt đào vàng (NL13).",
+        "storage": "Đậy nắp ở nhiệt độ thường hoặc đậy kín bảo quản lạnh trong ngăn mát.",
+        "shelf_life": "Đổ bỏ cuối ngày ở nhiệt độ thường; 0+3 ngày nếu bảo quản trong tủ mát.",
+        "steps": [
+            "Đun sôi 2,000 ml nước sạch cho 1 mẻ tiêu chuẩn.",
+            "Rải từ từ 250 g bột pudding vào nước sôi, khuấy tan đều.",
+            "Thêm 250 g đường mật và 250 g mứt đào vàng vào nồi, khuấy đều liên tục trong 2 phút.",
+            "Rót thạch ra khuôn khay, để nguội cho thạch đông kết kết cấu dẻo mịn."
+        ],
+        "keywords": ["thach dao", "pudding dao", "dao", "tp04"]
+    },
+    "TP05": {
+        "code": "TP05",
+        "name": "Trà sữa lạnh đã pha (Trà sữa nền cốt)",
+        "definition": "Hỗn hợp trà sữa nền cốt pha sẵn phục vụ quầy bar, phối trộn giữa hồng trà ủ đậm vị (mã 13), bột trà sữa béo ngậy (mã 3) và làm lạnh sốc bằng đá viên.",
+        "storage": "Bình giữ nhiệt chuyên dụng hoặc bình đong đậy kín nắp trong tủ lạnh.",
+        "shelf_life": "Đổ bỏ cuối ngày (không để qua đêm).",
+        "steps": [
+            "Ủ 100 g hồng trà với 1,400 g nước sôi trong đúng 12 phút.",
+            "Lọc bỏ bã trà, cho nhỏ giọt 30 giây để thu trọn nước cốt đậm đặc.",
+            "Cho 650 g bột trà sữa vào nước cốt trà nóng, dùng phới khuấy kỹ trong 2 phút cho tan mịn hoàn toàn không vón cục.",
+            "Cho 900 g đá viên vào khuấy tan trong 2 phút để làm lạnh sốc giữ trọn hương thơm béo ngậy."
+        ],
+        "keywords": ["tra sua lanh", "tra sua nen", "cot tra sua", "pha tra sua", "tp05"]
+    },
+    "TP06": {
+        "code": "TP06",
+        "name": "Sữa đặc pha từ bột trà sữa",
+        "definition": "Hỗn hợp sữa nền ngọt ngậy dùng gia tăng độ sánh béo cho các dòng trà sữa và sữa trái cây Mixue.",
+        "storage": "Bình giữ nhiệt hoặc bình đong đậy nắp trong tủ mát.",
+        "shelf_life": "8 giờ trong bình giữ nhiệt; đổ bỏ cuối ngày nếu bảo quản lạnh.",
+        "steps": [
+            "Pha 500 g bột trà sữa với 500 g nước nóng.",
+            "Dùng phới đánh đều trong khoảng 3 phút cho tan sánh mịn.",
+            "Thêm 500 g đá viên khuấy đều để làm nguội sốc và tạo độ sánh kem chuẩn."
+        ],
+        "keywords": ["sua dac", "bot sua pha", "tp06"]
+    },
+    "TP07": {
+        "code": "TP07",
+        "name": "Trà xanh đã ủ (Lục trà hoa nhài)",
+        "definition": "Cốt lục trà thơm hương hoa nhài thanh khiết, làm nền cho các món trà trái cây giải nhiệt (Trà chanh, Trà đào bigsize, Trà kiwi...).",
+        "storage": "Bình giữ nhiệt quầy bar hoặc đậy nắp bảo quản lạnh.",
+        "shelf_life": "Đổ bỏ cuối ngày.",
+        "steps": [
+            "Đun nước sôi 1,500 g, để nhiệt độ chuẩn 80-85°C (không ủ nước 100°C làm chát trà).",
+            "Ủ 60 g trà xanh nhài (mã 14) trong đúng 6 phút.",
+            "Lấy túi lọc trà ra để nhỏ giọt tự nhiên trong 30 giây (tuyệt đối không vắt ép túi trà tránh đắng chát).",
+            "Cho 1,000 g đá viên vào cốt trà khuấy tan để khóa hương hoa nhài và làm lạnh sốc."
+        ],
+        "keywords": ["tra xanh", "luc tra", "tra nhai", "tp07", "u tra xanh"]
+    },
+    "TP08": {
+        "code": "TP08",
+        "name": "Hồng trà đã ủ (Cốt hồng trà đậm vị)",
+        "definition": "Cốt hồng trà lên men truyền thống màu nâu đỏ óng ánh, vị đậm đà và hậu vị ngọt sâu, làm nền cho Hồng trà kem tươi và các dòng trà sữa đậm vị.",
+        "storage": "Bình giữ nhiệt chuyên dụng hoặc đậy nắp bảo quản lạnh.",
+        "shelf_life": "Đổ bỏ cuối ngày.",
+        "steps": [
+            "Đun 1,800 g nước sôi 100°C.",
+            "Ủ 100 g hồng trà (mã 13) trong đúng 10 phút.",
+            "Lấy túi trà ra, lọc để nhỏ giọt tự nhiên trong 30 giây (không vắt kiệt làm đục màu trà).",
+            "Cho 1,000 g đá viên vào khuấy tan làm lạnh sốc và khóa hương trà."
+        ],
+        "keywords": ["hong tra", "u hong tra", "cot hong tra", "tp08"]
+    },
+    "TP10": {
+        "code": "TP10",
+        "name": "Cà phê cô đặc từ cà phê hòa tan",
+        "definition": "Cốt cà phê cô đặc thơm nồng phục vụ cho các món Cà phê Americano và Cà phê sữa Mixue.",
+        "storage": "Bình đong đậy nắp bảo quản trong ngăn mát tủ lạnh.",
+        "shelf_life": "Đổ bỏ cuối ngày.",
+        "steps": [
+            "Pha 50 g bột cà phê hòa tan (NL22) với 300 g nước sôi.",
+            "Khuấy đều liên tục trong khoảng 1 phút cho tan hết bọt.",
+            "Cho 300 g đá viên vào khuấy tan để hạ nhiệt và cô đặc hương thơm."
+        ],
+        "keywords": ["ca phe", "coffee", "tp10", "pha ca phe"]
+    },
+    "TP11": {
+        "code": "TP11",
+        "name": "Hỗn hợp kem tươi đã pha trước khi đưa vào máy",
+        "definition": "Hỗn hợp sữa kem tươi béo mịn thơm ngậy tạo nên linh hồn của món Kem ốc quế và Kem siêu sundae Mixue.",
+        "storage": "Bình đong đậy nắp trong ngăn mát tủ lạnh hoặc nạp trực tiếp vào khoang chứa máy làm kem.",
+        "shelf_life": "Đổ bỏ cuối ngày.",
+        "steps": [
+            "Pha 1,500 g bột kem (mã 2) với 4,000 g nước sạch.",
+            "Dùng máy đánh hoặc phới lồng khuấy mạnh trong khoảng 3 phút cho tan mịn hoàn toàn.",
+            "Để hỗn hợp nghỉ trong 15 phút cho bột ngậm đủ nước.",
+            "Khuấy lại 2 lần trước khi rót vào khoang chứa của máy làm kem để kem đạt kết cấu xốp mịn hoàn hảo."
+        ],
+        "keywords": ["kem tuoi", "kem oc que", "bot kem", "hon hop kem", "pha kem", "tp11", "tp01"]
+    }
+}
+
+
 def _norm(text: str) -> str:
     import unicodedata
     if not text:
         return ""
     t = text.lower().replace("đ", "d")
-    return "".join(c for c in unicodedata.normalize("NFD", t) if unicodedata.category(c) != "Mn").strip()
+    norm = "".join(c for c in unicodedata.normalize("NFD", t) if unicodedata.category(c) != "Mn").strip()
+    norm = re.sub(r"\bchan\s*trau\b", "tran chau", norm)
+    norm = re.sub(r"\bchan\s*chau\b", "tran chau", norm)
+    norm = re.sub(r"\btran\s*trau\b", "tran chau", norm)
+    return norm
 
 
 class OperationsBOMAgent:
@@ -250,6 +391,72 @@ class OperationsBOMAgent:
             "po_items": po_draft.get("orders", []),
             "total_estimated_cost": po_draft.get("total_estimated_cost", 0),
             "evidence_ref": f"plan_po:{t_date}"
+        }
+
+    def get_sop_prep_guide(self, query: str) -> dict[str, Any] | None:
+        """Tra cứu hướng dẫn sơ chế, định nghĩa và quy trình nấu mẻ chuẩn SOP."""
+        q_norm = _norm(query)
+        matched_info = None
+
+        # 1. Tìm kiếm theo từ khóa chuyên biệt
+        for code, info in SEMI_PRODUCT_SOP_INFO.items():
+            if any(k in q_norm for k in info["keywords"]):
+                matched_info = info
+                break
+
+        if not matched_info:
+            return None
+
+        # Đọc dữ liệu mẻ thực tế từ 09_Cong_thuc_so_che_theo_me.csv và 02_Nguyen_lieu.csv
+        csv_file = REPO_ROOT / "DU_LIEU_CAN_NHAP" / "09_Cong_thuc_so_che_theo_me.csv"
+        ing_file = REPO_ROOT / "DU_LIEU_CAN_NHAP" / "02_Nguyen_lieu.csv"
+
+        ing_map = {}
+        if ing_file.exists():
+            with open(ing_file, encoding="utf-8-sig", errors="ignore") as fp:
+                for r in csv.DictReader(fp):
+                    code_val = r.get("Mã nguyên liệu") or r.get("\ufeffMã nguyên liệu")
+                    if code_val:
+                        ing_map[code_val] = r.get("Tên nguyên liệu", code_val)
+
+        batches = {}
+        if csv_file.exists():
+            with open(csv_file, encoding="utf-8-sig", errors="ignore") as fp:
+                for r in csv.DictReader(fp):
+                    tp = r.get("Bán thành phẩm đầu ra")
+                    if tp == matched_info["code"]:
+                        m_code = r.get("Mã công thức mẻ") or r.get("\ufeffMã công thức mẻ") or "ME"
+                        portion = r.get("Số phần", "1")
+                        in_id = r.get("Mã nguyên liệu đầu vào", "")
+                        in_name = ing_map.get(in_id, in_id)
+                        qty = r.get("Lượng đầu vào", "")
+                        unit = r.get("Đơn vị đầu vào", "")
+                        cups = r.get("Số cốc ước tính theo ảnh", "")
+
+                        b_key = f"{portion} mẻ ({m_code})"
+                        batches.setdefault(b_key, []).append({
+                            "ing_id": in_id,
+                            "ing_name": in_name,
+                            "qty": qty,
+                            "unit": unit,
+                            "cups": cups
+                        })
+
+        return {
+            "status": "SUCCESS",
+            "type": "SOP_PREP_GUIDE",
+            "code": matched_info["code"],
+            "name": matched_info["name"],
+            "definition": matched_info["definition"],
+            "batches": batches,
+            "steps": matched_info["steps"],
+            "storage": matched_info["storage"],
+            "shelf_life": matched_info["shelf_life"],
+            "evidence_refs": [
+                "file:DU_LIEU_CAN_NHAP/09_Cong_thuc_so_che_theo_me.csv",
+                "file:DU_LIEU_CAN_NHAP/13_Thoi_gian_so_che_theo_anh.csv",
+                "file:DU_LIEU_CAN_NHAP/10_Quy_dinh_bao_quan_theo_anh.csv"
+            ]
         }
 
     # Alias

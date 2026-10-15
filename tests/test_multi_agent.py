@@ -118,3 +118,33 @@ def test_mixue_operations_agent_natural_language_fallback():
         assert "Xin chào! Tôi là Trợ lý Vận hành Siêu thông minh Mixue (Snow King)" not in res["text"]
     finally:
         agent.close()
+
+
+def test_sop_cooking_guide_typo_chan_trau():
+    agent = MixueOperationsAgent()
+    try:
+        # User query with phonetic typo "cách nấu chân trâu"
+        res = agent.process_query("cách nấu chân trâu", user_role="STAFF", user_name="Barista")
+        assert res["status"] == "SUCCESS"
+        text = res["text"]
+
+        # 1. Must define what trân châu is
+        assert "Định nghĩa" in text or "Trân châu" in text
+
+        # 2. Must give cooking process and exact minutes (35p nấu, 30p ủ, 10p ủ đường)
+        assert "35 phút" in text
+        assert "30 phút" in text
+        assert "10 phút" in text
+
+        # 3. Must give exact ingredients / batches
+        assert "Trân châu đen" in text
+        assert "Đường mật" in text
+
+        # 4. Must give shelf-life / storage (4 giờ)
+        assert "4 giờ" in text
+
+        # 5. Must cite files in evidence_refs
+        assert any("09_Cong_thuc_so_che_theo_me" in ref for ref in res["evidence_refs"])
+    finally:
+        agent.close()
+
