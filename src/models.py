@@ -3,6 +3,7 @@ from datetime import date, datetime
 
 from sqlalchemy import (
     Boolean,
+    JSON,
     Column,
     Date,
     DateTime,
@@ -180,3 +181,12 @@ class DailyStockMovement(Base):
 
 
 
+
+
+class OperationPlan(Base):
+    """Durable plan snapshot including all lines and approval audit information."""
+    __tablename__ = "operation_plans"
+
+    plan_id = Column(String(50), primary_key=True)
+    payload = Column(JSON, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.now)

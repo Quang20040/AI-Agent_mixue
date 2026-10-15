@@ -28,3 +28,15 @@ Các biến thể size L giữ đúng dòng món; không dùng ảnh của món 
 
 Linh vật tự vẽ đã được loại khỏi mã giao diện, kể cả avatar chat và thanh bên. Tất cả dùng `snow-king-reference.png` do người dùng cung cấp.
 GSAP lặp chuyển động ở hero, Tuyết Vương, ảnh món, ánh sáng, ngôi sao và dải chữ; tự chạy theo yêu cầu người dùng và có nút tạm dừng.
+
+
+## Login snow world — 2026-10-15
+- Asset: `login-snow-world-v1.png`
+- Generated with the built-in ImageGen tool using the two user-provided reference images in this conversation.
+- Prompt: A cohesive 16:9 polished 3D Mixue snow-world login background; glossy cherry-red ribbon borders, creamy snow, one crowned Snow King with red scarf holding soft serve at lower left, strawberry smoothie and pearl milk tea at lower right, pale ivory/pink empty center for a real HTML login form. No UI, text, inset cards, repeating wallpaper, or extra mascot faces on cups.
+
+
+## Mobile login snow world — 2026-10-15
+- Asset: `login-snow-world-mobile-v1.png`
+- Generated with built-in ImageGen using the desktop snow world as a style reference.
+- Prompt: Dedicated portrait 9:16 mobile login background. Quiet pale ivory/pink upper 65% for a compact HTML form, thin red ribbon and snowflakes at top, crowned Snow King holding soft serve and strawberry/pearl drinks together in bottom 30%, comfortably inside image edges. Same polished 3D red-and-cream brand world. No UI, text, cards, or repeated texture.

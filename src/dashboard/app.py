@@ -18,6 +18,9 @@ from src.agent.mixue_agent import MixueOperationsAgent
 from src.auth import (
     can_access_page,
     create_employee,
+    update_employee,
+    delete_employee,
+    normalize_role,
     get_all_employees,
     get_allowed_pages,
     is_admin_role,
@@ -50,7 +53,8 @@ from src.engine.daily_stock_service import (
     update_stock_matrix_from_editor,
     update_stock_movement,
 )
-from src.models import MenuItem
+from src.models import MenuItem, User
+from src.engine.plan_service import list_plans
 
 # ==============================================================================
 # CẤU HÌNH TRANG STREAMLIT
@@ -98,6 +102,18 @@ if last_activity is not None and isinstance(last_activity, datetime):
         st.stop()
 
 st.session_state["last_activity"] = now_dt
+
+# Refresh account permissions so edits, deactivation and deletion affect existing sessions.
+with SessionLocal() as account_db:
+    account = account_db.get(User, st.session_state.get("username", ""))
+    if not account or not account.is_active:
+        st.session_state.clear()
+        st.warning("Tài khoản không còn hoạt động. Vui lòng đăng nhập lại.")
+        render_login_screen()
+        st.stop()
+    st.session_state["user_role"] = account.role
+    st.session_state["user_name"] = account.full_name
+    st.session_state["must_change_password"] = account.must_change_password
 
 # Kiểm tra yêu cầu đổi mật khẩu lần đầu (bắt buộc gồm đúng 6 chữ số)
 if st.session_state.get("must_change_password", False):
@@ -994,10 +1010,10 @@ with st.container(key="workspace"):
         with col_po1:
             with st.container(border=True):
                 lead_time = st.number_input("Thời gian giao hàng (Lead Time - ngày)", min_value=1, max_value=7, value=2, key="lead_time_in_vi")
-                po_date = st.date_input("Ngày đề xuất đặt hàng", value=date(2026, 10, 13), key="po_date_in_vi")
+                po_date = st.date_input("Ngày đề xuất đặt hàng", value=date.today(), key="po_date_in_vi")
 
                 if st.button("📋 Tạo Dự thảo Đơn Đặt hàng", key="calc_po_btn_vi", type="primary", use_container_width=True):
-                    res = agent.tool_optimize_replenishment(target_date=po_date.isoformat())
+                    res = agent.tool_optimize_replenishment(target_date=po_date.isoformat(), lead_time_days=lead_time)
                     st.session_state["po_plan_vi"] = res
 
         with col_po2:
@@ -1012,7 +1028,7 @@ with st.container(key="workspace"):
             </div>
             """, unsafe_allow_html=True)
 
-        if "po_plan_vi" in st.session_state:
+        if "po_plan_vi" in st.session_state and st.session_state["po_plan_vi"]["top_orders"]:
             po_res = st.session_state["po_plan_vi"]
             st.divider()
             st.write(f"#### 📄 Dự thảo Đơn Hàng `{po_res['draft_plan_id']}` (Gồm {po_res['critical_shortage_count']} mặt hàng nguy cấp)")
@@ -1021,6 +1037,7 @@ with st.container(key="workspace"):
             po_display = po_items.copy()
 
             # Định dạng cột tổng lượng quy đổi và tồn kho kèm đơn vị
+            po_display = po_display.reindex(columns=["ingredient_id", "ingredient_name", "ingredient_group", "daily_demand", "current_on_hand", "days_of_stock_remaining", "carton_spec", "display_order", "recommended_order_qty", "unit", "priority"])
             po_display["Tổng quy đổi"] = po_display.apply(
                 lambda r: f"{r['recommended_order_qty']:,.0f} {r['unit']}", axis=1
             )
@@ -1062,6 +1079,44 @@ with st.container(key="workspace"):
                         else:
                             st.error(app_res["message"])
 
+
+        st.divider()
+        if "po_plan_vi" in st.session_state and not st.session_state["po_plan_vi"]["top_orders"]:
+            st.info("Tồn kho đủ theo nhu cầu dự báo; không có nguyên liệu cần đặt thêm.")
+        st.write("#### Lịch sử đơn nhập hàng đã lưu")
+        saved_orders = list_plans("REPLENISHMENT_PO")
+        if not saved_orders:
+            st.info("Chưa có đơn nhập hàng. Tạo dự thảo để lưu đơn đầu tiên.")
+        for order in saved_orders:
+            approved = order["status"] == "APPROVED"
+            status_label = "Đã duyệt · Chờ nhận hàng" if approved else "Chờ duyệt"
+            with st.expander(f"{order['plan_id']} · {order['target_date']} · {status_label}"):
+                st.caption(f"Ngày tạo: {order['created_at']} · Thời gian giao: {order.get('lead_time_days', 2)} ngày")
+                if approved:
+                    st.success(f"Người duyệt: {order['approved_by']} · Lúc: {order['approved_at']}")
+                lines = pd.DataFrame([line for line in order["lines"] if line.get("recommended_order_qty", 0) > 0])
+                if lines.empty:
+                    st.info("Không có nguyên liệu cần đặt trong đơn này.")
+                else:
+                    details = lines[["ingredient_id", "ingredient_name", "display_order", "carton_spec", "recommended_order_qty", "unit"]].rename(columns={
+                        "ingredient_id": "Mã nguyên liệu", "ingredient_name": "Nguyên liệu", "display_order": "Số thùng/kiện",
+                        "carton_spec": "Quy cách", "recommended_order_qty": "Tổng lượng", "unit": "Đơn vị"})
+                    st.dataframe(details, use_container_width=True, hide_index=True)
+                    export = details.copy()
+                    export.insert(0, "Mã đơn", order["plan_id"])
+                    export.insert(1, "Ngày đặt", order["target_date"])
+                    export.insert(2, "Trạng thái", status_label)
+                    export.insert(3, "Người duyệt", order.get("approved_by", ""))
+                    export.insert(4, "Thời điểm duyệt", order.get("approved_at", ""))
+                    st.download_button("Tải phiếu đặt hàng CSV", export.to_csv(index=False).encode("utf-8-sig"),
+                                       file_name=f"{order['plan_id']}.csv", mime="text/csv", key=f"download_{order['plan_id']}")
+                if not approved and st.button("Ký duyệt đơn đã lưu", key=f"approve_{order['plan_id']}"):
+                    result = agent.tool_approve_plan(order["plan_id"], user_role=role_key, user_name=user_name)
+                    if result.get("is_approved"):
+                        st.rerun()
+                    else:
+                        st.error(result["message"])
+        st.caption("Ký duyệt lưu phiếu đặt hàng. Ghi nhận hàng thực nhận tại Sổ kho khi hàng được giao.")
 
     # ==============================================================================
     # TAB 5: TEM IN NHÃN & CÔNG THỨC PHA CHẾ (BOM)
@@ -1148,15 +1203,17 @@ with st.container(key="workspace"):
         st.subheader("👥 Quản lý Nhân sự & Phân quyền Tài khoản Chi nhánh")
         st.caption("Quản trị danh sách nhân viên Mixue 39 Tôn Quang Phiệt, cấp phát tài khoản mới và quyền reset mật khẩu quầy bar.")
 
+        if notice := st.session_state.pop("employee_notice", None):
+            st.success(notice)
         employees = get_all_employees()
-        total_emp = len(employees)
-        official_emp = sum(1 for e in employees if e["role"] == "STAFF_OFFICIAL")
-        probation_emp = sum(1 for e in employees if e["role"] == "STAFF_PROBATION")
-        admin_emp = sum(1 for e in employees if is_admin_role(e["role"]))
+        total_emp = sum(1 for e in employees if e["is_active"])
+        official_emp = sum(1 for e in employees if e["is_active"] and normalize_role(e["role"]) == "STAFF_OFFICIAL")
+        probation_emp = sum(1 for e in employees if e["is_active"] and normalize_role(e["role"]) == "STAFF_PROBATION")
+        admin_emp = sum(1 for e in employees if e["is_active"] and is_admin_role(e["role"]))
 
         m1, m2, m3, m4 = st.columns(4, gap="medium")
         with m1:
-            st.metric("Tổng số nhân sự", f"{total_emp} người", help="Tổng số tài khoản trong hệ thống chi nhánh")
+            st.metric("Tổng số nhân sự", f"{total_emp} người", help="Số tài khoản đang làm việc trong hệ thống chi nhánh")
         with m2:
             st.metric("Nhân viên chính thức", f"{official_emp} người", help="Đã hoàn thành đào tạo quầy pha chế")
         with m3:
@@ -1197,6 +1254,32 @@ with st.container(key="workspace"):
                 )
             else:
                 st.info("Chưa có dữ liệu nhân viên trong cơ sở dữ liệu.")
+
+        with tab_list:
+            if employees:
+                st.write("#### Sửa / xóa nhân viên")
+                selected_employee = st.selectbox("Chọn tài khoản cần chỉnh sửa", employees,
+                    format_func=lambda e: f"{e['full_name']} (@{e['username']})", key="edit_employee_select")
+                target = selected_employee["username"]
+                roles = ["STAFF_OFFICIAL", "STAFF_PROBATION", "ADMIN", "MANAGER", "OWNER"]
+                with st.form(f"edit_employee_{target}"):
+                    edit_name = st.text_input("Họ tên", selected_employee["full_name"])
+                    edit_phone = st.text_input("Điện thoại", "" if selected_employee["phone"] == "—" else selected_employee["phone"])
+                    edit_role = st.selectbox("Vai trò", roles, index=roles.index(normalize_role(selected_employee["role"])))
+                    edit_active = st.checkbox("Đang làm việc / Cho phép đăng nhập", value=selected_employee["is_active"])
+                    if st.form_submit_button("Lưu thông tin nhân viên", type="primary"):
+                        ok, message = update_employee(st.session_state.get("username", ""), target, edit_name, edit_phone, edit_role, edit_active)
+                        if ok:
+                            st.session_state["employee_notice"] = message
+                            st.rerun()
+                        st.error(message)
+                confirm_delete = st.checkbox(f"Xác nhận xóa tài khoản @{target}", key=f"confirm_delete_{target}")
+                if st.button("Xóa nhân viên", key=f"delete_employee_{target}", disabled=not confirm_delete):
+                    ok, message = delete_employee(st.session_state.get("username", ""), target)
+                    if ok:
+                        st.session_state["employee_notice"] = message
+                        st.rerun()
+                    st.error(message)
 
         with tab_create:
             st.write("#### ➕ Đăng ký Tài khoản Nhân viên Mới")
@@ -1242,7 +1325,7 @@ with st.container(key="workspace"):
                             role=new_role[0]
                         )
                         if ok:
-                            st.success(msg)
+                            st.session_state["employee_notice"] = msg
                             st.rerun()
                         else:
                             st.error(msg)
@@ -1268,7 +1351,7 @@ with st.container(key="workspace"):
                     if st.button("Xác nhận Reset Mật khẩu về 123456 🔄", type="primary", use_container_width=True):
                         ok, msg = reset_employee_password(admin_username=current_admin, target_username=target_user)
                         if ok:
-                            st.success(msg)
+                            st.session_state["employee_notice"] = msg
                             st.rerun()
                         else:
                             st.error(msg)

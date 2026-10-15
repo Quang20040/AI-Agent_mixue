@@ -12,6 +12,7 @@ import pandas as pd
 
 from src.auth import get_all_employees
 from src.database import SessionLocal
+from src.engine.plan_service import save_plan, get_plan, list_plans
 from src.engine.bom_engine import BOMEngine
 from src.engine.daily_stock_service import get_pending_requests, get_stock_matrix_df
 from src.engine.forecasting import ForecastingEngine
@@ -19,6 +20,7 @@ from src.engine.optimizer import OptimizerEngine
 from src.engine.shift_service import get_daily_closing_summary
 from src.engine.validator import IndependentPlanValidator
 from src.models import Ingredient, MenuItem, RecipeBOM, SalesDaily
+from src.agent.multi_agent import MultiAgentOrchestrator
 
 # --- STICKER / LABEL DECODER DICTIONARY ---
 SUGAR_LEVELS = {
@@ -68,7 +70,19 @@ def _parse_query_date_range(query: str) -> tuple[str | None, str | None]:
     q = query.lower()
     import re
 
-    # 0. Định dạng ISO: YYYY-MM-DD hoặc YYYY-MM-D hoặc YYYY/MM/DD (ví dụ: '2026-10-9', '2026-10-09')
+    # 0. Khoảng ngày định dạng ISO: từ YYYY-MM-DD đến YYYY-MM-DD
+    iso_range = re.search(
+        r'(?:từ|tu)?\s*(\d{4})[/-](\d{1,2})[/-](\d{1,2})\s*(?:đến|den|tới|toi|-)\s*(\d{4})[/-](\d{1,2})[/-](\d{1,2})',
+        q
+    )
+    if iso_range:
+        y1, m1, d1, y2, m2, d2 = iso_range.groups()
+        try:
+            return date(int(y1), int(m1), int(d1)).isoformat(), date(int(y2), int(m2), int(d2)).isoformat()
+        except Exception:
+            pass
+
+    # 0b. Định dạng ISO đơn: YYYY-MM-DD hoặc YYYY-MM-D hoặc YYYY/MM/DD (ví dụ: '2026-10-9', '2026-10-09')
     iso_m = re.search(r'\b(\d{4})[/-](\d{1,2})[/-](\d{1,2})\b', q)
     if iso_m:
         y, m, d = iso_m.groups()
@@ -188,6 +202,7 @@ Bạn được trang bị 8 công cụ vận hành:
         self.validator = IndependentPlanValidator(self.db)
         self.draft_plans = {}  # In-memory draft plan store
         self.system_prompt = self.SYSTEM_PROMPT_5_BLOCKS.strip()
+        self.multi_agent = MultiAgentOrchestrator(db_session=self.db)
         self.memory = {
             "last_tool": None,
             "last_topic": None,
@@ -336,6 +351,7 @@ Bạn được trang bị 8 công cụ vận hành:
             "created_at": datetime.now().isoformat()
         }
 
+        save_plan(self.draft_plans[plan_id])
         return {
             "status": "SUCCESS",
             "draft_plan_id": plan_id,
@@ -346,12 +362,12 @@ Bạn được trang bị 8 công cụ vận hành:
             "source_refs": ["engine:optimizer", "policy:SOP_Mixue_shelf_life"]
         }
 
-    def tool_optimize_replenishment(self, target_date: str | None = None) -> dict[str, Any]:
+    def tool_optimize_replenishment(self, target_date: str | None = None, lead_time_days: int = 2) -> dict[str, Any]:
         """Tool: Generate replenishment purchase order draft for raw materials."""
-        t_date = date.fromisoformat(target_date) if target_date else (date(2026, 10, 13))
+        t_date = date.fromisoformat(target_date) if target_date else date.today()
         fc_df = self.forecast_engine.forecast_demand(t_date, horizon_days=1, model="auto")
         dem_df = self.optimizer_engine.calculate_ingredient_demand(fc_df)
-        po_lines = self.optimizer_engine.optimize_replenishment(t_date, dem_df)
+        po_lines = self.optimizer_engine.optimize_replenishment(t_date, dem_df, lead_time_days=lead_time_days)
 
         verification = self.validator.verify_replenishment_plan(po_lines)
 
@@ -366,6 +382,9 @@ Bạn được trang bị 8 công cụ vận hành:
             "created_at": datetime.now().isoformat()
         }
 
+        self.draft_plans[plan_id]["lead_time_days"] = lead_time_days
+        save_plan(self.draft_plans[plan_id])
+
         critical_items = [p for p in po_lines if p["priority"] == "CRITICAL"]
         reorder_items = [p for p in po_lines if p["priority"] == "REORDER"]
 
@@ -375,10 +394,10 @@ Bạn được trang bị 8 công cụ vận hành:
             "target_date": str(t_date),
             "critical_shortage_count": len(critical_items),
             "reorder_count": len(reorder_items),
-            "top_orders": (critical_items + reorder_items)[:10],
+            "top_orders": (critical_items + reorder_items),
             "verification": verification,
             "requires_manager_approval": True,
-            "source_refs": ["engine:optimizer", "table:stock_counts", "lead_time:2d"]
+            "source_refs": ["engine:optimizer", "table:stock_counts", f"lead_time:{lead_time_days}d"]
         }
 
     def tool_decode_recipe_or_sticker(self, code: str) -> dict[str, Any]:
@@ -504,6 +523,9 @@ Bạn được trang bị 8 công cụ vận hành:
                 }
             }
 
+        stored_plan = get_plan(draft_plan_id)
+        if stored_plan:
+            self.draft_plans[draft_plan_id] = stored_plan
         if draft_plan_id not in self.draft_plans:
             return {
                 "status": "NOT_FOUND",
@@ -518,9 +540,15 @@ Bạn được trang bị 8 công cụ vận hành:
                 "violations": plan["verification"]["violations"]
             }
 
+        if plan.get("status") == "APPROVED":
+            return {"status": "SUCCESS", "is_approved": True, "plan_id": draft_plan_id,
+                    "message": "Đơn đã được duyệt và lưu trước đó.",
+                    "approved_by": plan["approved_by"], "approved_at": plan["approved_at"]}
         plan["status"] = "APPROVED"
         plan["approved_by"] = f"{user_name} ({clean_role})"
         plan["approved_at"] = datetime.now().isoformat()
+
+        save_plan(plan)
 
         return {
             "status": "SUCCESS",
@@ -584,7 +612,8 @@ Bạn được trang bị 8 công cụ vận hành:
             "tru luong", "tang luong", "giam luong", "che do", "dai ngo", "bao hiem",
             "nghi phep", "hop dong lao dong", "luong thang", "muc luong", "thu lao", "cham cong"
         ]
-        if any(kw in q for kw in salary_keywords):
+        salary_query = re.sub(r"\b(so luong|san luong|dinh luong|khoi luong|chat luong|nang luong|binh thuong)\b", "", q)
+        if any(re.search(r"\b" + re.escape(kw) + r"\b", salary_query) for kw in salary_keywords):
             msg = (
                 f"🛡️ **Thông Báo Bảo Mật & Ranh Giới Nghiệp Vụ (AI Guardrail - Ngày 11):**\n\n"
                 f"Xin chào **{user_name}**! Tôi là **Trợ lý Vận hành Tuyết Vương AI** chuyên trách điều phối quầy bar và kho chi nhánh Mixue 39 Tôn Quang Phiệt.\n\n"
@@ -619,7 +648,7 @@ Bạn được trang bị 8 công cụ vận hành:
 
     def tool_get_employees_overview(self, query: str = "") -> dict[str, Any]:
         """Tool: Tra cứu danh sách nhân sự, phân quyền tài khoản hoặc số lượng nhân viên theo đúng trọng tâm câu hỏi."""
-        employees = get_all_employees()
+        employees = [e for e in get_all_employees() if e["is_active"]]
         q = (query or "").lower()
         q_norm = _normalize_vn(q)
 
@@ -1062,7 +1091,11 @@ Bạn được trang bị 8 công cụ vận hành:
         if is_admin:
             ings = self.db.query(Ingredient).all()
             for i in ings:
-                if _normalize_vn(i.ingredient_name) in q_norm or _normalize_vn(i.ingredient_id) in q_norm:
+                i_name_norm = _normalize_vn(i.ingredient_name)
+                i_id_norm = _normalize_vn(i.ingredient_id)
+                matched_id = (len(i_id_norm) >= 3 and i_id_norm in q_norm) or bool(re.search(rf"\b{re.escape(i_id_norm)}\b", q_norm))
+                matched_name = len(i_name_norm) >= 4 and i_name_norm in q_norm
+                if matched_name or matched_id:
                     shelf = i.shelf_life_rule_id if i.shelf_life_rule_id else "Theo HSD bao bì"
                     cost = float(i.unit_cost_vnd) if i.unit_cost_vnd else 0.0
                     msg = (
@@ -1079,6 +1112,21 @@ Bạn được trang bị 8 công cụ vận hành:
                         "raw_result": {"id": i.ingredient_id, "name": i.ingredient_name},
                         "evidence_refs": ["table:ingredients", f"ingredient:{i.ingredient_id}"]
                     }
+
+        # 3. Lục tìm tài liệu & báo cáo repo (RepoDocsAgent)
+        hits = self.multi_agent.docs_agent.search(query, top_k=2)
+        if hits and hits[0]["score"] > 2.0:
+            doc = hits[0]
+            msg = f"### 📚 Trích Xuất Tài Liệu & Quy Chuẩn Dự Án: {doc['title']}\n\n"
+            msg += f"- **Nguồn tài liệu:** `{doc['file_path']}` (Phân loại: `{doc['category']}`)\n\n"
+            msg += f"> {doc['content']}\n"
+            return {
+                "text": msg,
+                "tool_called": "search_project_kb",
+                "raw_result": doc,
+                "evidence_refs": [f"file:{doc['file_path']}"],
+                "status": "SUCCESS"
+            }
 
         return None
 
@@ -1323,7 +1371,7 @@ Bạn được trang bị 8 công cụ vận hành:
                 "duyệt", "approve", "ký duyệt", "báo cáo", "thống kê", "tổng kết", "chạy nhất", "bán chạy",
                 "nhân viên", "nhân sự", "danh sách nhân viên", "tài khoản", "reset mật khẩu"
             ]
-            is_recipe_kw = any(w in q for w in ["công thức", "pha chế", "định lượng", "làm món", "cách làm", "tem", "mã tem", "sticker", "recipe"]) or any(code in q for code in ["dk", "ts", "thq", "st", "cf"])
+            is_recipe_kw = any(w in q for w in ["công thức", "pha chế", "định lượng", "làm món", "cách làm", "tem", "mã tem", "sticker", "recipe"]) or bool(re.search(r"\b(?:dk|ts|thq|st|cf)\d+\b", q))
 
             # Nếu hỏi về chủ đề quản trị (mà không phải hỏi công thức món cụ thể)
             if any(w in q for w in admin_topics) and not (is_recipe_kw and not any(w in q for w in ["doanh thu", "doanh số", "sản lượng", "tồn kho", "po", "tiền", "lợi nhuận"])):
@@ -1342,12 +1390,45 @@ Bạn được trang bị 8 công cụ vận hành:
                     "evidence_refs": ["policy:RBAC_Store_2132_Staff_Restriction"]
                 }
 
+        if is_admin and any(w in q_norm for w in ["don nhap", "don dat", "nhap hang", "po"]) and any(
+            w in q_norm for w in ["da duyet", "lich su", "ai duyet", "don nao", "da luu", "chua duyet", "cho duyet"]
+        ):
+            orders = list_plans("REPLENISHMENT_PO")
+            if "da duyet" in q_norm:
+                orders = [p for p in orders if p["status"] == "APPROVED"]
+            elif "chua duyet" in q_norm or "cho duyet" in q_norm:
+                orders = [p for p in orders if p["status"] == "PENDING_APPROVAL"]
+            lines = [f"- **{p['plan_id']}** · Ngày đặt {p['target_date']} · {p['status']}"
+                     + (f" · {p['approved_by']} lúc {p['approved_at']}" if p.get("approved_by") else "") for p in orders]
+            return {"text": "### Lịch sử đơn nhập hàng\n\n" + ("\n".join(lines) if lines else "Không có đơn phù hợp đã lưu.")
+                    + "\n\nXem chi tiết nguyên liệu và tải phiếu tại trang **Nhập hàng → Lịch sử đơn nhập hàng đã lưu**.",
+                    "tool_called": "get_purchase_order_history", "raw_result": {"orders": orders},
+                    "evidence_refs": ["table:operation_plans"]}
+
+        # Route explicit approvals before topics such as purchase orders or recipes.
+        if re.search(r"\b(ky duyet|phe duyet|duyet|approve)\b", q_norm) and not any(
+            word in q_norm for word in ["cho duyet", "da duyet", "lich su", "ai duyet", "chua duyet"]
+        ):
+            match = re.search(r"\bPLAN_(?:PO|PREP)_[A-Z0-9]+\b", user_query.upper())
+            draft_id = match.group(0) if match else None
+            if not draft_id:
+                candidates = list(self.draft_plans.values())
+                if "nhap hang" in q_norm or re.search(r"\bpo\b", q_norm):
+                    candidates = [p for p in candidates if p["plan_type"] == "REPLENISHMENT_PO"]
+                draft_id = candidates[-1]["plan_id"] if candidates else None
+            if not draft_id:
+                return {"text": "Vui lòng cung cấp mã dự thảo cần duyệt hoặc chọn đơn trong lịch sử Nhập hàng.",
+                        "tool_called": "approve_plan", "raw_result": {"status": "NO_DRAFT"}}
+            result = self.tool_approve_plan(draft_id, user_role=user_role, user_name=user_name)
+            return {"text": result["message"], "tool_called": "approve_plan", "raw_result": result,
+                    "evidence_refs": ["table:operation_plans"]}
+
         # 1. Tra cứu Công thức & Tem dán ly (Ưu tiên cao nhất)
-        is_recipe_kw = any(w in q for w in ["công thức", "pha chế", "định lượng", "làm món", "cách làm", "tem", "mã tem", "sticker", "recipe"]) or any(code in q for code in ["dk", "ts", "thq", "st", "cf"])
+        is_recipe_kw = any(w in q for w in ["công thức", "pha chế", "định lượng", "làm món", "cách làm", "tem", "mã tem", "sticker", "recipe"]) or bool(re.search(r"\b(?:dk|ts|thq|st|cf)\d+\b", q))
         all_menus = self.db.query(MenuItem).all()
         has_menu_name = any(_normalize_vn(m.sku_name) in q_norm for m in all_menus)
 
-        if (is_recipe_kw or has_menu_name) and not any(w in q for w in ["sơ chế", "nấu mẻ", "bảo quản", "hạn dùng", "doanh thu", "bán chạy", "tồn kho"]):
+        if (is_recipe_kw or has_menu_name) and not any(w in q for w in ["sơ chế", "nấu mẻ", "bảo quản", "hạn dùng", "doanh thu", "bán chạy", "tồn kho", "nhân viên", "nhập hàng", "đặt hàng", "duyệt"]):
             res = self.tool_decode_recipe_or_sticker(user_query)
             if res.get("status") == "SUCCESS":
                 if res.get("type") == "CUP_STICKER_DECODE":
@@ -1398,12 +1479,17 @@ Bạn được trang bị 8 công cụ vận hành:
             "mã cửa hàng", "ma cua hang", "chủ quán", "chu quan", "quản lý là ai", "quan ly la ai",
             "thông tin quán", "thong tin quan", "giới thiệu quán", "gioi thieu quan",
             "dự án là gì", "du an la gi", "beverageops"
-        ]):
+        ]) and not any(w in q_norm for w in ["doanh thu", "doanh so", "san luong", "ban hang", "ban duoc", "ton kho", "nhap hang", "dat hang", "du bao", "so che", "chot ca"]):
             res = self.tool_get_store_and_project_info()
             return res
 
-        # 4. Kế hoạch & Hướng dẫn Sơ chế Topping (Topping prep)
-        if any(w in q for w in ["sơ chế", "chuẩn bị topping", "nấu topping", "nấu trân châu", "nấu thạch", "nấu trà", "mẻ", "bảo quản", "hạn dùng", "để qua đêm", "bao lâu"]):
+        # 4. Kế hoạch & Hướng dẫn Sơ chế Topping theo mẻ (Topping prep plan)
+        is_prep_plan_query = any(w in q_norm for w in [
+            "so che bao nhieu me", "so che bao nhieu", "ke hoach so che", "ke hoach nau",
+            "chuan bi bao nhieu", "can nau bao nhieu", "nen so che bao nhieu", "so me can nau"
+        ]) or (any(w in q_norm for w in ["so che", "chuan bi topping", "nau topping"]) and any(w in q_norm for w in ["ngay mai", "ke hoach", "bao nhieu me", "may me"]))
+
+        if is_prep_plan_query:
             res = self.tool_optimize_topping_prep()
             evidence = res["recommendations"]
             if is_admin:
@@ -1423,7 +1509,7 @@ Bạn được trang bị 8 công cụ vận hành:
             }
 
         # 5. Replenishment purchase recommendation (Đơn nhập hàng PO)
-        if is_admin and any(w in q for w in ["nhập hàng", "đặt hàng", "mua hàng", "po", "thiếu hàng", "hết hàng", "reorder", "đặt ngay"]):
+        if is_admin and any(w in q for w in ["nhập hàng", "đặt hàng", "mua hàng", "thiếu hàng", "hết hàng", "reorder", "đặt ngay", "nhap hang", "dat hang"]) or (is_admin and bool(re.search(r"\bpo\b", q))):
             res = self.tool_optimize_replenishment()
             top = res["top_orders"]
             crit_count = res["critical_shortage_count"]
@@ -1446,7 +1532,7 @@ Bạn được trang bị 8 công cụ vận hành:
             "chờ duyệt", "cho duyet", "lệnh kho", "lenh kho", "tồn kho", "ton kho",
             "tồn thực tế", "ton thuc te", "kiểm kê kho", "kiem ke kho", "ốc quế", "bột kem",
             "bột trà", "bột pudding", "đường quả", "đường mật", "đường đen", "trân châu đen"
-        ]):
+        ]) and not any(w in q_norm for w in ["doanh thu", "doanh so", "ban duoc", "ban chay", "san luong"]):
             res = self.tool_get_daily_stock_matrix_info(user_query)
             return res
 
@@ -1560,67 +1646,56 @@ Bạn được trang bị 8 công cụ vận hành:
                 "evidence_refs": ["table:daily_sales", "table:recipe_bom", "table:stock_counts", "table:topping_daily"]
             }
 
-        # 12. Plan Approval request
-        if "duyệt" in q or "approve" in q:
-            tokens = q.split()
-            draft_id = None
-            for tok in tokens:
-                if tok.upper().startswith("PLAN_"):
-                    draft_id = tok.upper()
-                    break
-            if not draft_id:
-                if self.draft_plans:
-                    draft_id = list(self.draft_plans.keys())[-1]
-                else:
-                    return {
-                        "text": "Không tìm thấy mã dự thảo cần duyệt. Vui lòng cung cấp mã dự thảo (Ví dụ: `PLAN_PREP_...`).",
-                        "tool_called": "approve_plan",
-                        "raw_result": {"status": "NO_DRAFT"}
-                    }
-            res = self.tool_approve_plan(draft_id, user_role=user_role, user_name=user_name)
-            return {
-                "text": res["message"],
-                "tool_called": "approve_plan",
-                "raw_result": res,
-                "evidence_refs": ["governance:RBAC_approval_gate"]
-            }
-
         # 13. Deep Project Knowledge Base Search (Quét sâu cơ sở dữ liệu dự án cho Admin)
         kb_res = self.tool_search_project_kb(user_query, is_admin=is_admin)
         if kb_res:
             return kb_res
 
-        # Default fallback
-        if not is_admin:
+        # Kiểm tra nếu chỉ là câu chào hỏi xã giao đơn thuần
+        is_simple_greeting = any(w == q_norm or w in q_norm.split() for w in [
+            "chao", "xin chao", "hello", "hi", "helo", "ban la ai", "tro ly la ai", "gioi thieu"
+        ]) and len(q.split()) <= 4
+
+        if is_simple_greeting:
+            if not is_admin:
+                msg = f"Xin chào {user_name}! Tôi là **Trợ lý Tuyết Vương AI** của cửa hàng **Mixue 39 Tôn Quang Phiệt** (Mã CH: 2132).\n\n"
+                msg += "Với vai trò **Nhân viên quầy / Pha chế**, tôi sẵn sàng hỗ trợ bạn:\n"
+                msg += "1. 🍵 **Tra cứu công thức pha chế:** Định lượng chuẩn SOP các món trà sữa, kem, trà trái cây (Ví dụ: `Công thức TS1`, `Công thức DK1`).\n"
+                msg += "2. 🏷️ **Giải mã tem dán ly:** Phân tích mã tem 5 chữ số đường, đá, topping (Ví dụ: `24101`).\n"
+                msg += "3. 🥣 **Quy chuẩn sơ chế:** Định lượng nấu mẻ trân châu, thạch và thời gian bảo quản an toàn thực phẩm.\n\n"
+                msg += "*Lưu ý: Các tác vụ về doanh số, tồn kho, đơn nhập hàng và nhân sự chỉ dành cho Quản lý / Chủ quán (Admin).*"
+                return {
+                    "text": msg,
+                    "tool_called": "staff_overview",
+                    "raw_result": {"status": "SUCCESS", "role": user_role},
+                    "evidence_refs": ["policy:RBAC_Store_2132"]
+                }
+
+            sales_summary = self.tool_get_daily_sales()
             msg = f"Xin chào {user_name}! Tôi là **Trợ lý Tuyết Vương AI** của cửa hàng **Mixue 39 Tôn Quang Phiệt** (Mã CH: 2132).\n\n"
-            msg += "Với vai trò **Nhân viên quầy / Pha chế**, tôi sẵn sàng hỗ trợ bạn:\n"
-            msg += "1. 🍵 **Tra cứu công thức pha chế:** Định lượng chuẩn SOP các món trà sữa, kem, trà trái cây (Ví dụ: `Công thức TS1`, `Công thức DK1`).\n"
-            msg += "2. 🏷️ **Giải mã tem dán ly:** Phân tích mã tem 5 chữ số đường, đá, topping (Ví dụ: `24101`).\n"
-            msg += "3. 🥣 **Quy chuẩn sơ chế:** Định lượng nấu mẻ trân châu, thạch và thời gian bảo quản an toàn thực phẩm.\n\n"
-            msg += "*Lưu ý: Các tác vụ về doanh số, tồn kho, đơn nhập hàng và nhân sự chỉ dành cho Quản lý / Chủ quán (Admin).*"
+            msg += "Tôi có thể tra cứu và giải đáp mọi thông tin dữ liệu trong dự án cho Quản trị viên:\n"
+            msg += "1. 👥 **Quản lý nhân sự:** Tra cứu danh sách nhân viên, tài khoản và trạng thái mật khẩu.\n"
+            msg += "2. 📦 **Sổ thẻ kho 31 ngày:** Xem số tồn, nhập, xuất của 12 mặt hàng hoặc kiểm tra lệnh kho chờ duyệt.\n"
+            msg += "3. 📈 **Dự báo nhu cầu (D+1):** Dự đoán sản lượng 39 SKU ngày mai để chuẩn bị quầy.\n"
+            msg += "4. 🥣 **Kế hoạch sơ chế & Đơn nhập PO:** Tính số mẻ nấu theo hạn dùng 4h và đề xuất hàng cần nhập.\n"
+            msg += "5. 💰 **Báo cáo doanh số chi tiết:** Ngày doanh thu cao/thấp nhất, top món bán chạy, giá bán trung bình (AOV).\n"
+            msg += "6. 🍵 **Công thức & Tem ly:** Tra cứu 39 món thực đơn và giải mã mã tem dán ly.\n\n"
+            msg += f"**Dữ liệu thực tế:** 30 ngày kinh doanh (Tổng doanh thu: {sales_summary.get('total_revenue_vnd', 0):,} đ | {sales_summary.get('total_quantity_sold', 0):,} ly bán)."
             return {
                 "text": msg,
-                "tool_called": "staff_overview",
-                "raw_result": {"status": "SUCCESS", "role": user_role},
-                "evidence_refs": ["policy:RBAC_Store_2132"]
+                "tool_called": "admin_overview",
+                "raw_result": sales_summary,
+                "evidence_refs": ["system:overview"]
             }
 
-        sales_summary = self.tool_get_daily_sales()
-        msg = f"Xin chào {user_name}! Tôi là **Trợ lý Tuyết Vương AI** của cửa hàng **Mixue 39 Tôn Quang Phiệt** (Mã CH: 2132).\n\n"
-        msg += "Tôi có thể tra cứu và giải đáp mọi thông tin dữ liệu trong dự án cho Quản trị viên:\n"
-        msg += "1. 👥 **Quản lý nhân sự:** Tra cứu danh sách nhân viên, tài khoản và trạng thái mật khẩu.\n"
-        msg += "2. 📦 **Sổ thẻ kho 31 ngày:** Xem số tồn, nhập, xuất của 12 mặt hàng hoặc kiểm tra lệnh kho chờ duyệt.\n"
-        msg += "3. 📈 **Dự báo nhu cầu (D+1):** Dự đoán sản lượng 39 SKU ngày mai để chuẩn bị quầy.\n"
-        msg += "4. 🥣 **Kế hoạch sơ chế & Đơn nhập PO:** Tính số mẻ nấu theo hạn dùng 4h và đề xuất hàng cần nhập.\n"
-        msg += "5. 💰 **Báo cáo doanh số chi tiết:** Ngày doanh thu cao/thấp nhất, top món bán chạy, giá bán trung bình (AOV).\n"
-        msg += "6. 🍵 **Công thức & Tem ly:** Tra cứu 39 món thực đơn và giải mã mã tem dán ly.\n\n"
-        msg += f"**Dữ liệu thực tế:** 30 ngày kinh doanh (Tổng doanh thu: {sales_summary.get('total_revenue_vnd', 0):,} đ | {sales_summary.get('total_quantity_sold', 0):,} ly bán)."
-        return {
-            "text": msg,
-            "tool_called": "admin_overview",
-            "raw_result": sales_summary,
-            "evidence_refs": ["system:overview"]
-        }
+        # ĐIỀU PHỐI ĐA TÁC TỬ (MULTI-AGENT ORCHESTRATION): Lục tìm sâu trong toàn bộ Repo, Docs, Data và Database!
+        multi_res = self.multi_agent.dispatch(
+            query=user_query,
+            user_role=clean_role,
+            user_name=user_name,
+            chat_history=chat_history
+        )
+        return multi_res
 
 
 if __name__ == "__main__":

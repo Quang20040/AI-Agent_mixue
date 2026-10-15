@@ -240,6 +240,11 @@ def is_admin_role(role: str) -> bool:
     return role.strip().upper() in ("ADMIN", "MANAGER", "OWNER")
 
 
+def normalize_role(role: str) -> str:
+    role = (role or "").strip().upper()
+    return {"STAFF": "STAFF_OFFICIAL", "PROBATION": "STAFF_PROBATION", "TRAINEE": "STAFF_PROBATION"}.get(role, role)
+
+
 def is_staff_role(role: str) -> bool:
     """Kiểm tra role có phải Nhân viên hay không (cả chính thức và thử việc)."""
     if not role:
@@ -327,6 +332,9 @@ def create_employee(admin_username: str, username: str, full_name: str, phone: s
 
     db = SessionLocal()
     try:
+        actor = db.get(User, admin_username.strip().lower())
+        if not actor or not actor.is_active or not is_admin_role(actor.role):
+            return False, "Chỉ quản lý đang hoạt động được quản lý nhân viên."
         exists = db.query(User).filter(User.username == clean_user).first()
         if exists:
             return False, f"Tên đăng nhập '{clean_user}' đã tồn tại trong hệ thống. Vui lòng chọn tên khác!"
@@ -357,6 +365,9 @@ def reset_employee_password(admin_username: str, target_username: str) -> tuple[
 
     db = SessionLocal()
     try:
+        actor = db.get(User, admin_username.strip().lower())
+        if not actor or not actor.is_active or not is_admin_role(actor.role):
+            return False, "Chỉ quản lý đang hoạt động được quản lý nhân viên."
         user = db.query(User).filter(User.username == clean_target).first()
         if not user:
             return False, f"Không tìm thấy tài khoản nhân viên '{clean_target}'."
@@ -396,3 +407,45 @@ def get_all_employees() -> list[dict[str, Any]]:
         return result
     finally:
         db.close()
+
+
+def update_employee(admin_username: str, target_username: str, full_name: str, phone: str,
+                    role: str, is_active: bool = True) -> tuple[bool, str]:
+    """Update personnel with the same authorization and role rules as creation."""
+    clean_role = normalize_role(role)
+    if len(full_name.strip()) < 2 or clean_role not in ("STAFF_OFFICIAL", "STAFF_PROBATION", "ADMIN", "MANAGER", "OWNER"):
+        return False, "Họ tên hoặc vai trò không hợp lệ."
+    with SessionLocal() as db:
+        actor = db.get(User, admin_username.strip().lower())
+        user = db.get(User, target_username)
+        if not actor or not actor.is_active or not is_admin_role(actor.role):
+            return False, "Chỉ quản lý đang hoạt động được quản lý nhân viên."
+        if not user:
+            return False, "Không tìm thấy nhân viên."
+        if user.username == actor.username and (not is_active or not is_admin_role(clean_role)):
+            return False, "Không thể tự khóa hoặc hạ quyền tài khoản đang sử dụng."
+        if user.is_active and is_admin_role(user.role) and (not is_active or not is_admin_role(clean_role)):
+            other_admins = [u for u in db.query(User).filter(User.is_active == True).all()
+                            if u.username != user.username and is_admin_role(u.role)]
+            if not other_admins:
+                return False, "Phải giữ lại ít nhất một quản lý đang hoạt động."
+        user.full_name, user.phone, user.role = full_name.strip(), phone.strip(), clean_role
+        user.is_active = is_active
+        db.commit()
+        return True, "Đã lưu thông tin nhân viên."
+
+
+def delete_employee(admin_username: str, target_username: str) -> tuple[bool, str]:
+    """Remove an employee account; operational audit names remain in history."""
+    with SessionLocal() as db:
+        actor = db.get(User, admin_username.strip().lower())
+        user = db.get(User, target_username)
+        if not actor or not actor.is_active or not is_admin_role(actor.role):
+            return False, "Chỉ quản lý đang hoạt động được quản lý nhân viên."
+        if not user:
+            return False, "Không tìm thấy nhân viên."
+        if user.username == actor.username:
+            return False, "Không thể xóa tài khoản đang sử dụng."
+        db.delete(user)
+        db.commit()
+        return True, "Đã xóa tài khoản nhân viên. Lịch sử vận hành được giữ lại."

@@ -1,7 +1,7 @@
 # BeverageOps AI — Quản trị Điều phối Vận hành Chi nhánh Mixue 39 Tôn Quang Phiệt
 # Dependencies pinned for deterministic production builds and security audit compliance
 
-streamlit==1.40.1
+streamlit==1.64.0
 SQLAlchemy==2.0.35
 pandas>=2.2.0,<3.1.0
 numpy>=2.1.0,<2.3.0

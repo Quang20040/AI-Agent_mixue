@@ -1576,3 +1576,202 @@ hr {
 .menu-photo { height: auto; aspect-ratio: 1 / 1; }
 .menu-card .menu-photo img, .menu-card.milk .menu-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 @media(max-width:767px) { .menu-photo { height: auto; aspect-ratio: 1 / 1; } }
+
+/* Stack every operational form at narrow widths, including nested Streamlit wrappers. */
+.stMainBlockContainer { min-width: 0; }
+[data-testid="stColumn"] { min-width: 0; }
+@media (max-width: 1023px) {
+  [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; gap: 1rem !important; }
+  [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
+  [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(4)) > [data-testid="stColumn"] {
+    width: 100% !important; min-width: 100% !important; flex: 1 1 100% !important;
+  }
+  [data-testid="stForm"] { padding: 12px; }
+  [data-testid="stRadio"] [role="radiogroup"] { flex-wrap: wrap; }
+  [data-testid="stRadio"] label { min-width: 0; white-space: normal; }
+  [data-testid="stTabs"] [role="tablist"] { overflow-x: auto; }
+}
+
+/* Login: the form is the first content on every screen size. */
+.login-welcome { padding: 14px 0 8px; }
+.login-welcome h2 { font-size: clamp(27px, 2.8vw, 38px); margin: 10px 0 8px; }
+.login-welcome p { margin-bottom: 8px; }
+.st-key-login_card [data-testid="stForm"] { padding: 24px; box-shadow: 0 16px 45px #8b18300b; background: #fff; }
+.login-art { position: relative; overflow: hidden; isolation: isolate; min-height: 510px; padding: 34px; border-radius: 28px; color: #fff; background: radial-gradient(ellipse at 100% 0%, #ff6479 0%, transparent 60%), linear-gradient(145deg, #ec163b, #c80729); }
+.login-art-tag { font-size: 10px; letter-spacing: 2.3px; font-weight: 700; }
+.login-art h1 { position: relative; z-index: 2; color: white; font-size: clamp(32px, 3vw, 48px); line-height: 1.18; letter-spacing: -1.7px; margin: 22px 0 12px; }
+.login-art h1 em { color: #ffdfc4; font-style: normal; }
+.login-art > p { color: #ffe2e8; font-size: 13px; }
+.login-art-products { display: flex; gap: 18px; align-items: center; margin: 28px 0; position: relative; z-index: 2; }
+.login-art-products figure { margin: 0; width: 50%; background: #fff; border-radius: 16px; padding: 8px; box-shadow: 0 15px 30px #7e001c33; transform: rotate(-6deg); }
+.login-art-products figure + figure { transform: rotate(7deg) translateY(12px); }
+.login-art-products img { width: 100%; height: 145px; object-fit: cover; border-radius: 10px; }
+.login-art-products figcaption { padding: 10px 2px 3px; font-size: 11px; color: #9c1b36; font-weight: 650; }
+.login-art-footer { display: flex; align-items: center; gap: 12px; font-size: 12px; line-height: 1.7; }
+.login-art-footer img { width: 56px; height: 62px; object-fit: contain; background: #fff5f7; border-radius: 16px; }
+.login-art-star { position: absolute; right: -25px; top: 5px; font-size: 260px; line-height: 1; color: #ffffff12; z-index: -1; }
+.st-key-chat_quick_questions { padding-top: 8px; }
+@media (max-width: 1023px) {
+  [data-testid="stColumn"]:has(.login-art) { display: none !important; }
+  .stMainBlockContainer:has(.login-welcome) { max-width: 580px; }
+  .stMainBlockContainer:has(.login-welcome) .brand-location { display: none; }
+  .login-welcome { padding-top: 0; }
+  .login-welcome h2 { font-size: 28px; }
+  .st-key-login_card [data-testid="stForm"] { padding: 16px; }
+}
+@media (max-width: 480px) {
+  .stMainBlockContainer:has(.login-welcome) { padding: 3rem 14px 18px; }
+  .stMainBlockContainer:has(.login-welcome) .brandbar { margin-bottom: 0; padding: 0 0 8px; }
+  .login-welcome > span { font-size: 9px; letter-spacing: 1.2px; }
+  .login-welcome h2 { font-size: 25px; margin: 7px 0; }
+  .login-welcome p { font-size: 12px; margin-bottom: 2px; }
+  .st-key-login_card [data-testid="stForm"] { padding: 12px; border-radius: 16px; }
+}
+
+/* Cream soda backdrop: seamless line art, strawberry washes and warm vanilla. */
+.stApp {
+  background-color: #fff8ef;
+  background-image:
+    url("__MIXUE_BACKGROUND_PATTERN__"),
+    radial-gradient(ellipse at 0% 8%, #ffcad7a6 0%, transparent 48%),
+    radial-gradient(ellipse at 100% 48%, #ffe1bca6 0%, transparent 52%),
+    linear-gradient(145deg, #fff5f2 0%, #fffaf1 52%, #ffe9ef 100%);
+  background-size: 320px 320px, 100% 100%, 100% 100%, 100% 100%;
+  background-attachment: fixed;
+}
+.stApp:has(.login-welcome) {
+  background-color: #fff0ea;
+  background-image:
+    url("__MIXUE_BACKGROUND_PATTERN__"),
+    radial-gradient(ellipse at 3% 5%, #ffadbf99 0%, transparent 52%),
+    radial-gradient(ellipse at 95% 95%, #ffcda699 0%, transparent 55%),
+    linear-gradient(125deg, #fff0f2, #fff9eb 55%, #ffdde8);
+  background-size: 280px 280px, 100% 100%, 100% 100%, 100% 100%;
+}
+.brandbar {
+  background: #ffffffc9;
+  border: 1px solid #ffffffed;
+  box-shadow: 0 8px 28px #a42c4610;
+  border-radius: 18px;
+  padding: 12px 18px;
+  backdrop-filter: blur(14px);
+}
+header[data-testid="stHeader"] { background: #fff8f1bd; }
+.login-welcome > span {
+  display: inline-block; padding: 6px 10px; border-radius: 100px;
+  border: 1px solid #f4b5c2; background: #fff9f3dc; color: #b61436;
+}
+.login-welcome h2 { color: #702137; text-shadow: 0 2px #ffffffb3; }
+.login-welcome p { color: #855163; }
+.st-key-login_card [data-testid="stForm"] {
+  background: linear-gradient(145deg, #fffffffa, #fff9f5f5);
+  border: 1px solid #fff;
+  box-shadow: 0 18px 55px #ac3f5920, 0 0 0 5px #ffffff66;
+}
+.st-key-login_card [data-testid="stTextInput"] input { background: #fff4f1; }
+.st-key-login_card [data-testid="stFormSubmitButton"] button {
+  background: linear-gradient(110deg, #ef1644, #cf002b);
+  box-shadow: 0 6px 16px #dc174329;
+}
+.login-art { border: 1px solid #ffb6c4; box-shadow: 0 24px 60px #b1234930; }
+.st-key-chat_panel_box { background: #fffffff2; backdrop-filter: blur(12px); }
+.st-key-workspace > [data-testid="stVerticalBlockBorderWrapper"] { background-color: #ffffffed; }
+@media (max-width: 480px) {
+  .stApp, .stApp:has(.login-welcome) { background-size: 240px 240px, 100% 100%, 100% 100%, 100% 100%; }
+  .stMainBlockContainer:has(.login-welcome) .brandbar { padding: 8px 10px; border-radius: 14px; }
+  .login-welcome > span { padding: 4px 8px; }
+}
+
+
+/* Login scales continuously; portrait artwork follows orientation, not device names. */
+.stApp:has(.login-welcome) {
+  background: #fff0f0 url("__MIXUE_LOGIN_SCENE__") center / cover no-repeat;
+  min-height: 100svh;
+}
+.stApp:has(.login-welcome) header[data-testid="stHeader"],
+.stMainBlockContainer:has(.login-welcome) .brandbar { display: none; }
+.stMainBlockContainer:has(.login-welcome) {
+  width: 100%; max-width: 480px; min-height: 100svh;
+  padding: clamp(28px, 7vh, 76px) 16px 28px; margin: 0 auto;
+}
+.st-key-login_shell {
+  position: relative; z-index: 1;
+  background: #fffdfbf2; border: 1px solid #fff; border-radius: 26px;
+  padding: clamp(18px, 2.5vw, 26px);
+  box-shadow: 0 24px 65px #920f2930, 0 0 0 5px #ffffff38;
+  transform-style: preserve-3d; transform-origin: center;
+  animation: login-arrive .65s cubic-bezier(.2,.8,.2,1) backwards;
+}
+.st-key-login_shell .login-welcome { text-align: center; padding: 0; }
+.st-key-login_shell .login-welcome > span {
+  border: 0; background: none; font-size: clamp(9px, 1.5vw, 11px);
+  letter-spacing: 1.4px; padding: 0; color: #d0092c; font-weight: 800;
+}
+.st-key-login_shell .login-welcome h2 { font-size: clamp(24px, 3.5vw, 30px); margin: 9px 0 6px; }
+.st-key-login_shell .login-welcome p { margin: 0 auto 4px; font-size: 12px; }
+.st-key-login_shell .st-key-login_card [data-testid="stForm"] {
+  padding: 0; background: transparent; border: 0; border-radius: 0; box-shadow: none;
+}
+.st-key-login_shell [data-testid="stVerticalBlock"] { gap: .7rem; }
+.st-key-login_shell [data-testid="stTextInput"] input { min-height: 42px; }
+.st-key-login_shell [data-testid="stExpander"] { background: #ffffffc9; border-color: #f1d6dc; }
+.st-key-login_shell [data-testid="stExpander"] summary p { font-size: 12px; }
+.st-key-login_shell [data-testid="stFormSubmitButton"] button {
+  position: relative; overflow: hidden; min-height: 44px;
+  transition: transform .2s, box-shadow .2s;
+  box-shadow: 0 5px 0 #a70027, 0 10px 24px #d7114038;
+}
+.st-key-login_shell [data-testid="stFormSubmitButton"] button::after {
+  content: ""; position: absolute; inset: 0 auto 0 -60%; width: 35%;
+  background: linear-gradient(105deg, transparent, #ffffff50, transparent);
+  transform: skewX(-18deg); pointer-events: none;
+  animation: login-button-shine 6s ease-in-out infinite;
+}
+.st-key-login_shell [data-testid="stFormSubmitButton"] button:hover { transform: translateY(-2px); box-shadow: 0 7px 0 #a70027, 0 14px 28px #d7114050; }
+.st-key-login_shell [data-testid="stFormSubmitButton"] button:active { transform: translateY(3px); box-shadow: 0 2px 0 #a70027; }
+.login-motion-toggle { position: fixed; top: 10px; right: 10px; bottom: auto; z-index: 20; font-size: 10px; background: #a70029bf; border-color: #ffffff80; }
+.login-atmosphere { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+.login-atmosphere i { position: absolute; top: -12%; color: white; font-style: normal; font-size: 20px; text-shadow: 0 2px 10px #c6214840; animation: login-snow 15s linear infinite; }
+.login-atmosphere i:nth-child(1) { left: 5%; animation-delay: -3s; }
+.login-atmosphere i:nth-child(2) { left: 17%; animation-delay: -9s; font-size: 14px; }
+.login-atmosphere i:nth-child(3) { left: 30%; animation-delay: -13s; }
+.login-atmosphere i:nth-child(4) { left: 43%; animation-delay: -6s; font-size: 12px; }
+.login-atmosphere i:nth-child(5) { left: 58%; animation-delay: -11s; font-size: 16px; }
+.login-atmosphere i:nth-child(6) { left: 73%; animation-delay: -2s; }
+.login-atmosphere i:nth-child(7) { left: 85%; animation-delay: -8s; font-size: 14px; }
+.login-atmosphere i:nth-child(8) { left: 95%; animation-delay: -5s; }
+@keyframes login-arrive { from { opacity: 0; transform: translateY(16px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes login-snow { from { transform: translate3d(0,0,0) rotate(0); opacity: 0; } 10% { opacity: .85; } 90% { opacity: .85; } to { transform: translate3d(22px,115svh,0) rotate(120deg); opacity: 0; } }
+@keyframes login-button-shine { 0%,70% { left: -60%; } 95%,100% { left: 140%; } }
+/* Phones and portrait tablets retain a compact form and reserve the lower scene. */
+@media (max-width: 1024px) and (orientation: portrait) {
+  .stApp:has(.login-welcome) {
+    min-height: max(100svh, 680px);
+    background-image: url("__MIXUE_LOGIN_MOBILE_SCENE__");
+    background-position: center top; background-size: cover;
+  }
+  .stMainBlockContainer:has(.login-welcome) { max-width: 440px; min-height: max(100svh, 680px); padding: clamp(16px, 3vh, 32px) 16px 24px; }
+  .st-key-login_shell { padding: 16px; border-radius: 22px; }
+  .st-key-login_shell .login-welcome h2 { font-size: clamp(23px, 5.5vw, 28px); }
+  .st-key-login_shell .login-welcome p { font-size: 11px; }
+}
+@media (max-width: 360px) {
+  .stMainBlockContainer:has(.login-welcome) { padding-left: 12px; padding-right: 12px; }
+  .st-key-login_shell { padding: 14px 12px; }
+  .st-key-login_shell .login-welcome h2 { font-size: 22px; }
+  .st-key-login_shell [data-testid="stExpander"] summary p { font-size: 11px; }
+}
+/* Short landscape screens scroll naturally instead of shrinking controls. */
+@media (max-height: 540px) and (orientation: landscape) {
+  .stMainBlockContainer:has(.login-welcome) { padding-top: 12px; padding-bottom: 24px; }
+  .st-key-login_shell { padding: 16px 20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .st-key-login_shell, .login-atmosphere i, .st-key-login_shell button::after { animation: none !important; }
+}
+
+.stMainBlockContainer:has(.login-welcome) [data-testid="stElementContainer"]:has(> [data-testid="stMarkdown"] .login-atmosphere) { height: 0; min-height: 0; margin: 0; }
+
+/* The on-page control can explicitly enable motion when the OS prefers less. */
+html.mixue-motion-user-enabled .login-atmosphere i { animation-name: login-snow !important; animation-duration: 15s !important; animation-iteration-count: infinite !important; animation-timing-function: linear !important; }
+html.mixue-motion-user-enabled .st-key-login_shell [data-testid="stFormSubmitButton"] button::after { animation: login-button-shine 6s ease-in-out infinite !important; }

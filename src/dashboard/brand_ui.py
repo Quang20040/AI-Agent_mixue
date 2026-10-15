@@ -33,7 +33,7 @@ def asset(name):
         name = 'snow-king-reference.png'
     asset_path = HERE / 'assets' / name
     if asset_path.is_file():
-        mime = 'image/webp' if asset_path.suffix == '.webp' else 'image/png'
+        mime = {'.webp': 'image/webp', '.svg': 'image/svg+xml'}.get(asset_path.suffix, 'image/png')
         return f'data:{mime};base64,' + base64.b64encode(asset_path.read_bytes()).decode('ascii')
     return _FALLBACK_SVG
 
@@ -41,7 +41,8 @@ def asset(name):
 def install_brand():
     css_path = HERE / 'brand.css'
     if css_path.is_file():
-        st.markdown('<style>' + css_path.read_text(encoding='utf-8') + '</style>', unsafe_allow_html=True)
+        css = css_path.read_text(encoding='utf-8').replace('__MIXUE_BACKGROUND_PATTERN__', asset('brand-pattern.svg')).replace('__MIXUE_LOGIN_SCENE__', asset('login-snow-world-v1.png')).replace('__MIXUE_LOGIN_MOBILE_SCENE__', asset('login-snow-world-mobile-v1.png'))
+        st.markdown('<style>' + css + '</style>', unsafe_allow_html=True)
     st.markdown(f'''<div class="brandbar" role="banner"><div class="brandword">
     <img class="brand-logo" src="{asset('snow-king-reference.png')}" alt="Tuyết Vương Mixue"><div><strong>MIXUE</strong>
     <small>ICE CREAM &amp; TEA · BEVERAGEOPS</small></div></div>
@@ -310,24 +311,19 @@ def render_login_screen():
     """Màn hình đăng nhập nhận diện Mixue Tuyết Vương - Bắt buộc đăng nhập trước khi vào hệ thống."""
     from src.auth import verify_user
 
-    c_visual, c_card = st.columns([1.65, 1], gap="large")
-    with c_visual:
-        render_brand_hero(login=True)
-    with c_card:
+    st.markdown('<div class="login-atmosphere" aria-hidden="true"><i>❄</i><i>✦</i><i>❄</i><i>✧</i><i>❄</i><i>✦</i><i>❄</i><i>✧</i></div><button class="stage-motion-toggle login-motion-toggle" type="button" aria-pressed="true">Tạm dừng hiệu ứng</button>', unsafe_allow_html=True)
+    with st.container(key="login_shell"):
         st.markdown(
             '''
-            <div class="login-welcome"><span>CHÀO MỪNG TRỞ LẠI ✦</span><h2>Ca làm vui vẻ<br>bắt đầu từ đây.</h2><p>Đăng nhập để cùng Tuyết Vương chăm sóc cửa hàng Mixue 39 Tôn Quang Phiệt.</p></div>
+            <div class="login-welcome"><span>MIXUE · ICE CREAM &amp; TEA</span><h2>Chào mừng trở lại!</h2><p>Đăng nhập để bắt đầu một ca làm ngọt ngào.</p></div>
             ''',
             unsafe_allow_html=True
         )
 
-        with st.container(border=True):
-            st.markdown("### Đăng nhập cửa hàng")
-            st.caption("Không gian làm việc của đội ngũ Mixue · 2132")
-
+        with st.container(key="login_card"):
             with st.form("login_form", clear_on_submit=False):
-                username = st.text_input("Tên đăng nhập", key="login_username", placeholder="Ví dụ: chucuahang, quanly, nhanvien, nhanvien_moi")
-                password = st.text_input("Mật khẩu", type="password", key="login_password", placeholder="Nhập mật khẩu (Mặc định: 123 hoặc 123456)")
+                username = st.text_input("Tên đăng nhập", key="login_username", placeholder="Nhập tên đăng nhập của bạn")
+                password = st.text_input("Mật khẩu", type="password", key="login_password", placeholder="Nhập mật khẩu")
                 submitted = st.form_submit_button("Đăng nhập vào Hệ thống 🚀", type="primary", use_container_width=True)
 
                 if submitted:
@@ -344,7 +340,7 @@ def render_login_screen():
 
         st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
 
-        with st.expander("🔑 Danh mục Tài khoản & Đăng nhập nhanh một chạm", expanded=True):
+        with st.expander("🔑 Tài khoản dùng thử & đăng nhập nhanh", expanded=False):
             st.caption("Bấm chọn tài khoản bên dưới để đăng nhập trực tiếp thử nghiệm theo từng phân quyền:")
             cq1, cq2 = st.columns(2, gap="small")
             with cq1:
@@ -426,8 +422,8 @@ def _render_chat_conversation(agent, role, user_name, history_height=250, key_su
             f'''<div class="snowking-thinking-card">
             {snow_king_image(42, mode="thinking")}
             <div class="thinking-text-wrap">
-                <div class="thinking-title">Tuyết Vương đang suy nghĩ <span class="thinking-dots"><span></span><span></span><span></span></span></div>
-                <div class="thinking-sub">Đang đối chiếu dữ liệu POS &amp; kho cửa hàng 2132…</div>
+                <div class="thinking-title">Tuyết Vương Multi-Agent đang phân tích <span class="thinking-dots"><span></span><span></span><span></span></span></div>
+                <div class="thinking-sub">Đang điều phối các Agent lục tìm Repo, Docs, Quy chuẩn và Database…</div>
                 <div class="thinking-shimmer"></div>
             </div>
             </div>''',
@@ -478,58 +474,44 @@ def render_chat(agent, role, user_name, mode="auto"):
             ('Giải mã tem', 'Giải mã mã tem 24101'),
         ]
 
+    def ask_quick(question):
+        st.session_state.chat_input_val = question
+
+    def render_quick_questions():
+        with st.container(key="chat_quick_questions"):
+            st.markdown('<div class="chat-quick-label"><span>⚡ Câu hỏi gợi ý nhanh</span><span>Chạm để hỏi</span></div>', unsafe_allow_html=True)
+            for row in (quick[:2], quick[2:]):
+                for col, (label, question) in zip(st.columns(2, gap="small"), row):
+                    col.button(label, key=f'chat_{label}', use_container_width=True,
+                               on_click=ask_quick, args=(question,))
+
     if effective_mode == "fullscreen":
         with st.container(key="chat_panel_box", border=True):
-            col_side, col_main = st.columns([1, 2.35], gap="large")
-            with col_side:
-                role_desc = "Toàn quyền quản trị & vận hành" if is_admin else "Hỗ trợ công thức & sơ chế quầy bar"
-                st.markdown(
-                    f'''<div class="chat-hero-card">
-                    {snow_king_image(78)}
-                    <h3>Tuyết Vương AI</h3>
-                    <p><span class="chat-online-dot"></span> Trợ lý Vận hành Mixue 2132<br>{role_desc}</p>
-                    </div>''',
-                    unsafe_allow_html=True,
-                )
-                st.markdown('<div class="chat-quick-label"><span>⚡ Câu hỏi gợi ý nhanh</span><span>Chạm để hỏi</span></div>', unsafe_allow_html=True)
-                for label, question in quick:
-                    if st.button(label, key=f'chat_{label}', use_container_width=True):
-                        st.session_state.chat_input_val = question
-                footer_note = "Đề xuất cần được quản lý kiểm tra và phê duyệt." if is_admin else "Nhân viên tuân thủ đúng định lượng SOP quầy bar."
-                st.markdown(f'<p class="chat-foot">{footer_note}</p>', unsafe_allow_html=True)
-                if st.button('Bắt đầu cuộc trò chuyện mới', key='clear_chat', use_container_width=True):
-                    del st.session_state.chat_history_vi
-                    st.rerun()
-            with col_main:
-                role_label = "Quản trị viên" if is_admin else "Nhân viên"
-                st.markdown(
-                    f'''<div class="chat-head">{snow_king_image(42)}<img src="{asset('chat-avatar.png')}" alt="Tuyết Vương" style="display:none;">
-                    <div><strong>Không gian Hội thoại Tuyết Vương AI</strong><small><span class="chat-online-dot"></span>Đang trực tuyến · {escape(user_name)} ({role_label})</small></div></div>''',
-                    unsafe_allow_html=True,
-                )
-                _render_chat_conversation(agent, clean_role, user_name, history_height=430, key_suffix="")
+            role_label = "Quản trị viên" if is_admin else "Nhân viên"
+            st.markdown(
+                f'''<div class="chat-head">{snow_king_image(42)}
+                <div><strong>Tuyết Vương AI</strong><small><span class="chat-online-dot"></span>Đang trực tuyến · {escape(user_name)} ({role_label})</small></div></div>''',
+                unsafe_allow_html=True,
+            )
+            _render_chat_conversation(agent, clean_role, user_name, history_height=430, key_suffix="")
+            render_quick_questions()
+            if st.button('Bắt đầu cuộc trò chuyện mới', key='clear_chat', use_container_width=True):
+                st.session_state.pop('chat_history_vi', None)
+                st.rerun()
     else:
-        # Floating Bottom-Right Launcher Button with Popover (No page scrolling required)
         with st.container(key="chat_fab_container"):
             if hasattr(st, "popover"):
                 with st.popover("🍦 Chat Tuyết Vương AI"):
                     st.markdown(
-                        f'''<div class="chat-head">{snow_king_image(38)}<img src="{asset('chat-avatar.png')}" alt="Tuyết Vương" style="display:none;">
+                        f'''<div class="chat-head">{snow_king_image(38)}
                         <div><strong>Tuyết Vương AI</strong><small><span class="chat-online-dot"></span>Trợ lý vận hành · Hỏi nhanh tại chỗ</small></div></div>''',
                         unsafe_allow_html=True,
                     )
-                    st.markdown('<div class="chat-quick-label"><span>⚡ Gợi ý nhanh</span><span>Chạm để hỏi</span></div>', unsafe_allow_html=True)
-                    for row in (quick[:2], quick[2:]):
-                        for col, (label, question) in zip(st.columns(2, gap="small"), row):
-                            if col.button(label, key=f'chat_{label}', use_container_width=True):
-                                st.session_state.chat_input_val = question
                     _render_chat_conversation(agent, clean_role, user_name, history_height=240, key_suffix="")
-                    c_f1, c_f2 = st.columns([1.2, 1], gap="small")
-                    with c_f1:
-                        st.button("⤢ Mở màn hình Chat lớn", key="open_fullscreen_chat", use_container_width=True, on_click=_SwitchToChatTab)
-                    with c_f2:
-                        if st.button('Xóa lịch sử', key='clear_chat', use_container_width=True):
-                            del st.session_state.chat_history_vi
-                            st.rerun()
+                    render_quick_questions()
+                    st.button("⤢ Mở màn hình Chat lớn", key="open_fullscreen_chat", use_container_width=True, on_click=_SwitchToChatTab)
+                    if st.button('Xóa lịch sử', key='clear_chat', use_container_width=True):
+                        st.session_state.pop('chat_history_vi', None)
+                        st.rerun()
             else:
                 st.button("🍦 Mở màn hình Chat Tuyết Vương AI", key="fab_open_chat_tab", type="primary", on_click=_SwitchToChatTab)

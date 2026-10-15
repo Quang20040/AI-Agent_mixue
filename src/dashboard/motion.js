@@ -1,7 +1,7 @@
 /* Continuous Mixue motion, scoped to branded elements. */
 (() => {
   if (!window.gsap) return;
-  if (window.mixueMotion?.version === 2) { window.mixueMotion.scan(); return; }
+  if (window.mixueMotion?.version === 3) { window.mixueMotion.scan(); return; }
   window.mixueMotion?.destroy?.();
   const gsap = window.gsap;
   gsap.registerPlugin(window.ScrollTrigger);
@@ -9,9 +9,10 @@
   const controls = new Map();
   const fine = window.matchMedia('(hover: hover) and (pointer: fine)');
   // Continuous motion is the user's explicit preference; pause remains available.
-  let enabled = true;
-  document.documentElement.dataset.mixueMotion = 'running';
-  document.documentElement.classList.add('mixue-motion-active');
+  let enabled = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  document.documentElement.dataset.mixueMotion = enabled ? 'running' : 'paused';
+  document.documentElement.classList.toggle('mixue-motion-active', enabled);
+  document.documentElement.classList.toggle('mixue-motion-paused', !enabled);
   function syncControls() {
     controls.forEach((fn, button) => {if (!button.isConnected) {button.removeEventListener('click', fn); controls.delete(button);}});
     document.querySelectorAll('.stage-motion-toggle').forEach(button => {
@@ -21,6 +22,7 @@
       if (controls.has(button)) return;
       const toggle = () => {
         enabled = !enabled;
+        document.documentElement.classList.toggle('mixue-motion-user-enabled', enabled);
         document.documentElement.dataset.mixueMotion = enabled ? 'running' : 'paused';
         document.documentElement.classList.toggle('mixue-motion-paused', !enabled);
         document.documentElement.classList.toggle('mixue-motion-active', enabled);
@@ -71,19 +73,20 @@
       } else if (node.matches('.mixue-ribbon')) {
         loops.push(gsap.to(node.querySelector('div'), {xPercent: -50, duration: 24, repeat: -1, ease: 'none'}));
       }
-      const targets = node.matches('[data-tilt]') ? [node] : node.querySelectorAll('[data-tilt]');
+      const targets = node.matches('[data-tilt], .st-key-login_shell') ? [node] : node.querySelectorAll('[data-tilt]');
       targets.forEach(target => {
         const move = event => {
-          if (!fine.matches || !enabled) return;
+          if (!fine.matches || !enabled || target.matches(':focus-within')) return;
           const box = target.getBoundingClientRect();
-          gsap.to(target, {rotationX: -(event.clientY - box.top - box.height / 2) / box.height * 14,
-            rotationY: (event.clientX - box.left - box.width / 2) / box.width * 18,
+          gsap.to(target, {rotationX: -(event.clientY - box.top - box.height / 2) / box.height * (node.matches('.st-key-login_shell') ? 4 : 14),
+            rotationY: (event.clientX - box.left - box.width / 2) / box.width * (node.matches('.st-key-login_shell') ? 6 : 18),
             transformPerspective: 850, duration: .35, ease: 'power2.out', overwrite: 'auto'});
         };
         const reset = () => gsap.to(target, {rotationX: 0, rotationY: 0, duration: .65, overwrite: 'auto'});
         target.addEventListener('pointermove', move);
         target.addEventListener('pointerleave', reset);
-        cleanups.push(() => {target.removeEventListener('pointermove', move); target.removeEventListener('pointerleave', reset); gsap.killTweensOf(target);});
+        target.addEventListener('focusin', reset);
+        cleanups.push(() => {target.removeEventListener('pointermove', move); target.removeEventListener('pointerleave', reset); target.removeEventListener('focusin', reset); gsap.killTweensOf(target);});
       });
     }, node);
     const visibility = new IntersectionObserver(entries => entries.forEach(entry => {
@@ -95,14 +98,14 @@
   function scan() {
     syncControls();
     active.forEach((cleanup, node) => {if (!node.isConnected || !enabled) {cleanup(); active.delete(node);}});
-    document.querySelectorAll('.mixue-stage, .menu-card, .snowking-authentic, .brand-logo, .mixue-ribbon').forEach(bind);
+    document.querySelectorAll('.mixue-stage, .menu-card, .snowking-authentic, .brand-logo, .mixue-ribbon, .st-key-login_shell').forEach(bind);
   }
   let scheduled = false;
   const observer = new MutationObserver(() => {
     if (!scheduled) {scheduled = true; requestAnimationFrame(() => {scheduled = false; scan();});}
   });
   observer.observe(document.body, {childList: true, subtree: true});
-  window.mixueMotion = {version: 2, scan, destroy() {
+  window.mixueMotion = {version: 3, scan, destroy() {
     observer.disconnect(); active.forEach(cleanup => cleanup()); active.clear();
     controls.forEach((fn, button) => button.removeEventListener('click', fn)); controls.clear();
   }};

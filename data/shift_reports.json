@@ -84,9 +84,9 @@
     "variance_pos_vnd": -50000,
     "reconciliation_status": "KHỚP LỆCH NHẸ",
     "status": "APPROVED",
-    "id": "SHIFT_20261015_CA_SANG_cf6029",
-    "created_at": "2026-10-15T19:27:48.983344",
-    "updated_at": "2026-10-15T19:27:48.983344",
+    "id": "SHIFT_20261015_CA_SANG_fc5831",
+    "created_at": "2026-10-15T20:52:00.377749",
+    "updated_at": "2026-10-15T20:52:00.377749",
     "total_collected_vnd": 0.0,
     "notes": "Đã duyệt bởi Quản lý"
   }

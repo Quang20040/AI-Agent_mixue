@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320" fill="none">
+  <g stroke="#ca294b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" opacity=".16">
+    <!-- Snowflakes, tea cups and waffle cones, drawn as a seamless brand texture. -->
+    <g transform="translate(38 43) rotate(-12)"><path d="M-13 0h26M0-13v26M-9-9 9 9M-9 9 9-9"/><path d="m-13-4 4 4-4 4m26-8-4 4 4 4M-4-13l4 4 4-4m-8 26 4-4 4 4"/></g>
+    <g transform="translate(189 31) rotate(14)"><path d="m-13 0 4 31h18l4-31M-16 0h32M-11-5h22M3-5l7-18"/><path d="M-8 10h16M-5 25h10"/><circle cx="-3" cy="20" r="1.5"/><circle cx="4" cy="17" r="1.5"/></g>
+    <g transform="translate(91 171) rotate(-18)"><path d="m-13 0 13 29L13 0ZM-13 0c-8-9-2-16 4-17-4-8 0-13 6-14-1-5 2-9 6-11 0 8 13 10 10 20 10 5 8 15 0 22Z"/><path d="m-9 8 16 10M-5 17l14-9M-10-8h20"/></g>
+    <g transform="translate(254 182) rotate(18)"><path d="M-12 0h24M0-12v24M-8-8 8 8M-8 8 8-8"/></g>
+    <path d="m258 71 3 8 8 3-8 3-3 8-3-8-8-3 8-3ZM160 246l3 8 8 3-8 3-3 8-3-8-8-3 8-3Z"/>
+    <path d="M32 267c-10-9-19 4 0 15 19-11 10-24 0-15ZM283 282c-9-8-17 3 0 13 17-10 9-21 0-13Z"/>
+    <path d="M133 87h3M222 276h3M30 142h3M303 125h3" stroke-width="3"/>
+  </g>
+</svg>
