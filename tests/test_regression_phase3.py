@@ -59,19 +59,25 @@ def test_shift_report_preserves_reconciliation_fields():
     # 1. Create initial report with POS reconciliation fields
     initial_report = {
         "shift_id": test_shift_id,
+        "business_date": "2026-10-15",
         "date": "2026-10-15",
+        "shift_code": "CA_CHIEU",
         "shift_type": "CA_CHIEU",
         "leader": "TestLeader",
         "signed_by": "TestLeader",
         "total_revenue": 5000000,
+        "pos_revenue_vnd": 5000000,
         "pos_collected_vnd": 4950000,
+        "cash_vnd": 3000000,
         "cash_collected_vnd": 3000000,
+        "bank_transfer_vnd": 1950000,
         "banking_transfer_vnd": 1950000,
+        "total_collected_vnd": 4950000,
         "variance_pos_vnd": -50000,
         "reconciliation_status": "KHỚP LỆCH NHẸ",
         "status": "DRAFT"
     }
-    ok, _msg, saved_initial = save_or_update_shift_report(initial_report)
+    ok, _msg, saved_initial = save_or_update_shift_report(initial_report, actor_username="quanly")
     assert ok is True
     assert saved_initial["shift_id"] == test_shift_id
     assert saved_initial["pos_collected_vnd"] == 4950000
@@ -82,7 +88,7 @@ def test_shift_report_preserves_reconciliation_fields():
         "status": "APPROVED",
         "notes": "Đã duyệt bởi Quản lý"
     }
-    ok_up, _msg_up, saved_updated = save_or_update_shift_report(update_payload)
+    ok_up, _msg_up, saved_updated = save_or_update_shift_report(update_payload, actor_username="quanly")
     assert ok_up is True
 
     # 3. Verify POS audit fields were preserved
@@ -93,7 +99,7 @@ def test_shift_report_preserves_reconciliation_fields():
     assert saved_updated["variance_pos_vnd"] == -50000
 
     # Cleanup test report from JSON
-    delete_shift_report(test_shift_id)
+    delete_shift_report(test_shift_id, actor_username="quanly")
 
 
 def test_stock_request_duplicate_prevention():
@@ -107,7 +113,7 @@ def test_stock_request_duplicate_prevention():
         ingredient_id=test_ing,
         movement_type="IN",
         quantity=5.0,
-        recorded_by="test_user_dup",
+        recorded_by="nhanvien",
         user_role="STAFF",
         notes="First submission"
     )
@@ -121,7 +127,7 @@ def test_stock_request_duplicate_prevention():
             ingredient_id=test_ing,
             movement_type="IN",
             quantity=5.0,
-            recorded_by="test_user_dup",
+            recorded_by="nhanvien",
             user_role="STAFF",
             notes="Rapid double click"
         )
@@ -129,7 +135,7 @@ def test_stock_request_duplicate_prevention():
         assert "tránh trùng lặp" in res2["message"]
     finally:
         # Cleanup created movement
-        delete_stock_movement(req_id, "admin")
+        delete_stock_movement(req_id, "quanly")
 
 
 def test_bom_inventory_reconciliation_with_initial_stock():

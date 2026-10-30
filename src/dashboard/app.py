@@ -15,6 +15,10 @@ import pandas as pd
 import streamlit as st
 
 from src.agent.mixue_agent import MixueOperationsAgent
+from src.agent.config import AgentSettings
+from src.engine.weather import VN
+from src.engine.stock_matrix import matrix_views
+from src.dashboard.forecast_context_ui import render_forecast_context
 from src.auth import (
     can_access_page,
     create_employee,
@@ -28,17 +32,22 @@ from src.auth import (
 )
 from src.dashboard.brand_ui import (
     install_brand,
+    nav_label,
     render_chat,
     render_force_change_password_screen,
     render_home,
     render_login_screen,
-    snow_king_image,
+    render_mobile_navigation,
+    render_page_hero,
+    render_sidebar_bottom,
+    render_sidebar_top,
+    render_topbar,
 )
 from src.dashboard.shift_closing_ui import render_shift_closing_view
 from src.database import SessionLocal
 from src.engine.bom_engine import BOMEngine
 from src.engine.daily_stock_service import (
-    COLUMN_TO_MOVEMENT_MAP,
+    column_map_for_period,
     approve_stock_request,
     create_stock_request,
     delete_stock_movement,
@@ -63,7 +72,7 @@ st.set_page_config(
     page_title="Mixue 39 Tôn Quang Phiệt — Trợ lý Vận hành Tuyết Vương AI",
     page_icon="🍦",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
 # ==============================================================================
@@ -76,11 +85,20 @@ install_brand()
 # ==============================================================================
 def get_operations_agent():
     # Keep drafts and database sessions isolated between browser sessions.
-    if "operations_agent" not in st.session_state:
-        st.session_state.operations_agent = MixueOperationsAgent()
+    settings = AgentSettings.from_env()
+    existing = st.session_state.get('operations_agent')
+    if existing is None or type(existing) is not MixueOperationsAgent or existing._graph_options.get('settings') != settings:
+        if existing is not None:
+            existing.close()
+            st.session_state.pop('agent_pending_approval', None)
+        st.session_state.operations_agent = MixueOperationsAgent(settings=settings)
     return st.session_state.operations_agent
 
-agent = get_operations_agent()
+try:
+    agent = get_operations_agent()
+except ValueError as error:
+    st.error(f'Chưa khởi tạo được cấu hình vận hành: {error}')
+    st.stop()
 
 # ==============================================================================
 # KIỂM TRA ĐĂNG NHẬP BẮT BUỘC (MANDATORY AUTHENTICATION)
@@ -129,30 +147,6 @@ is_admin = is_admin_role(user_role)
 
 
 
-# Dữ liệu chuẩn hóa kiểm chứng 15 ngày Backtesting
-BENCHMARK_FORECAST_METRICS = {
-    "evaluation_period": "28/09/2026 đến 12/10/2026 (15 ngày backtest)",
-    "best_model": "Trung bình trượt 7 ngày (Moving Average)",
-    "aggregate_metrics": {
-        "Trung bình trượt 7 ngày (Moving Average)": {
-            "MAE": 8.31, "WAPE_pct": 20.27, "Bias_pct": 0.32,
-            "Total_Actual": 23957, "Total_Predicted": 24034.4,
-            "DanhGia": "Tối ưu nhất · Sai số thấp & chống nhiễu tốt"
-        },
-        "Trung bình theo thứ trong tuần (Day-of-Week)": {
-            "MAE": 8.92, "WAPE_pct": 21.76, "Bias_pct": -0.78,
-            "Total_Actual": 23957, "Total_Predicted": 23770.0,
-            "DanhGia": "Hiệu quả cho cao điểm cuối tuần (Thứ 7 & CN)"
-        },
-        "Chu kỳ tuần trước (Seasonal Naive)": {
-            "MAE": 10.35, "WAPE_pct": 25.24, "Bias_pct": 0.22,
-            "Total_Actual": 23957, "Total_Predicted": 24010.0,
-            "DanhGia": "Mô hình cơ sở đối chiếu chuẩn theo tuần"
-        }
-    }
-}
-
-@st.cache_data
 def get_cached_sales():
     eng = BOMEngine()
     df = eng.get_sales_summary()
@@ -188,71 +182,63 @@ def get_cached_daily_revenue():
     return df
 
 
+@st.fragment(run_every="30s")
+def render_live_home():
+    st.button('Làm mới dữ liệu', key='refresh_home_data')
+    render_home(get_cached_menu_list(), get_cached_sales(), user_role=user_role)
+    st.caption('Tự làm mới mỗi 30 giây khi đang mở trang · Theo ngày Việt Nam · Chỉ có số liệu khi đã nhập dữ liệu bán hàng.')
+
+
 # ==============================================================================
 # THANH ĐIỀU HƯỚNG BÊN TRÁI (SIDEBAR) — NHẬN DIỆN CHI NHÁNH & PHÂN QUYỀN
 # ==============================================================================
 with st.sidebar:
-    st.markdown(snow_king_image(68), unsafe_allow_html=True)
-    st.subheader("MIXUE · 2132")
-    st.caption("39 Tôn Quang Phiệt · Phiên làm việc đã xác thực")
+    render_sidebar_top(user_name, user_title, user_badge)
+
+    allowed_tabs = get_allowed_pages(user_role)
+    current_nav = st.session_state.get("main_navigation")
+    if current_nav not in allowed_tabs:
+        current_nav = allowed_tabs[0]
+        st.session_state["main_navigation"] = current_nav
+
+    nav_index = allowed_tabs.index(current_nav) if current_nav in allowed_tabs else 0
+
+    section = st.radio(
+        "Điều hướng",
+        allowed_tabs,
+        index=nav_index,
+        format_func=nav_label,
+        label_visibility="collapsed",
+        key="main_navigation",
+        width="stretch",
+    )
+
     st.divider()
-
-    st.subheader("👤 Tài khoản Hoạt động")
-    st.markdown(f"**Người dùng:** {user_name}")
-    st.markdown(f"**Phân quyền:** {user_badge}")
-    st.caption(f"Chức danh: {user_title}")
-
-    # Hiển thị quyền hạn thao tác
-    if is_admin:
-        st.success("🛡️ **Thẩm quyền ADMIN:** Toàn quyền xem báo cáo doanh thu, dự báo, đối soát kho, ký duyệt đơn PO và Quản lý nhân viên.")
-    else:
-        st.info("ℹ️ **Thẩm quyền NHÂN VIÊN:** Tra cứu thực đơn, công thức pha chế (BOM), tem ly và hỏi Tuyết Vương về công thức/sơ chế.")
-
-    if st.button("🚪 Đăng xuất khỏi Hệ thống", key="btn_logout", use_container_width=True):
+    if st.button("🚪 Đăng xuất", key="btn_logout", use_container_width=True):
+        agent.reset_conversation(start_new=False)
+        st.session_state.pop('agent_pending_approval', None)
         for k in ["authenticated", "user", "username", "user_role", "user_name", "user_title", "user_badge", "must_change_password", "main_navigation", "chat_history_vi", "last_activity"]:
             st.session_state.pop(k, None)
         st.rerun()
+    render_sidebar_bottom()
 
-    st.divider()
-
-    # Thẻ thông tin chi nhánh chuẩn thực tế
-    st.markdown("""
-    <div class="store-profile-card">
-        <h4>🏪 Mixue 39 Tôn Quang Phiệt</h4>
-        <div class="store-profile-item"><strong>Mã cửa hàng:</strong> 2132 (MX-2132)</div>
-        <div class="store-profile-item"><strong>Chủ quán:</strong> Nguyễn Hạnh Chi</div>
-        <div class="store-profile-item"><strong>Quản lý:</strong> Bùi Văn Quang</div>
-        <div class="store-profile-item"><strong>Địa chỉ:</strong> Số 39 Tôn Quang Phiệt, P. Cổ Nhuế 1, Q. Bắc Từ Liêm, Hà Nội</div>
-        <div class="store-profile-item"><strong>Giờ mở cửa:</strong> 08:00 – 23:00 (Hàng ngày)</div>
-        <div class="store-profile-item"><strong>Nguồn dữ liệu:</strong> Cơ sở dữ liệu đã nạp</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-
-allowed_tabs = get_allowed_pages(user_role)
-current_nav = st.session_state.get("main_navigation")
-if current_nav not in allowed_tabs:
-    current_nav = allowed_tabs[0]
-    st.session_state["main_navigation"] = current_nav
-
-nav_index = allowed_tabs.index(current_nav) if current_nav in allowed_tabs else 0
-
-section = st.radio(
-    "Điều hướng",
-    allowed_tabs,
-    index=nav_index,
-    horizontal=True,
-    label_visibility="collapsed",
-    key="main_navigation",
-)
+_pending_notifications = len(get_pending_requests()) if is_admin else 0
+render_topbar(user_name, _pending_notifications)
+if section != "💬 Tuyết Vương AI":
+    render_page_hero(section, user_name)
+render_mobile_navigation(allowed_tabs, section)
 
 with st.container(key="workspace"):
     if not can_access_page(user_role, section):
         st.error("🔒 **Truy cập bị từ chối:** Bạn không có quyền truy cập trang này. Chức năng chỉ dành riêng cho Quản lý và Chủ cửa hàng (Admin).")
     elif section == "Trang chủ":
-        render_home(get_cached_menu_list(), get_cached_sales(), user_role=user_role)
+        render_live_home()
 
     elif section == "Báo cáo & kho":
+        stock_period = st.date_input('Tháng xem sổ kho', value=datetime.now(VN).date().replace(day=1), key='stock_period')
+        stock_year, stock_month = stock_period.year, stock_period.month
+        stock_column_map = column_map_for_period(stock_year, stock_month)
+        stock_views = matrix_views(stock_year, stock_month)
         # Hiển thị thông báo trạng thái thao tác kho (Flash alert) nếu có
         if "stock_flash_msg" in st.session_state:
             f_data = st.session_state["stock_flash_msg"]
@@ -301,7 +287,7 @@ with st.container(key="workspace"):
                         st.write("#### ✍️ Tạo Phiếu Đề Xuất Lệnh Kho")
                         st.caption("Nhập thông tin xuất khui dùng hoặc nhận hàng xe tổng tại quầy.")
 
-                        matrix_df_items = get_stock_matrix_df(2026, 10)
+                        matrix_df_items = get_stock_matrix_df(stock_year, stock_month)
                         item_choices = [f"{row['Mã NL']} — {row['Tên mặt hàng (Quy cách)']}" for _, row in matrix_df_items.iterrows()]
 
                         with st.form("staff_stock_request_form", clear_on_submit=True):
@@ -427,10 +413,10 @@ with st.container(key="workspace"):
 
             # TAB 2: SỔ THẺ KHO MA TRẬN 31 NGÀY (THÁNG 10/2026)
             with tab_matrix:
-                st.subheader("📦 Sổ Thẻ Kho Điện Tử Ma Trận (Đầy Đủ 31 Ngày Tháng 10/2026)")
+                st.subheader(f"📦 Sổ kho tháng {stock_month}/{stock_year}")
                 st.caption("Chi nhánh Mixue 39 Tôn Quang Phiệt · Sổ kho chuẩn hóa theo quy cách đóng gói F&B (Thùng/Kiện/Dây/Bình).")
 
-                matrix_df = get_stock_matrix_df(2026, 10)
+                matrix_df = get_stock_matrix_df(stock_year, stock_month)
 
                 # Top KPI metrics
                 kpi1, kpi2, kpi3, kpi4 = st.columns(4, gap="medium")
@@ -475,7 +461,7 @@ with st.container(key="workspace"):
                                     key="admin_stock_action"
                                 )
 
-                                e_qty = st.number_input("Số lượng (Thùng / Kiện / Bình / Dây)", min_value=0.1, max_value=50.0, value=1.0, step=0.5, key="admin_stock_qty")
+                                e_qty = st.number_input("Số lượng (Thùng / Kiện / Bình / Dây)", min_value=0.0, max_value=50.0, value=1.0, step=0.5, key="admin_stock_qty")
                                 e_notes = st.text_input("Ghi chú (Tùy chọn)", placeholder="Ví dụ: Quản lý nhận hàng ca chiều", key="admin_stock_notes")
 
                                 btn_stock_save = st.form_submit_button("Lưu Ghi Nhận Trực Tiếp Vào Sổ Kho 🚀", type="primary", use_container_width=True)
@@ -502,10 +488,10 @@ with st.container(key="workspace"):
                             edit_item_str = st.selectbox("1. Chọn mặt hàng:", item_choices_edit, key="edit_item_picker")
                             edit_ing_id = edit_item_str.split(" — ")[0]
 
-                            edit_col_options = list(COLUMN_TO_MOVEMENT_MAP.keys())
+                            edit_col_options = list(stock_column_map.keys())
                             edit_col_name = st.selectbox("2. Chọn cột / ngày phát sinh:", edit_col_options, key="edit_col_picker")
 
-                            cur_val = get_cell_value(edit_ing_id, edit_col_name)
+                            cur_val = get_cell_value(edit_ing_id, edit_col_name, year=stock_year, month=stock_month)
                             if cur_val is not None:
                                 st.info(f"📊 Giá trị hiện tại trong ô: **{cur_val:g}** (Thùng/Kiện/Dây)")
                                 default_input = float(cur_val)
@@ -522,7 +508,7 @@ with st.container(key="workspace"):
                                         ingredient_id=edit_ing_id,
                                         column_name=edit_col_name,
                                         new_value=edit_qty_input,
-                                        updated_by=st.session_state.get("username", "admin")
+                                        updated_by=st.session_state.get("username", "admin"), year=stock_year, month=stock_month
                                     )
                                     st.session_state["stock_flash_msg"] = {"type": "success" if ok else "error", "text": msg}
                                     st.rerun()
@@ -533,7 +519,7 @@ with st.container(key="workspace"):
                                         ingredient_id=edit_ing_id,
                                         column_name=edit_col_name,
                                         new_value="",
-                                        updated_by=st.session_state.get("username", "admin")
+                                        updated_by=st.session_state.get("username", "admin"), year=stock_year, month=stock_month
                                     )
                                     st.session_state["stock_flash_msg"] = {"type": "success" if ok else "error", "text": msg}
                                     st.rerun()
@@ -585,22 +571,14 @@ with st.container(key="workspace"):
                         with cf1:
                             view_mode = st.selectbox(
                                 "Chọn phạm vi hiển thị cột:",
-                                [
-                                    "Toàn bộ Tháng 10/2026 (Tất cả 31 ngày)",
-                                    "Tuần 1 (01/10 - 04/10)",
-                                    "Tuần 2 (05/10 - 11/10)",
-                                    "Tuần 3 (12/10 - 18/10)",
-                                    "Tuần 4 (19/10 - 25/10)",
-                                    "Tuần 5 (26/10 - 31/10)",
-                                    "Tổng hợp Cuối kỳ (Sổ sách vs Thực tế)"
-                                ]
+                                list(stock_views)
                             )
                         with cf2:
-                            excel_data = generate_excel_export()
+                            excel_data = generate_excel_export(stock_year, stock_month)
                             st.download_button(
                                 label="📥 Tải File Excel (.xlsx)",
                                 data=excel_data,
-                                file_name=f"Mixue_Kho_Thang_10_2026_{date.today().strftime('%Y%m%d')}.xlsx",
+                                file_name=f"Mixue_Kho_{stock_year}_{stock_month}.xlsx",
                                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                 use_container_width=True
                             )
@@ -614,26 +592,12 @@ with st.container(key="workspace"):
                         </div>
                         """, unsafe_allow_html=True)
 
-                st.write("#### 📋 Bảng Ma Trận Sổ Thẻ Kho (Tháng 10/2026) — Mixue 39 Tôn Quang Phiệt")
+                st.write(f"#### 📋 Sổ kho tháng {stock_month}/{stock_year}")
                 st.caption("💡 **Chế độ sửa trực tiếp bằng tay:** Bạn có thể bấm đúp chuột vào bất kỳ ô số liệu nào trên bảng để gõ số sửa trực tiếp như Excel, sau đó bấm nút **'💾 Lưu Các Ô Đã Sửa Vào Sổ Kho'** bên dưới.")
 
-                if view_mode == "Tuần 1 (01/10 - 04/10)":
-                    cols_show = ["STT", "Tên mặt hàng (Quy cách)", "Tồn T9", "Nhập 1/10", "T5 1/10", "T6 2/10", "T7 3/10", "CN 4/10", "Tồn T1"]
-                elif view_mode == "Tuần 2 (05/10 - 11/10)":
-                    cols_show = ["STT", "Tên mặt hàng (Quy cách)", "Tồn T1", "T2 5/10", "T3 6/10", "T4 7/10", "T5 8/10", "T6 9/10", "T7 10/10", "CN 11/10", "Tồn T2"]
-                elif view_mode == "Tuần 3 (12/10 - 18/10)":
-                    cols_show = ["STT", "Tên mặt hàng (Quy cách)", "Tồn T2", "Nhập 12/10", "T2 12/10", "T3 13/10", "T4 14/10", "T5 15/10", "T6 16/10", "T7 17/10", "CN 18/10", "Tồn T3"]
-                elif view_mode == "Tuần 4 (19/10 - 25/10)":
-                    cols_show = ["STT", "Tên mặt hàng (Quy cách)", "Tồn T3", "Nhập 19/10", "T2 19/10", "T3 20/10", "T4 21/10", "T5 22/10", "T6 23/10", "T7 24/10", "CN 25/10", "Tồn T4"]
-                elif view_mode == "Tuần 5 (26/10 - 31/10)":
-                    cols_show = ["STT", "Tên mặt hàng (Quy cách)", "Tồn T4", "T2 26/10", "T3 27/10", "T4 28/10", "T5 29/10", "T6 30/10", "T7 31/10"]
-                elif view_mode == "Tổng hợp Cuối kỳ (Sổ sách vs Thực tế)":
-                    cols_show = ["STT", "Tên mặt hàng (Quy cách)", "Tồn T9", "Tổng nhập", "Tổng xuất", "Tồn sổ sách", "Tồn thực tế", "Chênh lệch"]
-                else:
-                    cols_show = [c for c in matrix_df.columns if c != "Mã NL"]
+                cols_show = stock_views[view_mode] or [c for c in matrix_df.columns if c != 'Mã NL']
 
-                # Khóa các cột tính toán/công thức tự động, chỉ cho phép sửa các ô ngày tháng và tồn thực tế
-                disabled_cols = [c for c in cols_show if c not in COLUMN_TO_MOVEMENT_MAP]
+                disabled_cols = [c for c in cols_show if c not in stock_column_map]
 
                 # Ràng buộc dữ liệu: chỉ cho phép nhập số dương/không âm (>= 0.0)
                 stock_col_config = {
@@ -642,7 +606,7 @@ with st.container(key="workspace"):
                         step=0.5,
                         format="%.1f"
                     )
-                    for c in cols_show if c in COLUMN_TO_MOVEMENT_MAP
+                    for c in cols_show if c in stock_column_map
                 }
 
                 edited_matrix = st.data_editor(
@@ -651,20 +615,20 @@ with st.container(key="workspace"):
                     hide_index=True,
                     disabled=disabled_cols,
                     column_config=stock_col_config,
-                    key=f"stock_editor_{view_mode}"
+                    key=f"stock_editor_{stock_year}_{stock_month}_{view_mode}"
                 )
 
                 c_save_col, c_hint_col = st.columns([1.5, 3], gap="medium")
                 with c_save_col:
                     btn_save_manual = st.button("💾 Lưu Các Ô Đã Sửa Vào Sổ Kho", type="primary", use_container_width=True)
                     if btn_save_manual:
-                        editor_key = f"stock_editor_{view_mode}"
+                        editor_key = f"stock_editor_{stock_year}_{stock_month}_{view_mode}"
                         editor_session_data = st.session_state.get(editor_key, {})
                         res_update = update_stock_matrix_from_editor(
                             edited_df=edited_matrix,
                             original_df=matrix_df,
                             updated_by=st.session_state.get("username", "admin"),
-                            editor_session_data=editor_session_data
+                            editor_session_data=editor_session_data, year=stock_year, month=stock_month
                         )
                         if res_update["updated_count"] > 0:
                             st.session_state["stock_flash_msg"] = {
@@ -838,29 +802,30 @@ with st.container(key="workspace"):
     # ==============================================================================
     elif section == "Dự báo":
         st.subheader("📈 Dự báo Nhu cầu Tiêu thụ Ngày mai (D+1) & Kết quả Kiểm chứng Backtest")
-        st.caption("Ứng dụng phương pháp Rolling-Origin Backtesting 1 ngày tới trên 39 món trong 15 ngày liên tục tại cửa hàng 2132.")
+        st.caption("Dự báo theo số ly, doanh thu gần đây và thời tiết trong giờ bán. Chỉ áp dụng điều chỉnh thời tiết khi kiểm chứng tốt hơn dự báo nền.")
 
         col_bt1, col_bt2 = st.columns([1.15, 1], gap="medium")
         with col_bt1:
             with st.container(border=True):
                 st.write("#### 🎯 So sánh Độ chính xác Các Mô hình Dự báo")
-                st.info(f"**Giai đoạn kiểm chứng:** {BENCHMARK_FORECAST_METRICS['evaluation_period']}\n\n**Mô hình tối ưu:** `{BENCHMARK_FORECAST_METRICS['best_model']}` (WAPE: 20.27%)")
+                benchmark = agent.forecast_engine.run_backtest(as_of=datetime.now(VN).date() - pd.Timedelta(days=1))
+                st.info(f"**Giai đoạn kiểm chứng mô hình nền:** {benchmark.get('evaluation_period', 'Chưa đủ lịch sử')}\n\n**Mô hình nền được chọn:** `{benchmark.get('best_model', 'Chưa xác định')}`")
 
                 bt_table = []
-                for m_name, v in BENCHMARK_FORECAST_METRICS["aggregate_metrics"].items():
+                for m_name, v in benchmark.get("aggregate_metrics", {}).items():
                     bt_table.append({
                         "Mô hình dự báo": m_name,
                         "Sai số tuyệt đối (MAE)": f"{v['MAE']} ly",
                         "Tỷ lệ sai số (WAPE)": f"{v['WAPE_pct']}%",
                         "Độ lệch tổng thể (Bias)": f"{v['Bias_pct']}%",
-                        "Đánh giá chuyên môn": v["DanhGia"]
+                        "Đánh giá chuyên môn": "Sai số thấp nhất" if m_name == benchmark['best_model'] else "Mô hình đối chiếu"
                     })
                 st.dataframe(pd.DataFrame(bt_table), use_container_width=True, hide_index=True)
 
         with col_bt2:
             with st.container(border=True):
                 st.write("#### ⚙️ Thiết lập Dự báo Ngày mai (D+1)")
-                target_date_input = st.date_input("Ngày cần dự báo", value=date(2026, 10, 13), key="fc_date_picker_vi")
+                target_date_input = st.date_input("Ngày cần dự báo", value=datetime.now(VN).date() + pd.Timedelta(days=1), key="fc_date_picker_vi")
                 model_choice_map = {
                     "Tự động chọn mô hình tối ưu nhất (Auto)": "auto",
                     "Trung bình trượt 7 ngày (Moving Average)": "moving_average",
@@ -873,16 +838,22 @@ with st.container(key="workspace"):
                 if st.button("🚀 Chạy Mô hình Dự báo", key="run_fc_btn_vi", type="primary", use_container_width=True):
                     with st.spinner("Đang tính toán dự báo sản lượng cho toàn bộ 39 món thực đơn..."):
                         fc_res = agent.forecast_engine.forecast_demand(target_date_input, horizon_days=1, model=selected_model_val)
-                        st.session_state["latest_forecast_vi"] = fc_res
-                        st.success(f"Đã lập dự báo thành công cho toàn bộ {len(fc_res)} món!")
+                        st.session_state.pop('latest_forecast_vi', None)
+                        if fc_res.empty:
+                            st.warning('Chưa có lịch sử bán hàng trước ngày này để dự báo.')
+                        else:
+                            st.session_state["latest_forecast_vi"] = fc_res
+                            st.success(f"Đã lập dự báo thành công cho toàn bộ {len(fc_res)} món!")
 
         # Hiển thị bảng dự báo
         if "latest_forecast_vi" in st.session_state:
             st.divider()
             fc_df = st.session_state["latest_forecast_vi"].copy()
             total_pred_cups = fc_df["predicted_qty"].sum()
+            render_forecast_context(fc_df.attrs.get('forecast_context', {}))
 
-            st.write(f"#### 📋 Bảng Dự báo Sản lượng Menu Ngày {target_date_input.strftime('%d/%m/%Y')} (Tổng dự kiến: **{total_pred_cups:,.0f} ly**)")
+            result_date = fc_df['target_date'].iloc[0]
+            st.write(f"#### 📋 Bảng Dự báo Sản lượng Menu Ngày {result_date.strftime('%d/%m/%Y')} (Tổng dự kiến: **{total_pred_cups:,.0f} ly**)")
 
             fc_display = fc_df.rename(columns={
                 "sku_id": "Mã món",
@@ -896,6 +867,7 @@ with st.container(key="workspace"):
 
             conf_map = {"HIGH": "Cao 🟢", "MEDIUM": "Trung bình 🟡", "LOW": "Thấp 🔴"}
             fc_display["Độ tin cậy"] = fc_display["Độ tin cậy"].map(lambda x: conf_map.get(x, x))
+            st.caption('Các mức thấp/cao chỉ để tham khảo từ dao động lịch sử, không phải giới hạn chắc chắn của số ly thực bán.')
 
             st.dataframe(
                 fc_display[["Mã món", "Tên món", "Dự báo (Ly)", "Ước lượng tối thiểu", "Ước lượng tối đa", "Độ tin cậy"]].sort_values(by="Dự báo (Ly)", ascending=False),
@@ -915,31 +887,49 @@ with st.container(key="workspace"):
         with col_p1:
             with st.container(border=True):
                 buffer_val = st.slider("Tỷ lệ đệm an toàn (Buffer)", min_value=0, max_value=30, value=10, step=5, format="%d%%") / 100.0
-                prep_date = st.date_input("Ngày thực hiện sơ chế", value=date(2026, 10, 13), key="prep_date_in_vi")
+                prep_date = st.date_input("Ngày thực hiện sơ chế", value=datetime.now(VN).date(), key="prep_date_in_vi")
+                with st.expander('Định mức đầu ra tạm tính'):
+                    pearl_yield = st.number_input('1 kg trân châu khô cho bao nhiêu gram thành phẩm đã ráo?',
+                                                 min_value=1000, max_value=5000, value=2000, step=100,
+                                                 key='pearl_yield_estimate')
+                    st.caption('Giả định để lập kế hoạch, chưa phải số đo hay quy chuẩn chính thức. Thay số này rồi tính lại để so sánh.')
 
                 if st.button("⚡ Tính toán Kế hoạch Sơ chế", key="calc_prep_btn_vi", type="primary", use_container_width=True):
-                    res = agent.tool_optimize_topping_prep(target_date=prep_date.isoformat(), buffer_pct=buffer_val)
-                    st.session_state["prep_plan_vi"] = res
+                    res = agent.tool_optimize_topping_prep(target_date=prep_date.isoformat(), buffer_pct=buffer_val, pearl_yield_g=float(pearl_yield))
+                    st.session_state.pop('prep_plan_vi', None)
+                    if res.get('status') == 'NO_DATA':
+                        st.warning(res['message'])
+                    else:
+                        st.session_state["prep_plan_vi"] = res
 
         with col_p2:
             st.markdown("""
             <div class="sop-card">
-                <h4>🛡️ Quy chuẩn Bảo quản Bán thành phẩm (SOP Mixue)</h4>
+                <h4>Chuẩn bị theo từng đợt, đối chiếu đúng nguyên liệu</h4>
                 <ul>
-                    <li><strong>Hồng trà / Trà xanh nhài lạnh (TP02, TP03):</strong> Bình chuẩn <strong>5.000 ml</strong> · Nhiệt độ thường tối đa <strong>4 giờ</strong> (hoặc đổ bỏ cuối ngày).</li>
-                    <li><strong>Trà sữa lạnh (TP04):</strong> Bình chuẩn <strong>5.000 ml</strong> · Đổ bỏ cuối ngày, bảo quản lạnh tối đa 3 ngày nếu đậy kín nắp.</li>
-                    <li><strong>Trân châu nguyên vị (NL06):</strong> Nồi chuẩn <strong>1.000 g</strong> · Giữ ấm tối đa <strong>4 giờ</strong> (nghiêm cấm để qua đêm theo SOP).</li>
-                    <li><strong>Thạch dừa / Thạch đường đen (NL07, NL08):</strong> Hộp chuẩn <strong>1.000 g</strong> · Đổ bỏ cuối ngày.</li>
+                    <li><strong>TP02 là trân châu nguyên vị đã nấu</strong>, tính bằng gram thành phẩm; TP07/TP08 là trà đã ủ, tính bằng ml.</li>
+                    <li>Định mức đầu ra mỗi mẻ hiện là <strong>ước lượng</strong>, chưa phải số đo thực tế tại quán.</li>
+                    <li>Không nấu toàn bộ lượng cả ngày từ đầu ca. Đối chiếu bán thực tế trước đợt tiếp theo.</li>
+                    <li>Trân châu nguyên vị dùng trong <strong>4 giờ</strong> theo hướng dẫn đang có. Các nguyên liệu khác xem đúng công thức và SOP tương ứng.</li>
                 </ul>
             </div>
             """, unsafe_allow_html=True)
 
         if "prep_plan_vi" in st.session_state:
             plan = st.session_state["prep_plan_vi"]
+            render_forecast_context(plan.get('forecast_context', {}))
+            st.info(plan.get('prep_policy', 'Chia đợt nấu theo hạn dùng, đối chiếu bán thực tế trước khi nấu tiếp.'))
+            if plan.get('yield_assumption'):
+                st.warning(plan['yield_assumption'])
+            pearl_line = next((line for line in plan.get('recommendations', []) if line['ingredient_id'] == 'TP02'), None)
+            if pearl_line and pearl_line.get('estimated_raw_input_g') is not None:
+                st.info(f"Trân châu khô tạm tính: **{pearl_line['estimated_raw_input_g']/1000:g} kg cả ngày**, "
+                        f"**{(pearl_line.get('initial_raw_input_g') or 0)/1000:g} kg đợt đầu**. "
+                        f"Số mẻ có thể khoảng {pearl_line['batch_count_range'][0]}–{pearl_line['batch_count_range'][1]} theo khoảng sản lượng giả định.")
             st.divider()
             v_status = plan["verification"]["status"]
             if v_status == "VERIFIED":
-                st.success(f"✅ **KẾ HOẠCH ĐÃ THẨM ĐỊNH HỢP LỆ** (Mã dự thảo: `{plan['draft_plan_id']}` | Kiểm định: Đạt chuẩn mẻ làm tròn & an toàn thực phẩm)")
+                st.success(f"Đạt kiểm tra số lượng, đơn vị và làm tròn theo định mức đang dùng · Dự thảo `{plan['draft_plan_id']}`. Định mức ước lượng vẫn cần quản lý đối chiếu.")
             else:
                 st.error("❌ **KẾ HOẠCH BỊ TỪ CHỐI DO VI PHẠM QUY CHUẨN**")
 
@@ -947,9 +937,12 @@ with st.container(key="workspace"):
             prep_table_display = prep_table.rename(columns={
                 "ingredient_id": "Mã topping",
                 "ingredient_name": "Tên topping / Trà",
-                "batch_size": "Quy cách 1 mẻ",
+                "preparation_action": "Cách chuẩn bị",
+                "batch_size": "Thành phẩm/mẻ (tạm tính)",
                 "forecasted_demand": "Nhu cầu dự báo",
-                "num_batches": "Số mẻ cần nấu",
+                "num_batches": "Số mẻ ước tính",
+                "initial_prep_qty": "Gợi ý nấu đợt đầu",
+                "review_after": "Đánh giá lại lúc",
                 "recommended_prep_qty": "Lượng nấu đề xuất",
                 "unit": "Đơn vị",
                 "expected_waste_qty": "Ước tính hủy thừa",
@@ -961,7 +954,7 @@ with st.container(key="workspace"):
             prep_table_display["Nguy cơ hao hụt"] = prep_table_display["Nguy cơ hao hụt"].map(lambda x: risk_map.get(x, x))
 
             st.dataframe(
-                prep_table_display[["Mã topping", "Tên topping / Trà", "Quy cách 1 mẻ", "Nhu cầu dự báo", "Số mẻ cần nấu", "Lượng nấu đề xuất", "Đơn vị", "Ước tính hủy thừa", "Nguy cơ hao hụt", "Hạn dùng theo SOP"]],
+                prep_table_display[[column for column in ["Mã topping", "Tên topping / Trà", "Cách chuẩn bị", "Thành phẩm/mẻ (tạm tính)", "Nhu cầu dự báo", "Số mẻ ước tính", "Lượng nấu đề xuất", "Gợi ý nấu đợt đầu", "Đánh giá lại lúc", "Đơn vị", "Ước tính hủy thừa", "Nguy cơ hao hụt", "Hạn dùng theo SOP"] if column in prep_table_display]],
                 use_container_width=True,
                 hide_index=True
             )
@@ -1122,79 +1115,35 @@ with st.container(key="workspace"):
     # TAB 5: TEM IN NHÃN & CÔNG THỨC PHA CHẾ (BOM)
     # ==============================================================================
     elif section == "Tem & công thức":
-        st.subheader("🏷️ Mô phỏng Tem Dán Ly & Sổ tay Công thức Pha chế (BOM)")
-        st.caption("Giải mã mã tem in quầy bar Mixue 39 Tôn Quang Phiệt và tra cứu định lượng nguyên liệu chuẩn quầy pha chế.")
+        st.subheader("📋 Sổ tay Công thức Pha chế")
+        st.caption("Tra cứu định lượng nguyên liệu và hướng dẫn pha chế theo món.")
 
-        col_dec1, col_dec2 = st.columns([1, 1], gap="medium")
-        with col_dec1:
-            with st.container(border=True):
-                st.write("#### 🔍 Giải mã Mã Tem In trên Ly (5 chữ số)")
-                st.caption("Cấu trúc: 2 số đầu (Mã món) · Số thứ 3 (Mức đường) · Số thứ 4 (Mức đá) · Số thứ 5 (Topping thêm)")
+        with st.container(border=True):
+            st.write("#### 🍵 Sổ tay Định lượng Công thức Pha chế (BOM)")
+            menu_items_raw = get_cached_menu_list()
+            menu_choices = [f"{m[0]} — {m[1]} ({m[2] if m[2] else 'Chuẩn'})" for m in menu_items_raw]
+            selected_menu = st.selectbox("Chọn món để xem định lượng", menu_choices)
 
-                code_input = st.text_input("Nhập mã tem ly", value="24101", help="Ví dụ: 24101 hoặc 01440")
-                if st.button("Giải mã Tem dán", key="dec_btn_vi", type="primary", use_container_width=True):
-                    res = agent.tool_decode_recipe_or_sticker(code_input)
-                    if res["status"] == "SUCCESS":
-                        st.session_state["sticker_result"] = res
-                    else:
-                        st.session_state.pop("sticker_result", None)
-                        st.error(res["message"])
+            if selected_menu:
+                selected_sku = selected_menu.split()[0]
+                rec_res = agent.tool_decode_recipe_or_sticker(selected_sku)
 
-                # Hiển thị tem dán chuẩn thực tế chi nhánh 39 Tôn Quang Phiệt
-                if "sticker_result" in st.session_state:
-                    s_data = st.session_state["sticker_result"]
-                    st.markdown(f"""
-                    <div class="cup-sticker">
-                        <div class="sticker-header">
-                            <div class="sticker-brand">🍦 MIXUE ICE CREAM &amp; TEA</div>
-                            <div class="sticker-store-info">MIXUE 39 TÔN QUANG PHIỆT · MÃ CH: 2132</div>
-                        </div>
-                        <div class="sticker-order-bar">
-                            <span>ORDER #{code_input}</span>
-                            <span>(1/1)</span>
-                            <span>13/10/2026 17:15</span>
-                        </div>
-                        <div class="sticker-drink-title">{s_data.get('product', 'MÓN ĐẶT')}</div>
-                        <div class="sticker-line"><strong>Mức đường:</strong> <span>{s_data.get('sugar', 'Chuẩn')}</span></div>
-                        <div class="sticker-line"><strong>Mức đá:</strong> <span>{s_data.get('ice', 'Chuẩn')}</span></div>
-                        <div class="sticker-line"><strong>Topping thêm:</strong> <span>{s_data.get('additional_topping', 'Không')}</span></div>
-                        <div class="sticker-sop-box">
-                            💡 <strong>Quy chuẩn Bar:</strong> {s_data.get('standard_bar_rule', 'Pha chế theo đúng SOP Mixue')}
-                        </div>
-                        <div class="sticker-barcode">|| | ||| | ||||| | |||</div>
-                        <div class="sticker-footer">
-                            Uống ngon nhất trong vòng 2 giờ · Hotline: 1900 0088
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-        with col_dec2:
-            with st.container(border=True):
-                st.write("#### 🍵 Sổ tay Định lượng Công thức Pha chế (BOM)")
-                menu_items_raw = get_cached_menu_list()
-                menu_choices = [f"{m[0]} — {m[1]} ({m[2] if m[2] else 'Chuẩn'})" for m in menu_items_raw]
-                selected_menu = st.selectbox("Chọn món để xem định lượng", menu_choices)
-
-                if selected_menu:
-                    selected_sku = selected_menu.split()[0]
-                    rec_res = agent.tool_decode_recipe_or_sticker(selected_sku)
-
-                    if rec_res.get("status") == "SUCCESS" and rec_res.get("recipe_lines"):
-                        st.write(f"**Giá niêm yết tại quầy:** `{rec_res.get('selling_price_vnd', 0):,.0f} đ`")
-                        bom_df = pd.DataFrame(rec_res["recipe_lines"])
-                        bom_df = bom_df.rename(columns={
-                            "ingredient_id": "Mã nguyên liệu",
-                            "ingredient_name": "Tên nguyên liệu",
-                            "quantity": "Định lượng chuẩn",
-                            "unit": "Đơn vị"
-                        })
-                        st.dataframe(
-                            bom_df[["Mã nguyên liệu", "Tên nguyên liệu", "Định lượng chuẩn", "Đơn vị"]],
-                            use_container_width=True,
-                            hide_index=True
-                        )
-                    else:
-                        st.info("Món này đang cập nhật công thức định lượng chi tiết.")
+                if rec_res.get("status") == "SUCCESS" and rec_res.get("recipe_lines"):
+                    st.write(f"**Giá niêm yết tại quầy:** `{rec_res.get('selling_price_vnd', 0):,.0f} đ`")
+                    bom_df = pd.DataFrame(rec_res["recipe_lines"])
+                    bom_df = bom_df.rename(columns={
+                        "ingredient_id": "Mã nguyên liệu",
+                        "ingredient_name": "Tên nguyên liệu",
+                        "quantity": "Định lượng chuẩn",
+                        "unit": "Đơn vị"
+                    })
+                    st.dataframe(
+                        bom_df[["Mã nguyên liệu", "Tên nguyên liệu", "Định lượng chuẩn", "Đơn vị"]],
+                        use_container_width=True,
+                        hide_index=True
+                    )
+                else:
+                    st.info("Món này đang cập nhật công thức định lượng chi tiết.")
 
     # ==============================================================================
     # TAB 6: QUẢN LÝ NHÂN VIÊN (CHỈ DÀNH CHO ADMIN)
@@ -1346,9 +1295,9 @@ with st.container(key="workspace"):
                 target_user = emp_options[selected_label]
 
                 with st.container(border=True):
-                    st.warning(f"⚠️ Bạn đang chuẩn bị reset mật khẩu cho tài khoản: **{selected_label}**.\n\nSau khi reset, mật khẩu tài khoản sẽ là **`123456`**. Nhân viên sẽ phải tạo mật khẩu mới (6 số) khi đăng nhập lần tới.")
+                    st.warning(f"⚠️ Bạn đang chuẩn bị reset mật khẩu cho tài khoản: **{selected_label}**.\n\nMật khẩu tạm mới sẽ được cấp sau khi xác nhận. Nhân viên cần đổi mật khẩu khi đăng nhập lần tới.")
 
-                    if st.button("Xác nhận Reset Mật khẩu về 123456 🔄", type="primary", use_container_width=True):
+                    if st.button("Xác nhận cấp lại mật khẩu 🔄", type="primary", use_container_width=True):
                         ok, msg = reset_employee_password(admin_username=current_admin, target_username=target_user)
                         if ok:
                             st.session_state["employee_notice"] = msg

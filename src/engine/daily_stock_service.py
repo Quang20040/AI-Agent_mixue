@@ -7,6 +7,9 @@ Tích hợp quy trình phê duyệt lệnh kho (Maker-Checker):
 """
 
 import io
+import math
+from pathlib import Path
+from functools import wraps
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -14,12 +17,27 @@ import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
-from src.auth import is_admin_role
+from src.auth import is_admin_role, normalize_role
 from src.database import Base, SessionLocal, engine
-from src.models import DailyStockMovement, Ingredient
+from src.models import DailyStockMovement, Ingredient, User
+from src.runtime_settings import demo_enabled
+from src.engine.storage_lock import FileTransactionLock
+from src.engine.stock_matrix import column_map_for_period
 
 # Đảm bảo bảng luôn tồn tại
 Base.metadata.create_all(bind=engine)
+
+_STOCK_LOCK = FileTransactionLock(lambda: (
+    Path(engine.url.database).with_suffix('.stock.lock') if engine.dialect.name == 'sqlite' and engine.url.database != ':memory:'
+    else Path(__file__).resolve().parents[2] / 'data' / 'stock-write.lock'))
+
+
+def _serialize_stock_write(function):
+    @wraps(function)
+    def call(*args, **kwargs):
+        with _STOCK_LOCK:
+            return function(*args, **kwargs)
+    return call
 
 OCTOBER_DAYS = [
     # (day_num, weekday_label, col_key, week_group)
@@ -167,6 +185,8 @@ SAMPLE_OCTOBER_DATA = REAL_OCTOBER_DATA
 def init_sample_daily_stock(force: bool = False):
     """Khởi tạo dữ liệu thực tế từ Google Sheet của quán (01/10 - 13/10).
     Tuyệt đối không điền bừa các ngày tương lai hay số lượng thực tế khi chưa kiểm kê."""
+    if not demo_enabled():
+        return
     db = SessionLocal()
     try:
         count = db.query(DailyStockMovement).count()
@@ -226,6 +246,7 @@ def init_sample_daily_stock(force: bool = False):
 init_sample_daily_stock()
 
 
+@_serialize_stock_write
 def create_stock_request(
     business_date: date,
     ingredient_id: str,
@@ -239,12 +260,12 @@ def create_stock_request(
     - Quản lý / Chủ quán: Tự động DUYỆT NGAY và ghi thẳng vào sổ kho.
     - Nhân viên chính thức: Tạo lệnh ở trạng thái PENDING chờ Quản lý duyệt.
     """
-    if quantity <= 0:
-        return {"status": "ERROR", "message": "Số lượng phải lớn hơn 0!"}
-
     clean_type = movement_type.strip().upper()
     if clean_type not in ("IN", "OUT", "ACTUAL_COUNT", "INITIAL"):
         return {"status": "ERROR", "message": f"Loại giao dịch không hợp lệ: {clean_type}"}
+    if (not isinstance(quantity, (int, float)) or isinstance(quantity, bool) or not math.isfinite(quantity)
+            or quantity < 0 or quantity > 99_999_999 or (quantity == 0 and clean_type in {'IN', 'OUT'})):
+        return {'status': 'ERROR', 'message': 'Số lượng không hợp lệ; kiểm kê có thể bằng 0, nhập/xuất phải lớn hơn 0.'}
 
     is_admin = is_admin_role(user_role)
     status = "APPROVED" if is_admin else "PENDING"
@@ -253,6 +274,15 @@ def create_stock_request(
 
     db = SessionLocal()
     try:
+        actor = db.get(User, recorded_by)
+        if (not actor or not actor.is_active or normalize_role(actor.role) != normalize_role(user_role)
+                or not (is_admin_role(actor.role) or normalize_role(actor.role) == 'STAFF_OFFICIAL')):
+            return {'status': 'FORBIDDEN', 'message': 'Tài khoản không có quyền ghi lệnh kho.'}
+        if clean_type == 'INITIAL' and not is_admin:
+            return {'status': 'FORBIDDEN', 'message': 'Chỉ quản lý được nhập tồn đầu kỳ.'}
+        ing = db.query(Ingredient).filter(Ingredient.ingredient_id == str(ingredient_id)).with_for_update().first()
+        if not ing:
+            return {'status': 'ERROR', 'message': 'Mã nguyên liệu không tồn tại.'}
         # Idempotency / Double-click check: reject duplicate identical requests within 3 seconds
         recent_cutoff = datetime.now() - timedelta(seconds=3)
         duplicate = db.query(DailyStockMovement).filter(
@@ -357,19 +387,24 @@ def get_pending_requests() -> list[dict[str, Any]]:
         db.close()
 
 
+@_serialize_stock_write
 def approve_stock_request(request_id: int, admin_username: str) -> tuple[bool, str]:
     """Quản lý / Chủ quán duyệt lệnh xuất/nhập kho của nhân viên."""
     db = SessionLocal()
     try:
+        actor = db.get(User, admin_username)
+        if not actor or not actor.is_active or not is_admin_role(actor.role):
+            return False, 'Chỉ quản lý đang hoạt động được duyệt lệnh kho.'
         rec = db.query(DailyStockMovement).filter(DailyStockMovement.id == request_id).first()
         if not rec:
             return False, f"Không tìm thấy yêu cầu lệnh kho #{request_id}."
-        if rec.status == "APPROVED":
+        if rec.status != 'PENDING':
             return False, f"Lệnh #{request_id} đã được duyệt trước đó."
-
-        rec.status = "APPROVED"
-        rec.approved_by = admin_username
-        rec.approved_at = datetime.now()
+        changed = db.query(DailyStockMovement).filter(DailyStockMovement.id == request_id, DailyStockMovement.status == 'PENDING').update(
+            {'status': 'APPROVED', 'approved_by': admin_username, 'approved_at': datetime.now()}, synchronize_session=False)
+        if not changed:
+            db.rollback()
+            return False, 'Lệnh đã được xử lý bởi một phiên khác.'
         db.commit()
 
         ing = db.query(Ingredient).filter(Ingredient.ingredient_id == rec.ingredient_id).first()
@@ -382,17 +417,24 @@ def approve_stock_request(request_id: int, admin_username: str) -> tuple[bool, s
         db.close()
 
 
+@_serialize_stock_write
 def reject_stock_request(request_id: int, admin_username: str, reason: str = "") -> tuple[bool, str]:
     """Quản lý từ chối lệnh xuất/nhập kho của nhân viên."""
     db = SessionLocal()
     try:
+        actor = db.get(User, admin_username)
+        if not actor or not actor.is_active or not is_admin_role(actor.role):
+            return False, 'Chỉ quản lý đang hoạt động được từ chối lệnh kho.'
         rec = db.query(DailyStockMovement).filter(DailyStockMovement.id == request_id).first()
         if not rec:
             return False, f"Không tìm thấy yêu cầu lệnh kho #{request_id}."
 
-        rec.status = "REJECTED"
-        rec.approved_by = admin_username
-        rec.rejection_reason = reason or "Quản lý từ chối"
+        changed = db.query(DailyStockMovement).filter(DailyStockMovement.id == request_id, DailyStockMovement.status == 'PENDING').update(
+            {'status': 'REJECTED', 'approved_by': admin_username, 'approved_at': datetime.now(),
+             'rejection_reason': reason or 'Quản lý từ chối'}, synchronize_session=False)
+        if not changed:
+            db.rollback()
+            return False, 'Chỉ được từ chối lệnh đang chờ duyệt.'
         db.commit()
         return True, f"Đã từ chối lệnh kho #{request_id}. Lệnh này sẽ không được ghi vào sổ kho."
     except Exception as e:
@@ -472,10 +514,14 @@ COLUMN_TO_MOVEMENT_MAP: dict[str, tuple[str, str]] = {
 }
 
 
+@_serialize_stock_write
 def delete_stock_movement(movement_id: int, admin_username: str = "admin") -> tuple[bool, str]:
     """Xóa bỏ hoàn toàn một bản ghi giao dịch kho theo ID (Sổ kho tự động tính toán lại ngay)."""
     db = SessionLocal()
     try:
+        actor = db.get(User, admin_username)
+        if not actor or not actor.is_active or not is_admin_role(actor.role):
+            return False, 'Chỉ quản lý đang hoạt động được xóa lệnh kho.'
         rec = db.query(DailyStockMovement).filter(DailyStockMovement.id == movement_id).first()
         if not rec:
             return False, f"Không tìm thấy bản ghi giao dịch kho #{movement_id}."
@@ -496,6 +542,7 @@ def delete_stock_movement(movement_id: int, admin_username: str = "admin") -> tu
         db.close()
 
 
+@_serialize_stock_write
 def update_stock_movement(
     movement_id: int,
     new_quantity: float,
@@ -506,9 +553,16 @@ def update_stock_movement(
     """Sửa đổi trực tiếp thông tin số lượng/ngày của một bản ghi giao dịch kho."""
     db = SessionLocal()
     try:
+        actor = db.get(User, admin_username)
+        if not actor or not actor.is_active or not is_admin_role(actor.role):
+            return False, 'Chỉ quản lý đang hoạt động được sửa lệnh kho.'
+        if not math.isfinite(float(new_quantity)) or not 0 <= float(new_quantity) <= 99_999_999:
+            return False, 'Số lượng không hợp lệ.'
         rec = db.query(DailyStockMovement).filter(DailyStockMovement.id == movement_id).first()
         if not rec:
             return False, f"Không tìm thấy bản ghi giao dịch kho #{movement_id}."
+        if float(new_quantity) == 0 and rec.movement_type in {'IN', 'OUT'}:
+            return False, 'Lượng nhập/xuất phải lớn hơn 0.'
 
         old_qty = float(rec.quantity)
         rec.quantity = float(new_quantity)
@@ -530,22 +584,23 @@ def update_stock_movement(
         db.close()
 
 
-def get_cell_value(ingredient_id: str, column_name: str) -> float | None:
+def get_cell_value(ingredient_id: str, column_name: str, *, year=2026, month=10) -> float | None:
     """Lấy số lượng hiện tại được duyệt trong cơ sở dữ liệu của một ô cụ thể."""
-    if column_name not in COLUMN_TO_MOVEMENT_MAP:
+    mapping = column_map_for_period(year, month)
+    if column_name not in mapping:
         return None
-    date_str, m_type = COLUMN_TO_MOVEMENT_MAP[column_name]
+    date_str, m_type = mapping[column_name]
     b_date = date.fromisoformat(date_str)
     db = SessionLocal()
     try:
-        rec = db.query(DailyStockMovement).filter(
+        records = db.query(DailyStockMovement).filter(
             DailyStockMovement.business_date == b_date,
             DailyStockMovement.ingredient_id == str(ingredient_id),
             DailyStockMovement.movement_type == m_type,
             DailyStockMovement.status == "APPROVED"
-        ).first()
-        if rec:
-            return float(rec.quantity)
+        ).order_by(DailyStockMovement.id).all()
+        if records:
+            return float(records[-1].quantity) if m_type == 'ACTUAL_COUNT' else sum(float(rec.quantity) for rec in records)
         return None
     finally:
         db.close()
@@ -590,17 +645,20 @@ def get_all_movements_detailed(limit: int = 300) -> list[dict[str, Any]]:
         db.close()
 
 
+@_serialize_stock_write
 def update_stock_cell_manually(
     ingredient_id: str,
     column_name: str,
     new_value: Any,
-    updated_by: str = "admin"
+    updated_by: str = "admin",
+    *, year: int = 2026, month: int = 10
 ) -> tuple[bool, str]:
     """Cập nhật hoặc xóa giá trị một ô bằng tay (Manual Cell Update / Delete)."""
-    if column_name not in COLUMN_TO_MOVEMENT_MAP:
+    mapping = column_map_for_period(year, month)
+    if column_name not in mapping:
         return False, f"Cột '{column_name}' là cột công thức tự động, không thể sửa trực tiếp."
 
-    date_str, m_type = COLUMN_TO_MOVEMENT_MAP[column_name]
+    date_str, m_type = mapping[column_name]
     b_date = date.fromisoformat(date_str)
 
     # Xử lý các giá trị xóa / rỗng / NaN
@@ -616,7 +674,7 @@ def update_stock_cell_manually(
         else:
             try:
                 new_qty = float(s_val.replace(",", "."))
-                if new_qty < 0:
+                if not math.isfinite(new_qty) or not 0 <= new_qty <= 99_999_999:
                     return False, "Số lượng không thể âm."
                 if new_qty == 0 and m_type == "OUT":
                     is_delete = True
@@ -625,23 +683,35 @@ def update_stock_cell_manually(
 
     db = SessionLocal()
     try:
-        existing = db.query(DailyStockMovement).filter(
+        actor = db.get(User, updated_by)
+        if not actor or not actor.is_active or not is_admin_role(actor.role):
+            return False, 'Chỉ quản lý đang hoạt động được sửa sổ kho.'
+        approved_rows = db.query(DailyStockMovement).filter(
             DailyStockMovement.business_date == b_date,
             DailyStockMovement.ingredient_id == str(ingredient_id),
-            DailyStockMovement.movement_type == m_type
-        ).first()
+            DailyStockMovement.movement_type == m_type,
+            DailyStockMovement.status == 'APPROVED'
+        ).order_by(DailyStockMovement.id.desc()).all()
+        existing = approved_rows[0] if approved_rows else None
 
         ing = db.query(Ingredient).filter(Ingredient.ingredient_id == str(ingredient_id)).first()
+        if not ing:
+            return False, 'Mã nguyên liệu không tồn tại.'
         ing_name = ing.ingredient_name if ing else f"Mã {ingredient_id}"
 
         if is_delete or new_qty is None:
             if existing:
-                db.delete(existing)
+                for row in approved_rows:
+                    db.delete(row)
                 db.commit()
                 return True, f"Đã xóa dữ liệu ô '{column_name}' của '{ing_name}'."
             return True, f"Ô '{column_name}' của '{ing_name}' hiện đã trống."
         else:
             if existing:
+                # A cell is the aggregate of all approved rows; pending requests
+                # remain separate and must pass the normal approval action.
+                for row in approved_rows[1:]:
+                    db.delete(row)
                 existing.quantity = new_qty
                 existing.status = "APPROVED"
                 existing.approved_by = updated_by
@@ -673,12 +743,14 @@ def update_stock_matrix_from_editor(
     edited_df: pd.DataFrame,
     original_df: pd.DataFrame,
     updated_by: str = "admin",
-    editor_session_data: dict[str, Any] | None = None
+    editor_session_data: dict[str, Any] | None = None,
+    *, year: int = 2026, month: int = 10
 ) -> dict[str, Any]:
     """Cập nhật hàng loạt các thay đổi từ bảng chỉnh sửa trực tiếp (st.data_editor).
     Hỗ trợ đọc trực tiếp delta từ st.session_state[editor_key]['edited_rows'] và so sánh DataFrame.
     """
     updated_count = 0
+    column_mapping = column_map_for_period(year, month)
     errors = []
 
     # 1. Nếu có session state delta 'edited_rows' từ Streamlit data_editor
@@ -694,9 +766,9 @@ def update_stock_matrix_from_editor(
                 continue
 
             for col_name, val_new in col_updates.items():
-                if col_name not in COLUMN_TO_MOVEMENT_MAP:
+                if col_name not in column_mapping:
                     continue
-                ok, msg = update_stock_cell_manually(ing_id, col_name, val_new, updated_by)
+                ok, msg = update_stock_cell_manually(ing_id, col_name, val_new, updated_by, year=year, month=month)
                 if ok:
                     updated_count += 1
                 else:
@@ -716,7 +788,7 @@ def update_stock_matrix_from_editor(
                 continue
 
             for col_name in row.index:
-                if col_name not in COLUMN_TO_MOVEMENT_MAP:
+                if col_name not in column_mapping:
                     continue
 
                 val_new = row[col_name]
@@ -740,7 +812,7 @@ def update_stock_matrix_from_editor(
                 except ValueError:
                     pass
 
-                ok, msg = update_stock_cell_manually(ing_id, col_name, val_new, updated_by)
+                ok, msg = update_stock_cell_manually(ing_id, col_name, val_new, updated_by, year=year, month=month)
                 if ok:
                     updated_count += 1
                 else:
@@ -754,195 +826,20 @@ def update_stock_matrix_from_editor(
 
 
 def get_stock_matrix_df(year: int = 2026, month: int = 10) -> pd.DataFrame:
-    """Tạo bảng ma trận Xuất - Nhập - Tồn kho ĐẦY ĐỦ 31 NGÀY tháng 10/2026.
-    Chỉ tổng hợp các giao dịch đã được Quản lý duyệt (status == 'APPROVED').
-    """
-    db = SessionLocal()
-    try:
-        ings = db.query(Ingredient).order_by(Ingredient.ingredient_id).all()
-        ing_map = {i.ingredient_id: i.ingredient_name for i in ings}
-
-        rows = []
-        for idx, item in enumerate(SAMPLE_OCTOBER_DATA, 1):
-            ing_id = item["ing_id"]
-            name = ing_map.get(ing_id, item["name"])
-
-            # 1. Tồn đầu kỳ
-            init_rec = db.query(DailyStockMovement).filter(
-                DailyStockMovement.ingredient_id == ing_id,
-                DailyStockMovement.movement_type == "INITIAL",
-                DailyStockMovement.status == "APPROVED"
-            ).first()
-            ton_dau = float(init_rec.quantity) if init_rec else item["initial"]
-
-            # 2. Toàn bộ giao dịch APPROVED
-            approved_movs = db.query(DailyStockMovement).filter(
-                DailyStockMovement.ingredient_id == ing_id,
-                DailyStockMovement.status == "APPROVED"
-            ).all()
-
-            in_by_date: dict[str, float] = {}
-            out_by_date: dict[str, float] = {}
-            for m in approved_movs:
-                d_str = m.business_date.strftime("%Y-%m-%d")
-                if m.movement_type == "IN":
-                    in_by_date[d_str] = in_by_date.get(d_str, 0.0) + float(m.quantity)
-                elif m.movement_type == "OUT":
-                    out_by_date[d_str] = out_by_date.get(d_str, 0.0) + float(m.quantity)
-
-            # --- Tuần 1: 01/10 - 04/10 ---
-            nhap_w1 = in_by_date.get("2026-10-01", 0.0)
-            out_01 = out_by_date.get("2026-10-01", 0.0)
-            out_02 = out_by_date.get("2026-10-02", 0.0)
-            out_03 = out_by_date.get("2026-10-03", 0.0)
-            out_04 = out_by_date.get("2026-10-04", 0.0)
-            xuat_w1 = out_01 + out_02 + out_03 + out_04
-            ton_w1 = ton_dau + nhap_w1 - xuat_w1
-
-            # --- Tuần 2: 05/10 - 11/10 ---
-            out_05 = out_by_date.get("2026-10-05", 0.0)
-            out_06 = out_by_date.get("2026-10-06", 0.0)
-            out_07 = out_by_date.get("2026-10-07", 0.0)
-            out_08 = out_by_date.get("2026-10-08", 0.0)
-            out_09 = out_by_date.get("2026-10-09", 0.0)
-            out_10 = out_by_date.get("2026-10-10", 0.0)
-            out_11 = out_by_date.get("2026-10-11", 0.0)
-            xuat_w2 = out_05 + out_06 + out_07 + out_08 + out_09 + out_10 + out_11
-            ton_w2 = ton_w1 - xuat_w2
-
-            # --- Tuần 3: 12/10 - 18/10 ---
-            nhap_w3 = in_by_date.get("2026-10-12", 0.0)
-            out_12 = out_by_date.get("2026-10-12", 0.0)
-            out_13 = out_by_date.get("2026-10-13", 0.0)
-            out_14 = out_by_date.get("2026-10-14", 0.0)
-            out_15 = out_by_date.get("2026-10-15", 0.0)
-            out_16 = out_by_date.get("2026-10-16", 0.0)
-            out_17 = out_by_date.get("2026-10-17", 0.0)
-            out_18 = out_by_date.get("2026-10-18", 0.0)
-            xuat_w3 = out_12 + out_13 + out_14 + out_15 + out_16 + out_17 + out_18
-            ton_w3 = ton_w2 + nhap_w3 - xuat_w3
-
-            # --- Tuần 4: 19/10 - 25/10 ---
-            nhap_w4 = in_by_date.get("2026-10-19", 0.0)
-            out_19 = out_by_date.get("2026-10-19", 0.0)
-            out_20 = out_by_date.get("2026-10-20", 0.0)
-            out_21 = out_by_date.get("2026-10-21", 0.0)
-            out_22 = out_by_date.get("2026-10-22", 0.0)
-            out_23 = out_by_date.get("2026-10-23", 0.0)
-            out_24 = out_by_date.get("2026-10-24", 0.0)
-            out_25 = out_by_date.get("2026-10-25", 0.0)
-            xuat_w4 = out_19 + out_20 + out_21 + out_22 + out_23 + out_24 + out_25
-            ton_w4 = ton_w3 + nhap_w4 - xuat_w4
-
-            # --- Tuần 5: 26/10 - 31/10 ---
-            out_26 = out_by_date.get("2026-10-26", 0.0)
-            out_27 = out_by_date.get("2026-10-27", 0.0)
-            out_28 = out_by_date.get("2026-10-28", 0.0)
-            out_29 = out_by_date.get("2026-10-29", 0.0)
-            out_30 = out_by_date.get("2026-10-30", 0.0)
-            out_31 = out_by_date.get("2026-10-31", 0.0)
-            _xuat_w5 = out_26 + out_27 + out_28 + out_29 + out_30 + out_31
-
-            # Tổng hợp cả tháng trong thời gian thực (Real-time)
-            tong_nhap = sum(in_by_date.values())
-            tong_xuat = sum(out_by_date.values())
-            ton_so_sach = ton_dau + tong_nhap - tong_xuat
-
-            # Tồn thực tế kiểm kê: CHỈ hiển thị nếu có phiếu kiểm kê ACTUAL_COUNT được duyệt!
-            actual_rec = db.query(DailyStockMovement).filter(
-                DailyStockMovement.ingredient_id == ing_id,
-                DailyStockMovement.movement_type == "ACTUAL_COUNT",
-                DailyStockMovement.status == "APPROVED"
-            ).order_by(DailyStockMovement.business_date.desc(), DailyStockMovement.id.desc()).first()
-
-            if actual_rec is not None:
-                ton_thuc_te = int(float(actual_rec.quantity)) if float(actual_rec.quantity) == int(float(actual_rec.quantity)) else float(actual_rec.quantity)
-                diff = float(actual_rec.quantity) - ton_so_sach
-                chenh_lech = int(diff) if diff == int(diff) else diff
-            else:
-                # Chưa có kiểm kê thực tế -> để "—", tuyệt đối không điền bừa
-                ton_thuc_te = "—"
-                chenh_lech = "—"
-
-            def _c(v: float, is_import: bool = False, keep_zero: bool = False) -> Any:
-                if v == 0:
-                    return 0 if keep_zero else ""
-                return int(v) if v == int(v) else v
-
-            def _n(v: float) -> Any:
-                return int(v) if v == int(v) else v
-
-            keep_zero_nhap1 = (ing_id in ("1", "4") and nhap_w1 == 0)
-
-            row = {
-                "STT": item.get("stt", idx),
-                "Mã NL": ing_id,
-                "Tên mặt hàng (Quy cách)": name,
-                "Tồn T9": _n(ton_dau),
-                # Tuần 1 (01/10 - 04/10)
-                "Nhập 1/10": _c(nhap_w1, is_import=True, keep_zero=keep_zero_nhap1),
-                "T5 1/10": _c(out_01),
-                "T6 2/10": _c(out_02),
-                "T7 3/10": _c(out_03),
-                "CN 4/10": _c(out_04),
-                "Tồn T1": _n(ton_w1),
-                # Tuần 2 (05/10 - 11/10)
-                "T2 5/10": _c(out_05),
-                "T3 6/10": _c(out_06),
-                "T4 7/10": _c(out_07),
-                "T5 8/10": _c(out_08),
-                "T6 9/10": _c(out_09),
-                "T7 10/10": _c(out_10),
-                "CN 11/10": _c(out_11),
-                "Tồn T2": _n(ton_w2),
-                # Tuần 3 (12/10 - 18/10)
-                "Nhập 12/10": _c(nhap_w3, is_import=True),
-                "T2 12/10": _c(out_12),
-                "T3 13/10": _c(out_13),
-                "T4 14/10": _c(out_14),
-                "T5 15/10": _c(out_15),
-                "T6 16/10": _c(out_16),
-                "T7 17/10": _c(out_17),
-                "CN 18/10": _c(out_18),
-                "Tồn T3": _n(ton_w3),
-                # Tuần 4 (19/10 - 25/10)
-                "Nhập 19/10": _c(nhap_w4, is_import=True),
-                "T2 19/10": _c(out_19),
-                "T3 20/10": _c(out_20),
-                "T4 21/10": _c(out_21),
-                "T5 22/10": _c(out_22),
-                "T6 23/10": _c(out_23),
-                "T7 24/10": _c(out_24),
-                "CN 25/10": _c(out_25),
-                "Tồn T4": _n(ton_w4) if (nhap_w4 > 0 or xuat_w4 > 0) else "",
-                # Tuần 5 (26/10 - 31/10)
-                "T2 26/10": _c(out_26),
-                "T3 27/10": _c(out_27),
-                "T4 28/10": _c(out_28),
-                "T5 29/10": _c(out_29),
-                "T6 30/10": _c(out_30),
-                "T7 31/10": _c(out_31),
-                # Cuối tháng
-                "Tổng nhập": _n(tong_nhap),
-                "Tổng xuất": _n(tong_xuat),
-                "Tồn sổ sách": _n(ton_so_sach),
-                "Tồn thực tế": ton_thuc_te,
-                "Chênh lệch": chenh_lech
-            }
-            rows.append(row)
-
-        return pd.DataFrame(rows)
-    finally:
-        db.close()
+    """Approved movements within the requested calendar month, with an explicit opening balance."""
+    from src.engine.stock_matrix import build_stock_matrix
+    with SessionLocal() as db:
+        return build_stock_matrix(db, year, month)
 
 
-def generate_excel_export() -> bytes:
+
+def generate_excel_export(year: int = 2026, month: int = 10) -> bytes:
     """Tạo file Excel ĐẦY ĐỦ 31 NGÀY THÁNG 10/2026 chuẩn màu sắc Google Sheets."""
-    df = get_stock_matrix_df(2026, 10)
+    df = get_stock_matrix_df(year, month)
 
     wb = Workbook()
     ws = wb.active
-    ws.title = "Kho tháng 10-2026"
+    ws.title = f"Kho tháng {month}-{year}"
 
     fill_header = PatternFill(start_color="FFF1F2", end_color="FFF1F2", fill_type="solid")
     fill_import = PatternFill(start_color="E0F2FE", end_color="E0F2FE", fill_type="solid")

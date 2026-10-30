@@ -1,0 +1,101 @@
+﻿Mã nguyên liệu,Tên nguyên liệu,Đơn vị cơ sở,Giá vốn mỗi đơn vị cơ sở (đồng),Nhóm nguyên liệu,Mã quy định hạn sử dụng,Quy cách theo danh sách đã nhập,Hạn dùng theo danh sách đã nhập,Nguồn,Trạng thái đối chiếu
+1,"Ốc quế (400 cái/thùng, 25 cái/dây)",cái,,Nguyên liệu nhập kho,,"Ốc quế 
+(400 cái/thùng, 25 cái/dây)",6 tháng,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+2,Bột kem (3kg*8 túi),g,,Nguyên liệu nhập kho,,"Bột kem
+(3kg*8 túi)",12 tháng,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+3,Bột trà sữa (2kg x 10 túi),g,,Nguyên liệu nhập kho,,"Bột trà sữa
+(2kg x 10 túi)",12 tháng,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+4,"Bột pudding (1kg*20 túi, thùng 20kg)",g,,Nguyên liệu nhập kho,,"Bột pudding 
+(1kg*20 túi, thùng 20kg)",12 tháng,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+6,"Cốc 700 (1 dây 50c, 20 dây/kiện)",cái,,Bao bì,,"Cốc 700
+(1 dây 50c, 20 dây/kiện)",2 năm,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+7,"Cốc 500 (1 dây 50c, 20 dây/kiện)",cái,,Bao bì,,"Cốc 500
+(1 dây 50c, 20 dây/kiện)",2 năm,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+8,"Cốc chữ U (1 dây 50c, 20 dây/kiện)",cái,,Bao bì,,"Cốc chữ U
+(1 dây 50c, 20 dây/kiện)",2 năm,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+9,"Đường quả (Syrup hoa quả) 6.5kg/bình, 4 bình/kiện",g,,Nguyên liệu nhập kho,,"Đường quả (Syrup hoa quả)
+6.5kg/bình, 4 bình/kiện",12 tháng,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+10,"Đường mật (đường mía) 6.5kg/bình, 4 bình/kiện",g,,Nguyên liệu nhập kho,,"Đường mật (đường mía)
+6.5kg/bình, 4 bình/kiện",12 tháng,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+11,"Đường đen (1,2kg*12 chai)",g,,Nguyên liệu nhập kho,,"Đường đen
+(1,2kg*12 chai)",12 tháng,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+12,"Trân châu đen (1kg*16 túi, thùng 16kg)",g,,Nguyên liệu nhập kho,,"Trân châu đen 
+(1kg*16 túi, thùng 16kg)",6 tháng,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+13,"Hồng trà (8KG,50G*160túi)",g,,Nguyên liệu nhập kho,,"Hồng trà
+(8KG,50G*160túi)",1 năm,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+14,"Trà xanh / trà hoa nhài (8KG,50G*160túi)",g,,Nguyên liệu nhập kho,,"Trà xanh / trà hoa nhài
+(8KG,50G*160túi)",1 năm,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+15,Syrup cam bưởi,g,,Nguyên liệu nhập kho,,Syrup cam bưởi,12 tháng,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+16,Mứt đào vàng (900g*20 hộp),g,,Nguyên liệu nhập kho,,"Mứt đào vàng
+(900g*20 hộp)",12 tháng,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+17,"Mứt trái đào (18KG,900G*20hộp)",g,,Nguyên liệu nhập kho,,"Mứt trái đào
+(18KG,900G*20hộp)",12 tháng,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+18,Thạch lô hội (1kg *18 túi),g,,Nguyên liệu nhập kho,,"Thạch lô hội
+(1kg *18 túi)",12 tháng,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+19,"Thạch dừa (2kg/túi, 10 túi/kiện)",g,,Nguyên liệu nhập kho,,"Thạch dừa
+(2kg/túi, 10 túi/kiện)",12 tháng,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+20,Thạch nguyên vị (1kg/túi * 20 túi),g,,Nguyên liệu nhập kho,,"Thạch nguyên vị
+(1kg/túi * 20 túi)",12 tháng,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+21,Syrup hạt dẻ,g,,Nguyên liệu nhập kho,,Syrup hạt dẻ,12 tháng,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+22,Bột matcha(300g *12 gói),g,,Nguyên liệu nhập kho,,Bột matcha(300g *12 gói),6 tháng,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+23,"Syrup Xoài (850gr*20lon, 17kg/thùng)",g,,Nguyên liệu nhập kho,,"Syrup Xoài 
+(850gr*20lon, 17kg/thùng)",12 tháng,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+24,Syrup Dâu Tây (900g*20 hộp),g,,Nguyên liệu nhập kho,,"Syrup Dâu Tây 
+(900g*20 hộp)",12 tháng,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+25,Syrup Socola,g,,Nguyên liệu nhập kho,,Syrup Socola,9 tháng,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+26,"Syrup Việt Quất (900gr * 20 lon, 18kg/thùng)",g,,Nguyên liệu nhập kho,,"Syrup Việt Quất
+(900gr * 20 lon, 18kg/thùng)",12 tháng,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+27,Syrup chanh dây,g,,Nguyên liệu nhập kho,,Syrup chanh dây,12 tháng,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+28,Bột Cafe rang (380gr*20gói),g,,Nguyên liệu nhập kho,,Bột Cafe rang (380gr*20gói),12 tháng,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+29,Vụn Oreo,g,,Nguyên liệu nhập kho,,Vụn Oreo,12 tháng,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+30,Chanh vàng (15kg/kiện),g,,Nguyên liệu nhập kho,,"Chanh vàng
+(15kg/kiện)",1 tháng,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+31,Cam vàng,g,,Nguyên liệu nhập kho,,Cam vàng,1 tháng,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+32,"Ống hút bé (50 túi/kiện, 100c/túi)",cái,,Bao bì,,"Ống hút bé
+(50 túi/kiện, 100c/túi)",,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+33,"Ống hút to (50 túi/kiện, 100c/túi)",cái,,Bao bì,,"Ống hút to
+(50 túi/kiện, 100c/túi)",,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+34,"Thìa sundea (3000 chiếc/thùng, 60 túi*50 chiếc)",cái,,Bao bì,,"Thìa sundea
+(3000 chiếc/thùng, 60 túi*50 chiếc)",,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+35,Giấy lót ốc quế (10.000 cái/thùng),cái,,Bao bì,,"Giấy lót ốc quế
+(10.000 cái/thùng)",,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+36,Giấy in hóa đơn (50 cuộn/thùng),cái,,Bao bì,,Giấy in hóa đơn (50 cuộn/thùng),,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+37,"Giấy in tem (800 tờ/ cuộn, 20 cuộn/ thùng)",cái,,Bao bì,,"Giấy in tem
+(800 tờ/ cuộn, 20 cuộn/ thùng)",,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+38,Màng dập cốc,cái,,Bao bì,,Màng dập cốc,,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+39,Túi đơn T-shirt,cái,,Bao bì,,Túi đơn T-shirt,,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+40,Túi đựng cốc 2 ly 8000c/thùng,cái,,Bao bì,,Túi đựng cốc 2 ly 8000c/thùng,,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+41,Túi đựng cốc 4 ly,cái,,Bao bì,,Túi đựng cốc 4 ly,,Danh sách người dùng đã nhập trước đợt ảnh,Chờ xác nhận
+TP01,Kem tươi đã làm,g,,Bán thành phẩm,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+TP02,Trân châu nguyên vị đã nấu,g,,Topping đã chế biến,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+TP03,Thạch đường đen đã chế biến,g,,Topping đã chế biến,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+TP04,Thạch đào đã chế biến,g,,Topping đã chế biến,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+TP05,Trà sữa lạnh đã pha,ml,,Bán thành phẩm,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+TP06,Sữa đặc pha từ bột trà sữa,ml,,Bán thành phẩm,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+TP07,Trà xanh đã ủ,ml,,Bán thành phẩm,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+TP08,Hồng trà đã ủ,ml,,Bán thành phẩm,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+TP09,Cà phê tươi dùng pha món,ml,,Bán thành phẩm,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+TP10,Cà phê cô đặc từ cà phê hòa tan,ml,,Bán thành phẩm,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+NL01,Đường mật,g,,Si rô,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+NL02,Đường quả,g,,Si rô,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+NL03,Syrup đường đen,g,,Si rô,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+NL04,Syrup hạt dẻ và bơ,g,,Si rô,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+NL05,Syrup socola,g,,Si rô,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+NL06,Trân châu trắng,g,,Topping đã chế biến,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+NL07,Thạch dừa dùng pha món,g,,Topping đã chế biến,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+NL08,Lô hội dùng pha món,g,,Topping đã chế biến,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+NL09,Vụn ốc quế,g,,Nguyên liệu dùng pha món,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+NL10,Vụn Oreo,g,,Nguyên liệu dùng pha món,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+NL11,Mứt xoài,g,,Mứt quả,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+NL12,Mứt đào mật,g,,Mứt quả,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+NL13,Mứt đào vàng,g,,Mứt quả,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+NL14,Mứt dâu tây,g,,Mứt quả,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+NL15,Mứt chanh leo,g,,Mứt quả,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+NL16,Mứt cam bưởi,g,,Mứt quả,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+NL17,Chanh cắt lát,g,,Trái cây đã sơ chế,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+NL18,Cam cắt lát,g,,Trái cây đã sơ chế,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+NL19,Nước định lượng bằng cân,g,,Nước,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+NL20,Nước định lượng bằng thể tích,ml,,Nước,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+NL21,Đá viên,g,,Đá,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+NL22,Bột cà phê hòa tan,g,,Nguyên liệu khô,,,,Ảnh công thức; xem nguồn từng dòng định lượng,Chờ xác nhận; chưa tự gộp với mã hàng kho
+TP11,Hỗn hợp kem đã pha trước khi đưa vào máy,g,,Bán thành phẩm,,,,ANH_15,Chờ xác nhận; chưa có lượng thành phẩm đo thực tế

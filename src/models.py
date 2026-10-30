@@ -156,6 +156,15 @@ class User(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
 
 
+class LoginThrottle(Base):
+    __tablename__ = 'login_throttles'
+
+    username = Column(String(50), primary_key=True)
+    failed_attempts = Column(Integer, nullable=False, default=0)
+    blocked_until = Column(DateTime, nullable=True)
+    last_attempt_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
 class DailyStockMovement(Base):
     """Bảng lưu nhật ký xuất - nhập - tồn kho hàng ngày theo quy cách đóng gói (thùng/kiện/dây)."""
     __tablename__ = "daily_stock_movements"
@@ -190,3 +199,23 @@ class OperationPlan(Base):
     plan_id = Column(String(50), primary_key=True)
     payload = Column(JSON, nullable=False)
     created_at = Column(DateTime, nullable=False, default=datetime.now)
+
+
+class ShiftReportRecord(Base):
+    """Bảng lưu trữ báo cáo chốt ca trong CSDL quan hệ (đồng bộ ACID cùng shift_reports.json)."""
+    __tablename__ = "shift_reports"
+
+    report_id = Column(String(100), primary_key=True)
+    business_date = Column(String(20), nullable=False)
+    shift_code = Column(String(30), nullable=False)
+    cash_vnd = Column(Numeric(14, 0), nullable=False, default=0)
+    bank_transfer_vnd = Column(Numeric(14, 0), nullable=False, default=0)
+    total_collected_vnd = Column(Numeric(14, 0), nullable=False, default=0)
+    status = Column(String(30), nullable=False, default="APPROVED")
+    signed_by = Column(String(100), nullable=True)
+    payload = Column(JSON, nullable=False)
+    updated_at = Column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
+
+    __table_args__ = (
+        Index("idx_shift_reports_date_code", "business_date", "shift_code"),
+    )

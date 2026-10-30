@@ -1,0 +1,20 @@
+﻿Mã vấn đề,Phạm vi,Nội dung cần xác nhận,Nguồn,Trạng thái
+XN01,Toàn bộ công thức,Ngày tài liệu 25/05/2026 không tự coi là ngày hiệu lực tại cửa hàng; cột ngày áp dụng để trống,ANH_01 đến ANH_05,Chờ xác nhận
+XN02,DK1 Kem ốc quế,120±10 g trong ảnh tính cả vỏ ốc quế; chưa tách được lượng kem nên chưa ghi 120 g kem vào BOM,ANH_05,Thiếu định lượng tách riêng
+XN03,DK3 THQ8 ST2,Chưa có công thức Việt Quất trong ảnh; không lấy công thức vị khác thay thế,Danh mục người dùng và toàn bộ ảnh,Thiếu công thức
+XN04,TS3 TS8,2J chọn 2 trong 3 loại topping; cần biết lựa chọn thực tế; không cộng cả ba,ANH_04,Cần dữ liệu tùy chọn
+XN05,DK7 DK8,Vụn ốc quế có thể thay bằng trân châu nguyên vị hoặc thạch đường đen hoặc thạch đào 40 g; cần biết lựa chọn thực tế,ANH_05,Cần dữ liệu tùy chọn
+XN06,Các món thêm đến vạch,Trà sữa lạnh nước và đá có chỗ chỉ ghi đến vạch hoặc cách miệng cốc 0.8 cm; không tự suy ra ml từ dung tích cốc,ANH_01 ANH_03 ANH_04,Thiếu lượng đo
+XN07,TP09 TP10,Cà phê tươi của tài liệu 2026 chưa chứng minh là cà phê cô đặc pha từ cà phê hòa tan 2025; không tự gộp,ANH_01 ANH_09,Cần xác nhận khác phiên bản
+XN08,NL22 và mã kho 28,Cà phê hòa tan khác bột cà phê rang; chưa nối hai mã này,ANH_09 và danh mục kho,Chờ xác nhận
+XN09,NL01 đến NL18 và mã kho,Một số tên syrup trong danh mục kho khác mứt trong công thức; giữ riêng mã dùng pha món và mã nhập kho để tránh gộp nhầm,Danh mục kho và ảnh,Cần duyệt bảng quy đổi
+XN10,Hạn dùng,Danh sách kho ghi đường mật 12 tháng đường quả 12 tháng hồng trà/trà xanh 1 năm; ảnh lần lượt ghi 24 tháng 9 tháng 18 tháng; giữ cả hai nguồn,ANH_18 và danh sách kho,Mâu thuẫn nguồn
+XN11,Quy cách trà,Danh sách kho ghi trà xanh/hồng trà túi 50 g; công thức mẻ ghi trà xanh 60 g/gói hồng trà 100 g/gói; định lượng mẻ dùng g không dùng số gói để quy đổi kho,ANH_12 ANH_14 ANH_16,Mâu thuẫn quy cách
+XN12,Tất cả mẻ sơ chế,Số cốc ước tính không phải lượng đầu ra cân/đong; cần đo yield thực tế sau nấu lọc và làm nguội,ANH_08 đến ANH_16,Thiếu lượng đầu ra
+XN13,TP01 TP11,Hỗn hợp kem trước máy và kem tươi sau máy được tách mã; cần xác nhận quy đổi thực tế,ANH_05 ANH_15,Chưa có yield
+XN14,Hạn dùng 0+3 ngày,Giữ nguyên ký hiệu tài liệu; chưa tự đổi thành giờ hay ngày hết hạn của lô hàng,ANH_11 ANH_13,Cần xác nhận cách tính tại cửa hàng
+XN15,Tài liệu mật mã,Phiên bản 06/2025 dùng để tham khảo ký hiệu; không ghi đè công thức 25/05/2026 khi khác số,ANH_06 ANH_07 ANH_19,Đã tách nguồn
+XN16,THQ7,Tên trong danh mục là Trà cam vàng; ảnh là Trà cam vàng 9999; định lượng đã chép chờ xác nhận cùng món,ANH_03,Chờ xác nhận tên
+XN17,Biến thể nóng lạnh,BOM món hiện có dùng bản lạnh; menu chưa tách nóng ấm; các món nóng/ấm không tự áp cùng BOM lạnh,ANH_01 ANH_03 ANH_04,Cần mã biến thể
+XN18,Hạn dùng bao bì/nguyên liệu đóng gói,Ảnh nhận diện không thay thế ngày sản xuất và hạn dùng in trên từng lô; chưa có dữ liệu lô hoặc ngày mở bao,ANH_17 ANH_18,Cần bổ sung lô thực tế
+XN19,Bốn bảng vận hành,Chưa có số bán phiếu nhận kiểm kê hoặc nhật ký chuẩn bị/hủy thực tế trong 19 ảnh; giữ bốn file trống,Toàn bộ ảnh,Thiếu dữ liệu thực tế

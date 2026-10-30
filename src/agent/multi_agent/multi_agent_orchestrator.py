@@ -16,6 +16,7 @@ from .repo_docs_agent import RepoDocsAgent
 from .database_analytics_agent import DatabaseAnalyticsAgent
 from .operations_bom_agent import OperationsBOMAgent
 from .nlp_synthesizer import NLPSynthesizer
+from src.agent.response_policy import casual_reply, conversational_reply, is_prep_guide_request
 
 
 def _norm(text: str) -> str:
@@ -51,6 +52,12 @@ class MultiAgentOrchestrator:
         q_norm = _norm(q)
         clean_role = (user_role or "STAFF").strip().upper()
         is_admin = clean_role in ["ADMIN", "MANAGER", "OWNER"]
+        small_talk = conversational_reply(query, is_admin=is_admin)
+        if small_talk:
+            return small_talk
+        light_chat = casual_reply(query)
+        if light_chat:
+            return light_chat
 
         # 0. RBAC Guardrail: Chặn Nhân viên truy cập dữ liệu doanh số, kho, đơn PO, nhân sự
         if not is_admin:
@@ -87,6 +94,12 @@ class MultiAgentOrchestrator:
         db_results: dict[str, Any] | None = None
         bom_results: dict[str, Any] | None = None
         primary_tool = "multi_agent_search"
+
+        if is_prep_guide_request(q):
+            guide = self.bom_agent.get_sop_prep_guide(q)
+            if guide:
+                return self.synthesizer.synthesize(query=q, user_name=user_name, user_role=clean_role,
+                                                  bom_results=guide, tool_called='get_sop_prep_guide')
 
         # 1. Phát hiện câu hỏi liên quan đến Hướng dẫn nấu mẻ / Sơ chế Topping / Định nghĩa (SOP Prep Guide)
         is_prep_sop_query = any(w in q_norm for w in [
@@ -159,7 +172,8 @@ class MultiAgentOrchestrator:
             db_results = self.db_agent.query_employees_directory()
 
         # 6. Luôn luôn kích hoạt RepoDocsAgent để lục tìm tài liệu, SOP, quy chuẩn, báo cáo kiểm toán
-        docs_hits = self.docs_agent.search(q, top_k=3)
+        technical = any(word in q_norm for word in ['kien truc', 'ma nguon', 'repo', 'lap trinh', 'kiem thu', 'database', 'langgraph'])
+        docs_hits = self.docs_agent.search(q, top_k=3, category_filter=None if technical else 'SOP_QUY_CHUAN') if not (db_results or bom_results) else []
         if docs_hits:
             docs_results = docs_hits
 

@@ -1,15 +1,16 @@
 /* Continuous Mixue motion, scoped to branded elements. */
 (() => {
   if (!window.gsap) return;
-  if (window.mixueMotion?.version === 3) { window.mixueMotion.scan(); return; }
+  if (window.mixueMotion?.version === 4) { window.mixueMotion.scan(); return; }
   window.mixueMotion?.destroy?.();
   const gsap = window.gsap;
   gsap.registerPlugin(window.ScrollTrigger);
   const active = new Map();
   const controls = new Map();
   const fine = window.matchMedia('(hover: hover) and (pointer: fine)');
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
   // Continuous motion is the user's explicit preference; pause remains available.
-  let enabled = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let enabled = !reduce.matches;
   document.documentElement.dataset.mixueMotion = enabled ? 'running' : 'paused';
   document.documentElement.classList.toggle('mixue-motion-active', enabled);
   document.documentElement.classList.toggle('mixue-motion-paused', !enabled);
@@ -41,7 +42,27 @@
         if (!target || (target.length !== undefined && !target.length)) return;
         loops.push(gsap.to(target, {repeat: -1, yoyo: true, ease: 'sine.inOut', ...vars}));
       };
-      if (node.matches('.mixue-stage')) {
+      if (node.matches('.mx-hero')) {
+        gsap.timeline({defaults: {ease: 'power3.out'}})
+          .from(node.querySelectorAll('.mx-hero-copy > *'), {y: 18, opacity: 0, stagger: .07, duration: .7})
+          .from(node.querySelector('.mx-hero-art'), {x: 35, rotationY: -20, opacity: 0, duration: .9}, .1);
+        loop(node.querySelector('.mx-bubble'), {y: -5, rotationZ: -2, duration: 3.4});
+        loop(node.querySelector('.mx-hero-drink'), {y: -9, rotationZ: -7, rotationY: 10, duration: 3, transformPerspective: 700});
+        loop(node.querySelectorAll('.mx-orbit'), {scale: 1.12, x: -8, duration: 5, stagger: 1});
+        node.querySelectorAll('.mx-spark').forEach((spark, index) => loop(spark, {y: -8, rotationZ: 20, scale: 1.2, duration: 2 + index * .5}));
+      } else if (node.matches('.mx-card, .mx-kpi')) {
+        // Reveal only when the panel enters view; leave content readable without JS.
+        const reveal = new IntersectionObserver(entries => entries.forEach(entry => {
+          if (!entry.isIntersecting) return;
+          context.add(() => {
+            gsap.from(node, {y: 18, rotationX: 5, transformPerspective: 1100, opacity: 0, duration: .65, ease: 'power3.out', clearProps: 'opacity,transform'});
+            if (node.matches('.mx-revenue')) gsap.from(node.querySelectorAll('.mx-bar i'), {scaleY: .05, stagger: .045, duration: .8, ease: 'power2.out'});
+          });
+          reveal.disconnect();
+        }), {threshold: .08});
+        reveal.observe(node);
+        cleanups.push(() => reveal.disconnect());
+      } else if (node.matches('.mixue-stage')) {
         gsap.timeline({defaults: {ease: 'power3.out'}})
           .from(node.querySelectorAll('.stage-copy > *'), {y: 24, opacity: 0, stagger: .08, duration: .75})
           .from(node.querySelectorAll('.photo-card'), {y: 60, rotationY: -18, opacity: 0, stagger: .16, duration: 1}, .15);
@@ -78,8 +99,9 @@
         const move = event => {
           if (!fine.matches || !enabled || target.matches(':focus-within')) return;
           const box = target.getBoundingClientRect();
-          gsap.to(target, {rotationX: -(event.clientY - box.top - box.height / 2) / box.height * (node.matches('.st-key-login_shell') ? 4 : 14),
-            rotationY: (event.clientX - box.left - box.width / 2) / box.width * (node.matches('.st-key-login_shell') ? 6 : 18),
+          const subtle = node.matches('.st-key-login_shell, .mx-kpi');
+          gsap.to(target, {rotationX: -(event.clientY - box.top - box.height / 2) / box.height * (subtle ? 4 : 14),
+            rotationY: (event.clientX - box.left - box.width / 2) / box.width * (subtle ? 6 : 18),
             transformPerspective: 850, duration: .35, ease: 'power2.out', overwrite: 'auto'});
         };
         const reset = () => gsap.to(target, {rotationX: 0, rotationY: 0, duration: .65, overwrite: 'auto'});
@@ -98,16 +120,65 @@
   function scan() {
     syncControls();
     active.forEach((cleanup, node) => {if (!node.isConnected || !enabled) {cleanup(); active.delete(node);}});
-    document.querySelectorAll('.mixue-stage, .menu-card, .snowking-authentic, .brand-logo, .mixue-ribbon, .st-key-login_shell').forEach(bind);
+    document.querySelectorAll('.mx-hero, .mx-card, .mx-kpi, .mixue-stage, .menu-card, .snowking-authentic, .brand-logo, .mixue-ribbon, .st-key-login_shell').forEach(bind);
   }
+  // Native dialog provides focus trapping, Escape and an accessible search.
+  const normalize = value => value.toLocaleLowerCase('vi').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+  const openSearch = () => {
+    const dialog = document.querySelector('.mx-command');
+    if (!dialog || dialog.open) return;
+    dialog.showModal();
+    dialog.querySelector('input')?.focus();
+  };
+  const click = event => {
+    if (event.target.closest('[data-command-open]')) openSearch();
+    if (event.target.closest('[data-command-close]')) event.target.closest('dialog')?.close();
+    const action = event.target.closest('[data-command-page]');
+    if (!action) return;
+    const target = action.dataset.commandPage.trim();
+    const option = [...document.querySelectorAll('.st-key-main_navigation label')].find(label => label.textContent.trim() === target);
+    if (option) {
+      document.querySelector('.mx-command[open]')?.close();
+      option.click();
+    }
+  };
+  const search = event => {
+    if (!event.target.matches('.mx-command input')) return;
+    const dialog = event.target.closest('dialog');
+    const query = normalize(event.target.value);
+    let visible = 0;
+    dialog.querySelectorAll('[data-command-page]').forEach(button => {
+      button.hidden = !normalize(button.dataset.commandPage).includes(query);
+      if (!button.hidden) visible++;
+    });
+    dialog.querySelector('.mx-command-empty').hidden = Boolean(visible);
+  };
+  const keydown = event => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k' && document.querySelector('.mx-command')) {event.preventDefault(); openSearch();}
+    if (event.key === 'Enter' && event.target.matches('.mx-command input')) {event.preventDefault(); event.target.closest('dialog').querySelector('[data-command-page]:not([hidden])')?.click();}
+  };
+  const preference = event => {
+    enabled = !event.matches;
+    document.documentElement.dataset.mixueMotion = enabled ? 'running' : 'paused';
+    document.documentElement.classList.toggle('mixue-motion-paused', !enabled);
+    document.documentElement.classList.toggle('mixue-motion-active', enabled);
+    document.documentElement.classList.remove('mixue-motion-user-enabled');
+    scan();
+  };
+  document.addEventListener('click', click);
+  document.addEventListener('input', search);
+  document.addEventListener('keydown', keydown);
+  reduce.addEventListener('change', preference);
   let scheduled = false;
   const observer = new MutationObserver(() => {
     if (!scheduled) {scheduled = true; requestAnimationFrame(() => {scheduled = false; scan();});}
   });
   observer.observe(document.body, {childList: true, subtree: true});
-  window.mixueMotion = {version: 3, scan, destroy() {
+  window.mixueMotion = {version: 4, scan, destroy() {
     observer.disconnect(); active.forEach(cleanup => cleanup()); active.clear();
     controls.forEach((fn, button) => button.removeEventListener('click', fn)); controls.clear();
+    document.removeEventListener('click', click); document.removeEventListener('input', search); document.removeEventListener('keydown', keydown);
+    reduce.removeEventListener('change', preference);
   }};
   scan();
 })();

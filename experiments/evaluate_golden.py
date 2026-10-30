@@ -5,10 +5,11 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 import json
 from datetime import date
 from src.agent.mixue_agent import MixueOperationsAgent
+from src.agent.config import AgentSettings
 from src.engine.validator import IndependentPlanValidator
 
 
-def run_golden_evaluation():
+def run_golden_evaluation(*, live=False):
     golden_path = os.path.join(os.path.dirname(__file__), "golden_cases.jsonl")
     if not os.path.exists(golden_path):
         print(f"Error: {golden_path} not found.")
@@ -17,7 +18,14 @@ def run_golden_evaluation():
     with open(golden_path, "r", encoding="utf-8") as f:
         cases = [json.loads(line) for line in f if line.strip()]
 
-    agent = MixueOperationsAgent()
+    settings = AgentSettings.from_env()
+    if not live:
+        settings = settings.model_copy(update={'llm_enabled': False})
+    elif not settings.llm_enabled or not settings.allow_external_transfer:
+        raise ValueError('Live evaluation requires API and external-transfer permission.')
+    settings = settings.model_copy(update={'checkpoint_path': 'data/agent_private/evaluation-legacy/checkpoints.sqlite',
+                                           'audit_path': 'data/agent_private/evaluation-legacy/audit.jsonl'})
+    agent = MixueOperationsAgent(settings=settings)
     val = IndependentPlanValidator()
 
     passed = 0
@@ -86,12 +94,14 @@ def run_golden_evaluation():
                 # Check must include keywords
                 all_found = all(mi.lower() in full_text.lower() for mi in must_include)
 
-                if all_found:
+                status_match = (case.get('expected_status') is None or
+                                resp.get('raw_result', {}).get('status', resp.get('status', 'SUCCESS')) == case['expected_status'])
+                if all_found and tool_match and status_match:
                     status = "PASS"
                     details = f"Tool: {resp.get('tool_called')} | Khớp tất cả từ khóa: {must_include}"
                 else:
                     missing = [mi for mi in must_include if mi.lower() not in full_text.lower()]
-                    details = f"Thiếu từ khóa: {missing}"
+                    details = f"Thiếu từ khóa: {missing}; đúng công cụ: {tool_match}; đúng trạng thái: {status_match}"
 
         except Exception as e:
             status = "ERROR"
@@ -123,4 +133,7 @@ def run_golden_evaluation():
 
 
 if __name__ == "__main__":
-    run_golden_evaluation()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--live', action='store_true')
+    run_golden_evaluation(live=parser.parse_args().live)

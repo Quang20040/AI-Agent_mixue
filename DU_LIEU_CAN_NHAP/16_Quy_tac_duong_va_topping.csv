@@ -1,0 +1,7 @@
+﻿Phạm vi,Quy tắc chép từ ảnh,Nguồn,Trạng thái
+Topping thêm,Ngoài topping có sẵn chỉ thêm nhiều nhất 2 phần; áp dụng mua tại cửa hàng không áp dụng giao ship,ANH_02,Chờ xác nhận
+Đường bình thường và thêm 1 phần topping,Pha theo mức đường 70%,ANH_02,Chờ xác nhận
+Đường bình thường và thêm 2 phần topping,Pha theo mức đường 50%,ANH_02,Chờ xác nhận
+Đường 70% hoặc 50% và thêm topping,Pha theo mức đường 50%,ANH_02,Chờ xác nhận
+Đường 30% và thêm topping,Vẫn pha theo mức đường 30%,ANH_02,Chờ xác nhận
+Americano,Mặc định không đường; nếu khách muốn thêm thì tiêu chuẩn đường bình thường 20 g,ANH_01,Chưa tự thêm vào BOM mặc định

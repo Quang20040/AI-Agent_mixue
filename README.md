@@ -62,8 +62,12 @@ Dữ liệu chuẩn hóa 30 ngày (1.170 sales, 120 BOM, tồn kho, kiểm kê, 
 ### 2.1. Cài đặt Môi trường
 Môi trường yêu cầu Python 3.11+:
 ```powershell
-pip install pandas sqlalchemy "streamlit>=1.64" pytest pydantic
+python -m pip install -r requirements.txt
 ```
+
+Cài mới không tạo tài khoản với mật khẩu mặc định. Cấp tài khoản quản lý bằng `python scripts/provision_admin.py quanly --name "Quản lý"`; mật khẩu được nhập riêng và cần 12–128 ký tự. Tài khoản quản lý cũ dùng mật khẩu công khai cần đặt lại bằng cùng lệnh có thêm `--reset-existing`. Không bật `APP_DEMO_MODE` khi sử dụng thật.
+
+Database chính nhận `DATABASE_URL` từ môi trường tiến trình, sau đó từ `.env`; khi không có URL, ứng dụng dùng SQLite cục bộ trong `data/`. PostgreSQL đã cấu hình mà không kết nối được sẽ báo lỗi. Để kiểm tra cấu hình PostgreSQL/MCP mà không lộ mật khẩu, chạy `python scripts/check_database_setup.py`. Hướng dẫn PostgreSQL MCP nằm trong [docs/POSTGRES_MCP.md](docs/POSTGRES_MCP.md). Chi tiết bản sửa và giới hạn xác minh: [docs/AUDIT_REMEDIATION.md](docs/AUDIT_REMEDIATION.md).
 
 ### 2.2. Nạp Dữ liệu vào Database (Ingestion)
 Đọc và nạp toàn bộ 30 ngày dữ liệu nghiệp vụ chuẩn hóa:

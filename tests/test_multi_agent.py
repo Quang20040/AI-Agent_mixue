@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import pytest
 from src.agent.multi_agent.repo_docs_agent import RepoDocsAgent
 from src.agent.multi_agent.database_analytics_agent import DatabaseAnalyticsAgent
 from src.agent.multi_agent.operations_bom_agent import OperationsBOMAgent
@@ -101,10 +100,12 @@ def test_multi_agent_orchestrator_integration():
     ans_blocked = orchestrator.dispatch("Doanh thu bán hàng tháng 10", user_role="STAFF")
     assert ans_blocked["tool_called"] == "rbac_restriction"
 
-    # Query 4: Sổ kho
+    # TP01 is a semi-product, not a code in the raw-ingredient stock ledger.
+    # A mention in unrelated project docs must not make this look successful.
     ans_stock = orchestrator.dispatch("Xem tồn kho TP01", user_role="MANAGER")
-    assert ans_stock["status"] == "SUCCESS"
+    assert ans_stock["status"] == "NO_DATA"
     assert "TP01" in ans_stock["text"]
+    assert 'Sổ Kho Hàng Ngày' not in ans_stock['text']
 
 
 def test_mixue_operations_agent_natural_language_fallback():

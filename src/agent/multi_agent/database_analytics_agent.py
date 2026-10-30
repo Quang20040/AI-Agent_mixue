@@ -10,12 +10,12 @@ Thực hiện truy vấn SQL sâu và phân tích số liệu thời gian thực
 
 from datetime import date, datetime
 from typing import Any
+import re
 import pandas as pd
-from sqlalchemy import func, desc, asc
 
 from src.database import SessionLocal
-from src.models import SalesDaily, MenuItem, Ingredient, DailyStockMovement, User, Purchase, StockCount
-from src.engine.shift_service import get_all_shift_reports, get_daily_closing_summary
+from src.models import SalesDaily, MenuItem
+from src.engine.shift_service import get_all_shift_reports
 from src.engine.daily_stock_service import get_stock_matrix_df, get_pending_requests
 from src.auth import get_all_employees
 
@@ -172,7 +172,22 @@ class DatabaseAnalyticsAgent:
 
         if ingredient_query:
             q_norm = _norm(ingredient_query)
-            matched = matrix_df[matrix_df["Tên mặt hàng (Quy cách)"].apply(lambda x: q_norm in _norm(str(x)))]
+            requested_code = re.search(r'\b[a-z]{1,4}\d+\b', q_norm)
+            if requested_code:
+                code = requested_code.group(0)
+                matched = matrix_df[matrix_df['Mã NL'].astype(str).str.lower().eq(code)]
+                if not matched.empty:
+                    has_ledger_data = (
+                        (matched["Tồn sổ sách"] != "—")
+                        | (matched["Tổng nhập"] != 0)
+                        | (matched["Tổng xuất"] != 0)
+                        | (matched["Tồn thực tế"] != "—")
+                    )
+                    matched = matched[has_ledger_data]
+                if matched.empty:
+                    return {'status': 'NO_DATA', 'message': f'Không tìm thấy mã {code.upper()} trong sổ kho. Bạn gửi tên hoặc mã nguyên liệu trong kho nhé.'}
+            else:
+                matched = matrix_df[matrix_df["Tên mặt hàng (Quy cách)"].apply(lambda x: q_norm in _norm(str(x)))]
             if not matched.empty:
                 return {
                     "status": "SUCCESS",

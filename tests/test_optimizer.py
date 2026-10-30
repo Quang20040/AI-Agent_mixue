@@ -73,3 +73,17 @@ def test_validator_rejects_negative_or_invalid_unit(engines):
     assert res["is_valid"] is False, "Validator must reject invalid plan"
     assert res["status"] == "REJECTED"
     assert len(res["violations"]) >= 2
+
+
+def test_lower_cup_forecast_reduces_bom_and_preparation(engines):
+    fe, opt, _ = engines
+    dry = fe.forecast_demand(date(2026, 10, 16), model='moving_average')
+    wet = dry.copy()
+    wet['predicted_qty'] *= .7
+    dry_demand = opt.calculate_ingredient_demand(dry)
+    wet_demand = opt.calculate_ingredient_demand(wet)
+    dry_plans = opt.optimize_topping_preparation(date(2026, 10, 16), dry_demand)
+    wet_plans = opt.optimize_topping_preparation(date(2026, 10, 16), wet_demand)
+    dry_quantities = {line['ingredient_id']: line['recommended_prep_qty'] for line in dry_plans}
+    assert all(line['recommended_prep_qty'] <= dry_quantities[line['ingredient_id']] for line in wet_plans)
+    assert any(line['recommended_prep_qty'] < dry_quantities[line['ingredient_id']] for line in wet_plans)

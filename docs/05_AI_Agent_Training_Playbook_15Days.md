@@ -1,4 +1,10 @@
 # 📘 PLAYBOOK HUẤN LUYỆN AGENT THEO CHUẨN "RETRO 15 NGÀY · AI THỰC CHIẾN"
+
+> **Ghi chú kiểm tra 16/10/2026:** Phần ánh xạ ngày và các bảng “ĐẠT” bên dưới
+> là báo cáo cũ, không phải kết quả nghiệm thu theo giáo trình hiện tại. Không
+> dùng các tuyên bố “bao phủ 100%”, “độ dài giảm >75%” hoặc “production ready”
+> khi chưa có phép đo tương ứng. Đối chiếu triển khai hiện tại tại
+> [LangGraph](LANGGRAPH_AGENT.md) và [OCR, truy xuất, đánh giá](OCR_AND_AGENT_EVALUATION.md).
 > **Hệ thống áp dụng:** Trợ lý Vận hành Tuyết Vương AI (`MixueOperationsAgent`)  
 > **Cửa hàng:** Mixue 39 Tôn Quang Phiệt (Mã CH: 2132)  
 > **Dựa trên giáo trình:** [Retro 15 ngày · AI Thực Chiến · Phase 1](https://retro-15-days.vercel.app/)
@@ -105,7 +111,7 @@ flowchart TD
 - **Day 12 (Observability & Tracing):**
   - Ghi nhận `trace_id`, `tools_called`, `evidence_grounding`, và độ trễ phản hồi trong đối tượng `AgentResponse`.
 - **Day 13 (Graceful Fallback & Deterministic Reliability):**
-  - Khi không có LLM API key hoặc mất mạng, hệ thống tự động chạy qua bộ suy luận cục bộ (Deterministic Heuristics Engine) mà không làm gián đoạn vận hành cửa hàng.
+  - Agent hiện chạy LangGraph với API khi bật `LLM_ENABLED`. API lỗi được báo rõ, không tự chuyển âm thầm sang suy luận cục bộ. Khi chủ động tắt API, giao diện ghi chế độ tra cứu cơ bản (`offline_rules`). Xem [luồng và cấu hình hiện tại](LANGGRAPH_AGENT.md).
 - **Day 14 (Golden Evaluation Benchmark Suite):**
   - Xây dựng bộ test chuẩn `tests/test_retro_15days_evaluation.py` với 5 bài test lớn bao phủ 100% các tiêu chí của khóa học:
     - `test_day04_system_prompt_5_blocks`

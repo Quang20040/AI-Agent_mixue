@@ -4,7 +4,8 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 import pandas as pd
-from sqlalchemy import func
+from sqlalchemy import func, or_
+from src.runtime_settings import resolve_store_id
 
 from src.database import SessionLocal
 from src.models import (
@@ -19,8 +20,9 @@ from src.models import (
 
 
 class BOMEngine:
-    def __init__(self, db_session=None):
+    def __init__(self, db_session=None, *, store_id=None):
         self.db = db_session or SessionLocal()
+        self.store_id = store_id
 
     def close(self):
         if self.db:
@@ -36,6 +38,7 @@ class BOMEngine:
             SalesDaily.quantity_sold,
             SalesDaily.revenue_vnd
         ).join(MenuItem, SalesDaily.sku_id == MenuItem.sku_id)
+        query = query.filter(SalesDaily.store_id == resolve_store_id(self.db, self.store_id))
 
         if start_date:
             query = query.filter(SalesDaily.business_date >= start_date)
@@ -97,6 +100,11 @@ class BOMEngine:
         ).join(MenuItem, SalesDaily.sku_id == MenuItem.sku_id)\
          .join(RecipeBOM, SalesDaily.sku_id == RecipeBOM.sku_id)\
          .join(Ingredient, RecipeBOM.ingredient_id == Ingredient.ingredient_id)
+        query = query.filter(
+            SalesDaily.store_id == resolve_store_id(self.db, self.store_id),
+            RecipeBOM.effective_from <= SalesDaily.business_date,
+            or_(RecipeBOM.effective_to.is_(None), RecipeBOM.effective_to >= SalesDaily.business_date),
+            RecipeBOM.is_optional.is_(False))
 
         if start_date:
             query = query.filter(SalesDaily.business_date >= start_date)
@@ -112,6 +120,8 @@ class BOMEngine:
             "ingredient_id", "ingredient_name", "ingredient_group",
             "quantity_per_item", "unit"
         ])
+        if df.duplicated(['business_date', 'sku_id', 'ingredient_id']).any():
+            raise ValueError('Có công thức chồng lấn hiệu lực; cần xác minh BOM trước khi tính nhu cầu.')
         df["quantity_sold"] = df["quantity_sold"].astype(float)
         df["quantity_per_item"] = df["quantity_per_item"].astype(float)
         df["theoretical_usage"] = df["quantity_sold"] * df["quantity_per_item"]
@@ -133,6 +143,7 @@ class BOMEngine:
             func.sum(ToppingDaily.wasted_qty).label("total_wasted"),
             ToppingDaily.unit
         ).join(Ingredient, ToppingDaily.prepared_ingredient_id == Ingredient.ingredient_id)
+        query = query.filter(ToppingDaily.store_id == resolve_store_id(self.db, self.store_id))
 
         if start_date:
             query = query.filter(ToppingDaily.business_date >= start_date)

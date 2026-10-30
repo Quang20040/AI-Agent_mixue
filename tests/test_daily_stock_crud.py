@@ -18,7 +18,7 @@ def test_cell_manual_update_and_delete():
         ingredient_id="1",
         column_name="T5 1/10",
         new_value=4.5,
-        updated_by="admin"
+        updated_by="quanly"
     )
     assert ok is True
     val = get_cell_value("1", "T5 1/10")
@@ -29,14 +29,14 @@ def test_cell_manual_update_and_delete():
         ingredient_id="1",
         column_name="T5 1/10",
         new_value="",
-        updated_by="admin"
+        updated_by="quanly"
     )
     assert ok_del is True
     val_after = get_cell_value("1", "T5 1/10")
     assert val_after is None
 
     # Khôi phục lại giá trị 1.0 chuẩn ban đầu
-    update_stock_cell_manually("1", "T5 1/10", 1.0, "admin")
+    update_stock_cell_manually("1", "T5 1/10", 1.0, "quanly")
     assert get_cell_value("1", "T5 1/10") == 1.0
 
 
@@ -48,7 +48,7 @@ def test_movement_create_update_delete():
         ingredient_id="2",
         movement_type="OUT",
         quantity=3.0,
-        recorded_by="admin",
+        recorded_by="quanly",
         user_role="ADMIN",
         notes="Test CRUD"
     )
@@ -59,13 +59,13 @@ def test_movement_create_update_delete():
     ok_up, msg_up = update_stock_movement(
         movement_id=mov_id,
         new_quantity=5.5,
-        admin_username="admin"
+        admin_username="quanly"
     )
     assert ok_up is True
     assert "5.5" in msg_up
 
     # 3. Xóa lệnh
-    ok_del, msg_del = delete_stock_movement(mov_id, admin_username="admin")
+    ok_del, msg_del = delete_stock_movement(mov_id, admin_username="quanly")
     assert ok_del is True
     assert f"#{mov_id}" in msg_del
 

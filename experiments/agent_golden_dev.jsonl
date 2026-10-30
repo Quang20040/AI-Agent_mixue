@@ -1,0 +1,35 @@
+{"id": "V2_01", "category": "identity", "query": "Tôi là ai?", "max_chars": 500}
+{"id": "V2_02", "category": "identity", "query": "Tên tôi là gì?", "max_chars": 500}
+{"id": "V2_03", "category": "identity", "query": "Bạn là ai?", "max_chars": 500}
+{"id": "V2_04", "category": "identity", "query": "Bạn làm được gì?", "max_chars": 500}
+{"id": "V2_05", "category": "casual", "query": "hi", "max_chars": 900}
+{"id": "V2_06", "category": "casual", "query": "Xin chào", "max_chars": 900}
+{"id": "V2_07", "category": "casual", "query": "Cảm ơn bạn", "max_chars": 900}
+{"id": "V2_08", "category": "casual", "query": "Kể chuyện vui về trà sữa", "max_chars": 900}
+{"id": "V2_09", "category": "casual", "query": "Chúc mình một ngày vui vẻ", "max_chars": 900}
+{"id": "V2_10", "category": "casual", "query": "Mình hơi mệt hôm nay", "max_chars": 900}
+{"id": "V2_11", "category": "sales", "query": "Doanh thu ngày 15/10/2026", "tool_groups": [["get_daily_sales", "get_sales_analytics", "get_shift_revenue"]], "evidence_required": true}
+{"id": "V2_12", "category": "sales", "query": "Số ly bán ngày 15/10/2026", "tool_groups": [["get_daily_sales", "get_sales_analytics", "get_shift_revenue"]], "evidence_required": true}
+{"id": "V2_13", "category": "sales", "query": "Ngày 14/10/2026 bán bao nhiêu ly?", "tool_groups": [["get_daily_sales", "get_sales_analytics", "get_shift_revenue"]], "evidence_required": true}
+{"id": "V2_14", "category": "sales", "query": "Doanh thu ngày 14/10/2026", "tool_groups": [["get_daily_sales", "get_sales_analytics", "get_shift_revenue"]], "evidence_required": true}
+{"id": "V2_15", "category": "sales", "query": "Top 5 món bán chạy ngày 15/10/2026", "tool_groups": [["get_daily_sales", "get_sales_analytics", "get_shift_revenue"]], "evidence_required": true}
+{"id": "V2_16", "category": "sales", "query": "Món nào bán ít nhất ngày 15/10/2026?", "tool_groups": [["get_daily_sales", "get_sales_analytics", "get_shift_revenue"]], "evidence_required": true}
+{"id": "V2_17", "category": "sales", "query": "Doanh thu từ 10/10/2026 đến 15/10/2026", "tool_groups": [["get_daily_sales", "get_sales_analytics", "get_shift_revenue"]], "evidence_required": true}
+{"id": "V2_18", "category": "sales", "query": "Ngày gần nhất có dữ liệu bán bao nhiêu ly?", "tool_groups": [["get_daily_sales", "get_sales_analytics", "get_shift_revenue"]], "evidence_required": true}
+{"id": "V2_19", "category": "sales", "query": "Doanh thu ca sáng 14/10/2026", "tool_groups": [["get_daily_sales", "get_sales_analytics", "get_shift_revenue"]], "evidence_required": true}
+{"id": "V2_20", "category": "sales", "query": "Tổng thu về cả ngày 14/10/2026", "tool_groups": [["get_daily_sales", "get_sales_analytics", "get_shift_revenue"]], "evidence_required": true}
+{"id": "V2_21", "category": "sop_recipe", "query": "Cách nấu trân châu nguyên vị", "tool_groups": [["get_sop_prep_guide", "decode_recipe_or_sticker", "search_operating_knowledge"]], "evidence_required": true}
+{"id": "V2_22", "category": "sop_recipe", "query": "Cách nấu trân châu nửa mẻ", "tool_groups": [["get_sop_prep_guide", "decode_recipe_or_sticker", "search_operating_knowledge"]], "evidence_required": true}
+{"id": "V2_23", "category": "sop_recipe", "query": "Trân châu đã nấu để được bao lâu?", "tool_groups": [["get_sop_prep_guide", "decode_recipe_or_sticker", "search_operating_knowledge"]], "evidence_required": true}
+{"id": "V2_24", "category": "sop_recipe", "query": "Bảo quản hồng trà thế nào?", "tool_groups": [["get_sop_prep_guide", "decode_recipe_or_sticker", "search_operating_knowledge"]], "evidence_required": true}
+{"id": "V2_25", "category": "sop_recipe", "query": "Cách sơ chế thạch đào", "tool_groups": [["get_sop_prep_guide", "decode_recipe_or_sticker", "search_operating_knowledge"]], "evidence_required": true}
+{"id": "V2_26", "category": "sop_recipe", "query": "Công thức TS1", "tool_groups": [["get_sop_prep_guide", "decode_recipe_or_sticker", "search_operating_knowledge"]], "evidence_required": true}
+{"id": "V2_27", "category": "sop_recipe", "query": "Giải mã tem 24101", "tool_groups": [["get_sop_prep_guide", "decode_recipe_or_sticker", "search_operating_knowledge"]], "evidence_required": true}
+{"id": "V2_28", "category": "sop_recipe", "query": "Công thức trà chanh tươi", "tool_groups": [["get_sop_prep_guide", "decode_recipe_or_sticker", "search_operating_knowledge"]], "evidence_required": true}
+{"id": "V2_29", "category": "sop_recipe", "query": "Định lượng trân châu 1 mẻ", "tool_groups": [["get_sop_prep_guide", "decode_recipe_or_sticker", "search_operating_knowledge"]], "evidence_required": true}
+{"id": "V2_30", "category": "sop_recipe", "query": "Thời gian ủ trân châu bao lâu?", "tool_groups": [["get_sop_prep_guide", "decode_recipe_or_sticker", "search_operating_knowledge"]], "evidence_required": true}
+{"id": "V2_31", "category": "weather", "query": "Thời tiết hôm nay thế nào?", "tool_groups": [["get_weather_forecast"]], "statuses": ["SUCCESS", "WEATHER_UNAVAILABLE", "MISSING_EVIDENCE"]}
+{"id": "V2_32", "category": "weather", "query": "Ngày mai có mưa không?", "tool_groups": [["get_weather_forecast"]], "statuses": ["SUCCESS", "WEATHER_UNAVAILABLE", "MISSING_EVIDENCE"]}
+{"id": "V2_33", "category": "weather", "query": "Hôm nay có mưa không?", "tool_groups": [["get_weather_forecast"]], "statuses": ["SUCCESS", "WEATHER_UNAVAILABLE", "MISSING_EVIDENCE"]}
+{"id": "V2_34", "category": "weather", "query": "Thời tiết hôm nay nên chuẩn bị nguyên liệu thế nào?", "tool_groups": [["get_weather_forecast"]], "statuses": ["SUCCESS", "WEATHER_UNAVAILABLE", "MISSING_EVIDENCE"]}
+{"id": "V2_35", "category": "weather", "query": "Dự báo thời tiết ngày mai", "tool_groups": [["get_weather_forecast"]], "statuses": ["SUCCESS", "WEATHER_UNAVAILABLE", "MISSING_EVIDENCE"]}

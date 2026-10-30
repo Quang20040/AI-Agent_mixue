@@ -8,6 +8,7 @@ cách Tuyết Vương Mixue (Snow King).
 
 from typing import Any
 import os
+from src.agent.response_policy import prep_guide_reply
 
 
 class NLPSynthesizer:
@@ -34,6 +35,13 @@ class NLPSynthesizer:
 
         sections: list[str] = []
 
+        if db_results and db_results.get('status') not in (None, 'SUCCESS'):
+            return {'text': db_results.get('message', 'Chưa có dữ liệu phù hợp với yêu cầu này.'),
+                    'tool_called': tool_called, 'status': db_results['status'], 'evidence_refs': []}
+
+        if bom_results and bom_results.get('type') == 'SOP_PREP_GUIDE' and not db_results:
+            return prep_guide_reply(query, bom_results)
+
         # 1. Xử lý dữ liệu từ Database & Doanh thu / Ca trực / Kho
         if db_results and db_results.get("status") == "SUCCESS":
             if "total_revenue" in db_results:
@@ -48,7 +56,7 @@ class NLPSynthesizer:
                 sec = (
                     f"### 📊 Báo Cáo Doanh Thu Bán Hàng ({s_date} đến {e_date})\n\n"
                     f"- **Tổng doanh thu:** **{rev:,.0f} đ**\n"
-                    f"- **Tổng số lượng ly bán ra:** **{cups:,} ly** (Trung bình: **{avg_day:,.0f} đ / ngày**)\n"
+                    f"- **Tổng số lượng ly bán ra:** **{cups:,} ly** ({days} ngày, Trung bình: **{avg_day:,.0f} đ / ngày**)\n"
                     f"- **Giá bán trung bình mỗi ly (AOV):** **{db_results['avg_price_per_cup']:,.0f} đ / ly**\n"
                 )
 
@@ -98,7 +106,7 @@ class NLPSynthesizer:
             elif "matched_rows" in db_results:
                 evidence_refs.append(db_results.get("evidence_ref", "daily_stock_matrix"))
                 rows = db_results["matched_rows"]
-                sec = f"### 📦 Chi Tiết Tồn Kho Mặt Hàng Yêu Cầu\n\n"
+                sec = "### 📦 Chi Tiết Tồn Kho Mặt Hàng Yêu Cầu\n\n"
                 for r in rows:
                     sec += f"**Mặt hàng:** {r.get('Tên mặt hàng (Quy cách)')} (Mã: `{r.get('Mã NL')}`)\n"
                     sec += f"- Tồn đầu kỳ: `{r.get('Tồn T9')}` | Tổng nhập: `{r.get('Tổng nhập')}` | Tổng xuất: `{r.get('Tổng xuất')}`\n"
@@ -150,49 +158,15 @@ class NLPSynthesizer:
                 sections.append(sec)
 
             elif bom_results.get("type") == "SOP_PREP_GUIDE":
-                for ref in bom_results.get("evidence_refs", []):
-                    evidence_refs.append(ref)
-
-                sec = (
-                    f"### 🥣 Hướng Dẫn Nấu & Sơ Chế Chuẩn SOP: {bom_results['name']} (Mã: `{bom_results['code']}`)\n\n"
-                    f"**📖 Định nghĩa & Khái niệm:**\n"
-                    f"> {bom_results['definition']}\n\n"
-                )
-
-                # Bảng định lượng mẻ
-                batches = bom_results.get("batches", {})
-                if batches:
-                    sec += "**⚖️ Bảng Định Lượng Nguyên Liệu Chuẩn Theo Mẻ (Cửa hàng 2132):**\n\n"
-                    sec += "| Quy cách mẻ | Mã NL | Tên thành phần | Lượng chuẩn | Đơn vị | Sản lượng ước tính |\n"
-                    sec += "| :--- | :---: | :--- | :---: | :---: | :---: |\n"
-                    for b_name, items in batches.items():
-                        for it in items:
-                            cups_str = f"~{it['cups']} ly" if it.get("cups") else "Theo mẻ"
-                            sec += f"| **{b_name}** | `{it['ing_id']}` | {it['ing_name']} | **{it['qty']}** | {it['unit']} | {cups_str} |\n"
-                    sec += "\n"
-
-                # Các bước thao tác
-                steps = bom_results.get("steps", [])
-                if steps:
-                    sec += "**⏱️ Quy Trình Thao Tác Nấu & Sơ Chế Từng Bước (SOP Bar):**\n"
-                    for idx, stp in enumerate(steps, 1):
-                        sec += f"{idx}. {stp}\n"
-                    sec += "\n"
-
-                # Bảo quản & Hạn dùng
-                sec += (
-                    f"**🛡️ Quy Định Bảo Quản & Hạn Dùng An Toàn Thực Phẩm:**\n"
-                    f"- **Điều kiện bảo quản:** {bom_results['storage']}\n"
-                    f"- **Hạn sử dụng:** **{bom_results['shelf_life']}**\n"
-                )
-                sections.append(sec)
+                reply = prep_guide_reply(query, bom_results)
+                sections.append(reply['text'])
+                evidence_refs.extend(reply['evidence_refs'])
 
         # 3. Xử lý tri thức trích xuất từ Repo Docs, Báo cáo & Quy chuẩn CSV
-        if docs_results:
-            sec = "### 📚 Tri Thức & Quy Chuẩn Trích Xuất Từ Kho Tài Liệu Repo\n\n"
-            for idx, doc in enumerate(docs_results[:3], 1):
+        if docs_results and not sections:
+            sec = ""
+            for doc in docs_results[:1]:
                 evidence_refs.append(f"file:{doc['file_path']}")
-                sec += f"**{idx}. [{doc['file_path']}] — {doc['title']}**\n\n"
                 content = doc["content"]
                 if content.strip().startswith("|"):
                     # Định dạng bảng Markdown hoàn chỉnh
@@ -206,16 +180,10 @@ class NLPSynthesizer:
                     sec += f"> {clean_snippet}\n\n"
             sections.append(sec)
 
-        # 4. Lời khuyên vận hành của Tuyết Vương
-        advice = (
-            "💡 **Khuyến nghị vận hành từ Tuyết Vương:**\n"
-            "- Luôn tuân thủ nguyên tắc nhập trước xuất trước (FIFO) và kiểm soát nhiệt độ quầy pha chế.\n"
-            "- Các đề xuất về đơn hàng PO hoặc hủy hỏng bắt buộc phải có sự phê duyệt trực tiếp của Quản lý cửa hàng (Maker-Checker)."
-        )
-        sections.append(advice)
-
-        final_text = f"Chào **{user_name}**, Tuyết Vương AI đã lục tìm trên toàn bộ hệ thống (Repo, Docs, Dữ liệu & Database) và tổng hợp câu trả lời chi tiết cho bạn:\n\n"
-        final_text += "\n---\n\n".join(sections)
+        if not sections:
+            return {'text': 'Mình chưa tìm thấy thông tin phù hợp. Bạn nói rõ món hoặc nội dung cần hỏi nhé.',
+                    'tool_called': tool_called, 'evidence_refs': [], 'status': 'NO_DATA'}
+        final_text = "\n\n".join(sections).strip()
 
         # Loại bỏ trùng lặp evidence_refs
         unique_refs = list(dict.fromkeys(evidence_refs))

@@ -10,13 +10,10 @@ Drives Playwright to execute full black-box exploratory and functional tests on 
 - Tests business logic scenarios & negative edge cases
 """
 
-import os
-import sys
 import time
 import json
-import traceback
 from pathlib import Path
-from playwright.sync_api import sync_playwright, Page, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import sync_playwright, Page
 
 BASE_URL = "http://localhost:8501"
 OUTPUT_DIR = Path("blackbox-qa")

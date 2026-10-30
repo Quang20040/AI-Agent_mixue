@@ -1,0 +1,20 @@
+[tool.ruff]
+line-length = 140
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = [
+    "E501",  # line too long
+    "E402",  # module level import not at top of file
+    "E722",  # do not use bare except
+    "E731",  # lambda assignment
+    "F403",  # star imports
+    "F405",  # star import names
+    "W291",  # trailing whitespace
+    "W293",  # blank line whitespace
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

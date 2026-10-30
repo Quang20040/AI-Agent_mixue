@@ -68,6 +68,10 @@ class IndependentPlanValidator:
             # 3. Valid unit
             if unit not in self.ALLOWED_UNITS:
                 violations.append(f"Dòng {idx+1} ({ing_id}): Đơn vị '{unit}' không hợp lệ.")
+            elif unit != self.valid_ingredients[ing_id]:
+                violations.append(f"Dòng {idx+1} ({ing_id}): Đơn vị {unit} không khớp danh mục ({self.valid_ingredients[ing_id]}).")
+            if line.get('batch_yield_is_estimate'):
+                warnings.append(f'Dòng {idx+1} ({ing_id}): Số mẻ dựa trên sản lượng thành phẩm ước lượng, cần đối chiếu thực tế.')
 
             # 4. Batch size multiple
             if batch_size <= 0:

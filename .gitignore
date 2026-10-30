@@ -1,4 +1,5 @@
 .env
+data/shift_photos/uploads/
 .env.*
 !.env.example
 .venv/
@@ -9,10 +10,18 @@ data/staging_private/
 data/processed_private/
 data/quality_reports/
 data/snapshots_private/
+data/agent_private/
+data/weather_private/
+output/agent-review/
 backups/
 node_modules/
 .next/
 *.log
-DU_LIEU_CAN_NHAP/
 BAO_CAO_KIEM_TRA/
+
+# Generated verification sandboxes and runtime locks (reports stay available locally).
+audit-reports/
+output/
+data/*.lock
+data/shift_photos/chat_attachments/
 

@@ -14,8 +14,8 @@ with sync_playwright() as p:
     # Print radio buttons
     radio_labels = page.locator("div[aria-label='Điều hướng'] label").all()
     print("Found navigation labels:", len(radio_labels))
-    for l in radio_labels:
-        print(" - Label:", repr(l.inner_text()))
+    for lbl in radio_labels:
+        print(" - Label:", repr(lbl.inner_text()))
         
     # Try clicking 'Báo cáo & kho'
     print("\nAttempting to click 'Báo cáo & kho'...")

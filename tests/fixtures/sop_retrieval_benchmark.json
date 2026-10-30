@@ -1,0 +1,272 @@
+[
+  {
+    "query_id": "SOP_01",
+    "query": "Cách nấu trân châu nguyên vị",
+    "query_type": "canonical",
+    "expected_codes": ["TP02"],
+    "expected_files": ["09_Cong_thuc_so_che_theo_me.csv", "10_Quy_dinh_bao_quan_theo_anh.csv"],
+    "expected_keywords": ["trân châu", "35 phút", "30 phút", "4 giờ"],
+    "is_negative": false
+  },
+  {
+    "query_id": "SOP_02",
+    "query": "cách nấu chân trâu",
+    "query_type": "synonym",
+    "expected_codes": ["TP02"],
+    "expected_files": ["09_Cong_thuc_so_che_theo_me.csv", "10_Quy_dinh_bao_quan_theo_anh.csv"],
+    "expected_keywords": ["trân châu", "35 phút", "30 phút"],
+    "is_negative": false
+  },
+  {
+    "query_id": "SOP_03",
+    "query": "cach nau tran chau nguyen vi",
+    "query_type": "unaccented",
+    "expected_codes": ["TP02"],
+    "expected_files": ["09_Cong_thuc_so_che_theo_me.csv"],
+    "expected_keywords": ["trân châu", "35 phút"],
+    "is_negative": false
+  },
+  {
+    "query_id": "SOP_04",
+    "query": "nau chan trau duong den",
+    "query_type": "typo",
+    "expected_codes": ["TP02"],
+    "expected_files": ["09_Cong_thuc_so_che_theo_me.csv"],
+    "expected_keywords": ["trân châu", "đường"],
+    "is_negative": false
+  },
+  {
+    "query_id": "SOP_05",
+    "query": "Trân châu đã nấu bảo quản được mấy tiếng?",
+    "query_type": "specific_metric",
+    "expected_codes": ["TP02"],
+    "expected_files": ["10_Quy_dinh_bao_quan_theo_anh.csv", "15_Han_dung_nguyen_lieu_tren_anh.csv"],
+    "expected_keywords": ["4 giờ"],
+    "is_negative": false
+  },
+  {
+    "query_id": "SOP_06",
+    "query": "tran chau de duoc bao lau",
+    "query_type": "unaccented",
+    "expected_codes": ["TP02"],
+    "expected_files": ["10_Quy_dinh_bao_quan_theo_anh.csv"],
+    "expected_keywords": ["4 giờ"],
+    "is_negative": false
+  },
+  {
+    "query_id": "SOP_07",
+    "query": "Cách sơ chế thạch đào và bảo quản",
+    "query_type": "canonical",
+    "expected_codes": ["TP04"],
+    "expected_files": ["09_Cong_thuc_so_che_theo_me.csv", "10_Quy_dinh_bao_quan_theo_anh.csv"],
+    "expected_keywords": ["thạch đào"],
+    "is_negative": false
+  },
+  {
+    "query_id": "SOP_08",
+    "query": "cach lam thach dao va han bao quan",
+    "query_type": "unaccented",
+    "expected_codes": ["TP04"],
+    "expected_files": ["10_Quy_dinh_bao_quan_theo_anh.csv"],
+    "expected_keywords": ["thạch đào"],
+    "is_negative": false
+  },
+  {
+    "query_id": "SOP_09",
+    "query": "Thạch đào để tủ lạnh được bao lâu?",
+    "query_type": "specific_metric",
+    "expected_codes": ["TP04"],
+    "expected_files": ["10_Quy_dinh_bao_quan_theo_anh.csv"],
+    "expected_keywords": ["0+3 ngày", "lạnh"],
+    "is_negative": false
+  },
+  {
+    "query_id": "SOP_10",
+    "query": "Quy trình ủ hồng trà và thời gian bảo quản",
+    "query_type": "canonical",
+    "expected_codes": ["TP08"],
+    "expected_files": ["09_Cong_thuc_so_che_theo_me.csv", "10_Quy_dinh_bao_quan_theo_anh.csv"],
+    "expected_keywords": ["hồng trà"],
+    "is_negative": false
+  },
+  {
+    "query_id": "SOP_11",
+    "query": "u tra den cua quan",
+    "query_type": "synonym",
+    "expected_codes": ["TP08"],
+    "expected_files": ["09_Cong_thuc_so_che_theo_me.csv", "10_Quy_dinh_bao_quan_theo_anh.csv"],
+    "expected_keywords": ["hồng trà"],
+    "is_negative": false
+  },
+  {
+    "query_id": "SOP_12",
+    "query": "Quy trình sơ chế trà xanh ủ lạnh",
+    "query_type": "canonical",
+    "expected_codes": ["TP07"],
+    "expected_files": ["09_Cong_thuc_so_che_theo_me.csv", "10_Quy_dinh_bao_quan_theo_anh.csv"],
+    "expected_keywords": ["trà xanh"],
+    "is_negative": false
+  },
+  {
+    "query_id": "SOP_13",
+    "query": "cach u tra xanh hoa dao",
+    "query_type": "unaccented",
+    "expected_codes": ["TP07"],
+    "expected_files": ["09_Cong_thuc_so_che_theo_me.csv"],
+    "expected_keywords": ["trà xanh"],
+    "is_negative": false
+  },
+  {
+    "query_id": "SOP_14",
+    "query": "Cách nấu thạch đường đen",
+    "query_type": "canonical",
+    "expected_codes": ["TP03"],
+    "expected_files": ["09_Cong_thuc_so_che_theo_me.csv", "10_Quy_dinh_bao_quan_theo_anh.csv"],
+    "expected_keywords": ["thạch đường đen"],
+    "is_negative": false
+  },
+  {
+    "query_id": "SOP_15",
+    "query": "Định lượng 1 mẻ trà sữa lạnh",
+    "query_type": "canonical",
+    "expected_codes": ["TP05"],
+    "expected_files": ["09_Cong_thuc_so_che_theo_me.csv"],
+    "expected_keywords": ["trà sữa lạnh", "TP05"],
+    "is_negative": false
+  },
+  {
+    "query_id": "SOP_16",
+    "query": "dinh luong nua me thach dao",
+    "query_type": "unaccented",
+    "expected_codes": ["TP04"],
+    "expected_files": ["09_Cong_thuc_so_che_theo_me.csv"],
+    "expected_keywords": ["thạch đào", "0.5"],
+    "is_negative": false
+  },
+  {
+    "query_id": "SOP_17",
+    "query": "Quy định giảm đường khi khách gọi thêm 1 phần topping",
+    "query_type": "canonical",
+    "expected_codes": [],
+    "expected_files": ["16_Quy_tac_duong_va_topping.csv"],
+    "expected_keywords": ["70%", "đường", "topping"],
+    "is_negative": false
+  },
+  {
+    "query_id": "SOP_18",
+    "query": "them 2 phan topping thi giam duong the nao",
+    "query_type": "unaccented",
+    "expected_codes": [],
+    "expected_files": ["16_Quy_tac_duong_va_topping.csv"],
+    "expected_keywords": ["50%", "đường"],
+    "is_negative": false
+  },
+  {
+    "query_id": "SOP_19",
+    "query": "Khách gọi thêm tối đa được mấy phần topping?",
+    "query_type": "specific_metric",
+    "expected_codes": [],
+    "expected_files": ["16_Quy_tac_duong_va_topping.csv"],
+    "expected_keywords": ["2 phần"],
+    "is_negative": false
+  },
+  {
+    "query_id": "SOP_20",
+    "query": "Hạn dùng của mứt xoài và mứt đào",
+    "query_type": "specific_metric",
+    "expected_codes": [],
+    "expected_files": ["15_Han_dung_nguyen_lieu_tren_anh.csv"],
+    "expected_keywords": ["12 tháng", "mứt"],
+    "is_negative": false
+  },
+  {
+    "query_id": "SOP_21",
+    "query": "Hạn dùng của syrup đường đen và vỏ ốc quế",
+    "query_type": "specific_metric",
+    "expected_codes": [],
+    "expected_files": ["15_Han_dung_nguyen_lieu_tren_anh.csv"],
+    "expected_keywords": ["9 tháng", "6 tháng"],
+    "is_negative": false
+  },
+  {
+    "query_id": "SOP_22",
+    "query": "han dung la tra xanh va la hong tra",
+    "query_type": "unaccented",
+    "expected_codes": [],
+    "expected_files": ["15_Han_dung_nguyen_lieu_tren_anh.csv"],
+    "expected_keywords": ["18 tháng"],
+    "is_negative": false
+  },
+  {
+    "query_id": "SOP_23",
+    "query": "Thời gian ủ và nấu trân châu theo ảnh ANH_08",
+    "query_type": "canonical",
+    "expected_codes": ["TP02"],
+    "expected_files": ["13_Thoi_gian_so_che_theo_anh.csv", "09_Cong_thuc_so_che_theo_me.csv"],
+    "expected_keywords": ["35 phút", "30 phút", "10 phút"],
+    "is_negative": false
+  },
+  {
+    "query_id": "SOP_24",
+    "query": "thoi gian so che thach dao",
+    "query_type": "unaccented",
+    "expected_codes": ["TP04"],
+    "expected_files": ["13_Thoi_gian_so_che_theo_anh.csv"],
+    "expected_keywords": ["thạch đào"],
+    "is_negative": false
+  },
+  {
+    "query_id": "SOP_25",
+    "query": "Cách làm bánh bao nhân thịt Mixue",
+    "query_type": "negative",
+    "expected_codes": [],
+    "expected_files": [],
+    "expected_keywords": [],
+    "is_negative": true
+  },
+  {
+    "query_id": "SOP_26",
+    "query": "Công thức trà sữa sầu riêng musang king",
+    "query_type": "negative",
+    "expected_codes": [],
+    "expected_files": [],
+    "expected_keywords": [],
+    "is_negative": true
+  },
+  {
+    "query_id": "SOP_27",
+    "query": "Cách nấu topping KHONG_TON_TAI_999",
+    "query_type": "negative",
+    "expected_codes": [],
+    "expected_files": [],
+    "expected_keywords": [],
+    "is_negative": true
+  },
+  {
+    "query_id": "SOP_28",
+    "query": "quy trinh chien ga ran kfc tai quay",
+    "query_type": "negative",
+    "expected_codes": [],
+    "expected_files": [],
+    "expected_keywords": [],
+    "is_negative": true
+  },
+  {
+    "query_id": "SOP_29",
+    "query": "Công thức nấu lẩu thái tomyum Mixue",
+    "query_type": "negative",
+    "expected_codes": [],
+    "expected_files": [],
+    "expected_keywords": [],
+    "is_negative": true
+  },
+  {
+    "query_id": "SOP_30",
+    "query": "Định lượng pizza phô mai xúc xích",
+    "query_type": "negative",
+    "expected_codes": [],
+    "expected_files": [],
+    "expected_keywords": [],
+    "is_negative": true
+  }
+]

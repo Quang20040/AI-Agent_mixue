@@ -10,11 +10,8 @@ Drives Playwright to execute end-to-end black-box exploratory and functional tes
 - Tests business logic scenarios & negative edge cases
 """
 
-import os
-import sys
 import time
 import json
-import traceback
 from pathlib import Path
 from playwright.sync_api import sync_playwright, Page
 

@@ -12,19 +12,26 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from datetime import date, timedelta
+import time
+from datetime import date, datetime, timedelta
 from typing import Any
 
 import numpy as np
 import pandas as pd
 
 from src.database import SessionLocal
+from src.engine.contextual_forecast import contextual_adjustment
+from src.engine.weather import VN, WeatherClient, WeatherSettings, WeatherUnavailable
+from src.engine.weather_advice import weather_preparation_advice
 from src.models import MenuItem, SalesDaily
+from src.runtime_settings import resolve_store_id
 
 
 class ForecastingEngine:
-    def __init__(self, db_session=None):
+    def __init__(self, db_session=None, *, weather_client=None):
         self.db = db_session or SessionLocal()
+        self.weather_client = weather_client
+        self.store_id = resolve_store_id(self.db, (weather_client.settings if weather_client else WeatherSettings.from_env()).store_id or None)
         self._load_sales_data()
 
     def close(self):
@@ -37,17 +44,28 @@ class ForecastingEngine:
             SalesDaily.business_date,
             SalesDaily.sku_id,
             MenuItem.sku_name,
-            SalesDaily.quantity_sold
-        ).join(MenuItem, SalesDaily.sku_id == MenuItem.sku_id).order_by(SalesDaily.business_date).all()
+            SalesDaily.quantity_sold,
+            SalesDaily.revenue_vnd
+        ).join(MenuItem, SalesDaily.sku_id == MenuItem.sku_id).filter(SalesDaily.store_id == self.store_id).order_by(SalesDaily.business_date).all()
 
         if not records:
-            self.df = pd.DataFrame(columns=["business_date", "sku_id", "sku_name", "quantity_sold"])
+            self.df = pd.DataFrame(columns=["business_date", "sku_id", "sku_name", "quantity_sold", "revenue_vnd"])
             self.dates = []
             self.skus = []
+            self._sku_series = {}
+            self._forecast_cache = {}
+            self._backtest_cache = {}
             return
 
-        self.df = pd.DataFrame(records, columns=["business_date", "sku_id", "sku_name", "quantity_sold"])
+        self.df = pd.DataFrame(records, columns=["business_date", "sku_id", "sku_name", "quantity_sold", "revenue_vnd"])
+        self.df['revenue_vnd'] = self.df['revenue_vnd'].astype(float)
         self.df["business_date"] = pd.to_datetime(self.df["business_date"]).dt.date
+        version = int(pd.util.hash_pandas_object(self.df, index=True).sum())
+        if version != getattr(self, '_data_version', None):
+            self._forecast_cache = {}
+            self._backtest_cache = {}
+        self._data_version = version
+        self._actuals = {(row.sku_id, row.business_date): row.quantity_sold for row in self.df.itertuples()}
         self.dates = sorted(self.df["business_date"].unique())
         self.skus = sorted(self.df["sku_id"].unique())
         self._sku_series = {}
@@ -99,9 +117,10 @@ class ForecastingEngine:
         recent_matches = matches[-weeks:]
         return float(np.mean(recent_matches))
 
-    def predict_sku_single(self, sku_id: str, target_date: date, model: str = "day_of_week_ma") -> dict[str, Any]:
+    def predict_sku_single(self, sku_id: str, target_date: date, model: str = "day_of_week_ma", cutoff_date=None) -> dict[str, Any]:
         """Predicts sales for one SKU on target_date."""
-        history = self.get_sku_history(sku_id, up_to_date=target_date - timedelta(days=1))
+        cutoff = min(target_date - timedelta(days=1), cutoff_date) if cutoff_date else target_date - timedelta(days=1)
+        history = self.get_sku_history(sku_id, up_to_date=cutoff)
         
         if history.empty:
             return {
@@ -142,7 +161,7 @@ class ForecastingEngine:
 
     # --- ROLLING-ORIGIN BACKTESTING ---
 
-    def run_backtest(self, start_eval_day: int = 15) -> dict[str, Any]:
+    def run_backtest(self, start_eval_day: int = 15, as_of=None) -> dict[str, Any]:
         """Runs rolling-origin 1-day ahead backtest for all models across days 15..end.
         
         Calculates:
@@ -152,13 +171,15 @@ class ForecastingEngine:
         """
         if not hasattr(self, "_backtest_cache"):
             self._backtest_cache = {}
-        if start_eval_day in self._backtest_cache:
-            return self._backtest_cache[start_eval_day]
+        cache_key = (start_eval_day, as_of)
+        if cache_key in self._backtest_cache:
+            return self._backtest_cache[cache_key]
 
-        if len(self.dates) <= start_eval_day:
+        available_dates = [d for d in self.dates if as_of is None or d <= as_of]
+        if len(available_dates) <= start_eval_day:
             return {"error": "Insufficient history for backtest"}
 
-        eval_dates = self.dates[start_eval_day:]
+        eval_dates = available_dates[start_eval_day:]
         models = ["seasonal_naive", "moving_average", "day_of_week_ma"]
 
         results = {m: {"actuals": [], "preds": [], "errors": []} for m in models}
@@ -167,8 +188,7 @@ class ForecastingEngine:
         for d in eval_dates:
             for sku in self.skus:
                 hist = self.get_sku_history(sku, up_to_date=d - timedelta(days=1))
-                act_row = self.df[(self.df["business_date"] == d) & (self.df["sku_id"] == sku)]
-                actual = float(act_row["quantity_sold"].iloc[0]) if not act_row.empty else 0.0
+                actual = float(self._actuals.get((sku, d), 0.0))
 
                 for m in models:
                     if m == "seasonal_naive":
@@ -216,7 +236,7 @@ class ForecastingEngine:
             "best_model": best_model,
             "per_sku_metrics": self._summarize_per_sku_metrics(per_sku_results, models)
         }
-        self._backtest_cache[start_eval_day] = res
+        self._backtest_cache[cache_key] = res
         return res
 
     def _summarize_per_sku_metrics(self, per_sku_results: dict, models: list) -> list[dict[str, Any]]:
@@ -240,19 +260,25 @@ class ForecastingEngine:
         
         If model == 'auto', selects the model with lowest WAPE from backtest.
         """
-        if not hasattr(self, "_forecast_cache"):
-            self._forecast_cache = {}
-        cache_key = (str(target_date), horizon_days, model)
+        if not 1 <= horizon_days <= 7:
+            raise ValueError('horizon_days must be between 1 and 7')
+        self._load_sales_data()
+        client = self.weather_client or WeatherClient()
+        cache_key = (str(target_date), horizon_days, model, client.settings, int(time.time() // 3600))
         if cache_key in self._forecast_cache:
             return self._forecast_cache[cache_key].copy()
 
         if not target_date:
-            last_date = self.dates[-1] if self.dates else date.today()
-            target_date = last_date + timedelta(days=1)
+            target_date = datetime.now(VN).date() + timedelta(days=1)
+        cutoff = target_date - timedelta(days=1)
+        if not any(day <= cutoff for day in self.dates):
+            empty = pd.DataFrame(columns=['target_date', 'sku_id', 'sku_name', 'predicted_qty', 'lower_bound', 'upper_bound', 'model_used', 'confidence'])
+            empty.attrs['forecast_context'] = {'status': 'NO_SALES', 'warnings': ['Chưa có lịch sử trước ngày cần dự báo.']}
+            return empty
 
         selected_model = model
         if model == "auto":
-            bt = self.run_backtest(start_eval_day=15)
+            bt = self.run_backtest(start_eval_day=15, as_of=cutoff)
             selected_model = bt.get("best_model", "day_of_week_ma")
 
         sku_names = dict(self.df[["sku_id", "sku_name"]].drop_duplicates().values)
@@ -261,7 +287,7 @@ class ForecastingEngine:
         for day_offset in range(horizon_days):
             current_target = target_date + timedelta(days=day_offset)
             for sku in self.skus:
-                res = self.predict_sku_single(sku, current_target, model=selected_model)
+                res = self.predict_sku_single(sku, current_target, model=selected_model, cutoff_date=cutoff)
                 forecast_rows.append({
                     "target_date": current_target,
                     "sku_id": sku,
@@ -274,8 +300,76 @@ class ForecastingEngine:
                 })
 
         df_res = pd.DataFrame(forecast_rows)
+        if df_res.empty:
+            df_res.attrs['forecast_context'] = {'status': 'NO_SALES', 'warnings': ['Chưa có dữ liệu bán hàng.']}
+            return df_res
+        df_res['baseline_qty'] = df_res['predicted_qty']
+        context = self._apply_context(df_res, target_date, cutoff, client, model)
+        df_res.attrs['forecast_context'] = context
         self._forecast_cache[cache_key] = df_res.copy()
         return df_res
+
+    def _total_baseline(self, day, requested_model):
+        selected = requested_model
+        if selected == 'auto':
+            selected = self.run_backtest(as_of=day - timedelta(days=1)).get('best_model', 'day_of_week_ma')
+        functions = {'seasonal_naive': lambda h: self.predict_seasonal_naive(h, day),
+                     'moving_average': self.predict_moving_average,
+                     'day_of_week_ma': lambda h: self.predict_day_of_week_ma(h, day)}
+        return sum(functions[selected](self.get_sku_history(sku, day - timedelta(days=1))) for sku in self.skus)
+
+    def _apply_context(self, frame, target, cutoff, client, model):
+        cfg = client.settings
+        before = self.df[self.df['business_date'] <= cutoff]
+        latest = max(before['business_date']) if not before.empty else None
+        metadata = {'status': 'DISABLED' if not cfg.enabled else 'PENDING',
+                    'as_of_sales_date': str(latest) if latest else None, 'target_date': str(target),
+                    'location': cfg.location_label, 'opening_hours': f'{cfg.opening_hour:02d}:00–{cfg.closing_hour:02d}:00',
+                    'warnings': [], 'days': [], 'source_refs': ['table:sales_daily']}
+        previous_rows = before[before['business_date'] == cutoff]
+        metadata['previous_sales'] = ({'date': str(cutoff), 'cups': float(previous_rows['quantity_sold'].sum()),
+                                       'revenue': float(previous_rows['revenue_vnd'].sum())} if not previous_rows.empty else None)
+        if latest and latest < cutoff:
+            metadata['warnings'].append(f'Chưa có doanh số ngày {cutoff}; ngày gần nhất là {latest}.')
+        if not cfg.enabled or before.empty:
+            metadata['warnings'].append('Chưa điều chỉnh theo thời tiết.' if not cfg.enabled else 'Không có lịch sử trước ngày cần dự báo.')
+            return metadata
+        start = max(min(before['business_date']), cutoff - timedelta(days=100))
+        try:
+            history = client.history(start, cutoff)
+            if target < datetime.now(VN).date():
+                target_weather = client.history(target, target)['anticipated'].get(target)
+                retrieved_at = history['fetched_at']
+            else:
+                live = client.forecast(target, target)
+                target_weather = live['days'].get(target)
+                retrieved_at = live['fetched_at']
+            mask = frame['target_date'] == target
+            total = float(frame.loc[mask, 'baseline_qty'].sum())
+            adjustment = contextual_adjustment(before, target, history, target_weather, total,
+                                                lambda day: self._total_baseline(day, model))
+            factor = adjustment['factor']
+            for column in ['predicted_qty', 'lower_bound', 'upper_bound']:
+                frame.loc[mask, column] = (frame.loc[mask, column] * factor).round(1)
+            if factor != 1:
+                frame.loc[mask, 'model_used'] = frame.loc[mask, 'model_used'] + '+' + adjustment['status'].lower()
+            frame.loc[mask, 'confidence'] = 'LOW' if adjustment['status'] not in {'WEATHER_VALIDATED', 'SALES_CONTEXT_ONLY'} else 'MEDIUM'
+            metadata.update(status=adjustment['status'], retrieved_at=retrieved_at, days=[{'target_date': str(target), **adjustment}],
+                            comparison={'previous_date': str(cutoff), 'previous_weather_estimate': history['reference'].get(cutoff),
+                                        'target_weather_forecast': target_weather},
+                            source_refs=['table:sales_daily', 'weather:Open-Meteo_ECMWF_IFS'])
+            if adjustment['status'] != 'WEATHER_VALIDATED':
+                metadata['warnings'].append('Chưa chứng minh được thời tiết cải thiện dự báo; không tự đặt hệ số giảm khi mưa.')
+            if len(frame['target_date'].unique()) > 1:
+                metadata['warnings'].append('Chỉ ngày đầu có đủ dữ liệu doanh số liền trước để xét mô hình bối cảnh; các ngày sau dùng dự báo nền.')
+        except (WeatherUnavailable, ValueError, KeyError, np.linalg.LinAlgError):
+            metadata['status'] = 'WEATHER_UNAVAILABLE'
+            metadata['warnings'].append('Chưa lấy được thời tiết hợp lệ; giữ dự báo nền, không giả định trời nắng hay mưa.')
+            frame['confidence'] = 'LOW'
+        advice = weather_preparation_advice(metadata)
+        if advice:
+            metadata['operational_advice'] = advice
+        return metadata
 
 
 if __name__ == "__main__":

@@ -126,7 +126,7 @@ def test_daily_stock_matrix_and_export():
         ingredient_id="1",
         movement_type="OUT",
         quantity=1.0,
-        recorded_by="admin",
+        recorded_by="quanly",
         notes="Khui ốc quế quầy bar"
     )
     assert res["status"] == "SUCCESS"

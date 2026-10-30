@@ -70,24 +70,5 @@
     "status": "APPROVED",
     "created_by": "an_quanly",
     "updated_at": "2026-10-15T05:02:41.815526"
-  },
-  {
-    "shift_id": "SHIFT_TEST_REGRESSION_P3",
-    "date": "2026-10-15",
-    "shift_type": "CA_CHIEU",
-    "leader": "TestLeader",
-    "signed_by": "TestLeader",
-    "total_revenue": 5000000,
-    "pos_collected_vnd": 4950000,
-    "cash_collected_vnd": 3000000,
-    "banking_transfer_vnd": 1950000,
-    "variance_pos_vnd": -50000,
-    "reconciliation_status": "KHỚP LỆCH NHẸ",
-    "status": "APPROVED",
-    "id": "SHIFT_20261015_CA_SANG_fc5831",
-    "created_at": "2026-10-15T20:52:00.377749",
-    "updated_at": "2026-10-15T20:52:00.377749",
-    "total_collected_vnd": 0.0,
-    "notes": "Đã duyệt bởi Quản lý"
   }
 ]

@@ -78,28 +78,13 @@ def test_shift_reports_seed_and_closing_summary():
 
 
 def test_shift_ai_ocr_extraction():
-    """Kiểm tra AI OCR trích xuất chính xác cấu trúc trường từ ảnh chụp sổ và POS."""
-    # 1. Trích xuất ca sáng
-    ext_sang = extract_shift_data_from_image(
-        image_path=str(SHIFT_PHOTOS_DIR / "20261014_ca_sang_chieu.jpg"),
-        shift_hint="CA_SANG",
-        target_date="2026-10-14"
-    )
-    assert ext_sang["cash_vnd"] == 653000
-    assert ext_sang["bank_transfer_vnd"] == 1591000
-    assert ext_sang["signed_by"] == "Hà"
-    assert ext_sang["total_collected_vnd"] == 2328000
-
-    # 2. Trích xuất ca tối tổng hợp cả ngày
-    ext_toi = extract_shift_data_from_image(
-        image_path=str(SHIFT_PHOTOS_DIR / "20261014_ca_toi_tong_ket.jpg"),
-        shift_hint="CA_TOI",
-        target_date="2026-10-14"
-    )
-    assert ext_toi["cash_vnd"] == 3260000
-    assert ext_toi["expenses_vnd"] == 56000
-    assert ext_toi["total_collected_vnd"] == 9877000
-    assert ext_toi["signed_by"] == "An"
+    """A disabled vision API must never return the old hardcoded sample figures."""
+    result = extract_shift_data_from_image(
+        image_path=str(SHIFT_PHOTOS_DIR / '20261014_ca_sang_chieu.jpg'),
+        shift_hint='CA_SANG', target_date='2026-10-14')
+    assert result['status'] == 'OCR_DISABLED'
+    assert 'cash_vnd' not in result
+    assert 'confidence_score' not in result
 
 
 def test_agent_targeted_shift_revenue_qa(agent):

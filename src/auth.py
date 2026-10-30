@@ -14,11 +14,13 @@ Phân quyền 2 cấp độ:
 
 import hashlib
 import re
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from src.database import Base, SessionLocal, engine
-from src.models import User
+from src.models import LoginThrottle, User
+from src.runtime_settings import demo_enabled
+from sqlalchemy import case, update
 
 # Đảm bảo bảng người dùng luôn tồn tại trong DB
 Base.metadata.create_all(bind=engine)
@@ -124,6 +126,8 @@ def _get_role_metadata(role: str) -> dict[str, str]:
 
 def init_db_users():
     """Khởi tạo các tài khoản chuẩn chi nhánh Mixue 39 Tôn Quang Phiệt nếu cơ sở dữ liệu chưa có."""
+    if not demo_enabled():
+        return
     db = SessionLocal()
     try:
         count = db.query(User).count()
@@ -193,21 +197,38 @@ def verify_user(username: str, password: str) -> dict[str, Any] | None:
         return None
     clean_user = username.strip().lower()
     clean_pass = password.strip()
+    aliases = {'owner': 'chucuahang', 'manager': 'quanly', 'staff': 'nhanvien'}
+    clean_user = aliases.get(clean_user, clean_user)
+    if len(clean_user) > 50:
+        return None
 
     db = SessionLocal()
     try:
-        user = db.query(User).filter(User.username == clean_user, User.is_active == True).first()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        throttle = db.get(LoginThrottle, clean_user)
+        if throttle and throttle.blocked_until and throttle.blocked_until > now:
+            return None
+        if throttle and (throttle.blocked_until or now - throttle.last_attempt_at > timedelta(minutes=5)):
+            throttle.failed_attempts = 0
+            throttle.blocked_until = None
+            db.commit()
+        user = db.query(User).filter(User.username == clean_user, User.is_active).first()
         if not user:
             # Fallback tài khoản bí danh cũ nếu có
             alias_map = {"owner": "chucuahang", "manager": "quanly", "staff": "nhanvien"}
             if clean_user in alias_map:
-                user = db.query(User).filter(User.username == alias_map[clean_user], User.is_active == True).first()
+                user = db.query(User).filter(User.username == alias_map[clean_user], User.is_active).first()
 
-        if not user:
-            return None
-
-        valid = check_password(clean_pass, user.password_hash)
+        valid = bool(user and check_password(clean_pass, user.password_hash))
+        if user and normalize_role(user.role) not in {'ADMIN', 'MANAGER', 'OWNER', 'STAFF_OFFICIAL', 'STAFF_PROBATION'}:
+            valid = False
+        # Previously seeded demo credentials remain disabled outside explicit demo.
+        if not demo_enabled() and clean_pass in {'123', '123456'}:
+            valid = False
         if valid:
+            if throttle:
+                db.delete(throttle)
+                db.commit()
             # Tự động nâng cấp hash mật khẩu cũ sang chuẩn PBKDF2 nếu chưa nâng cấp
             if not user.password_hash.startswith("pbkdf2_"):
                 try:
@@ -228,6 +249,19 @@ def verify_user(username: str, password: str) -> dict[str, Any] | None:
                 "must_change_password": bool(user.must_change_password),
                 "is_active": bool(user.is_active)
             }
+        dialect = db.get_bind().dialect.name
+        if dialect == 'postgresql':
+            from sqlalchemy.dialects.postgresql import insert
+        else:
+            from sqlalchemy.dialects.sqlite import insert
+        db.execute(insert(LoginThrottle).values(username=clean_user, failed_attempts=0, last_attempt_at=now)
+                   .on_conflict_do_nothing(index_elements=['username']))
+        db.execute(update(LoginThrottle).where(LoginThrottle.username == clean_user).values(
+            failed_attempts=LoginThrottle.failed_attempts + 1,
+            last_attempt_at=now,
+            blocked_until=case((LoginThrottle.failed_attempts + 1 >= 8, now + timedelta(seconds=60)),
+                               else_=LoginThrottle.blocked_until)))
+        db.commit()
         return None
     finally:
         db.close()
@@ -259,7 +293,9 @@ def get_allowed_pages(role: str) -> list[str]:
         return ADMIN_PAGES
     if r in ("STAFF_PROBATION", "PROBATION", "TRAINEE"):
         return STAFF_PROBATION_PAGES
-    return STAFF_OFFICIAL_PAGES
+    if normalize_role(r) == 'STAFF_OFFICIAL':
+        return STAFF_OFFICIAL_PAGES
+    return []
 
 
 def can_manage_inventory(role: str) -> bool:
@@ -281,8 +317,10 @@ def change_user_password(username: str, old_password: str, new_password: str) ->
     clean_new = new_password.strip()
 
     # Kiểm tra quy tắc 6 chữ số
-    if not re.match(r"^\d{6}$", clean_new):
+    if demo_enabled() and not re.match(r"^\d{6}$", clean_new):
         return False, "Mật khẩu mới không hợp lệ! Mật khẩu phải bao gồm đúng 6 chữ số (ví dụ: 686868, 112233)."
+    if not demo_enabled() and not 12 <= len(clean_new) <= 128:
+        return False, 'Mật khẩu mới phải có từ 12 đến 128 ký tự.'
 
     if clean_new == "123456":
         return False, "Mật khẩu mới không được trùng với mật khẩu mặc định 123456! Vui lòng chọn 6 chữ số khác."
@@ -295,9 +333,6 @@ def change_user_password(username: str, old_password: str, new_password: str) ->
 
         # Xác thực mật khẩu cũ
         valid_old = check_password(clean_old, user.password_hash)
-        if not valid_old and is_admin_role(user.role) and clean_old in ("123", "mixue2132"):
-            valid_old = True
-
         if not valid_old:
             return False, "Mật khẩu hiện tại không chính xác!"
 
@@ -306,7 +341,7 @@ def change_user_password(username: str, old_password: str, new_password: str) ->
         user.must_change_password = False
         user.updated_at = datetime.now()
         db.commit()
-        return True, "Đổi mật khẩu thành công! Mật khẩu mới gồm 6 chữ số đã được kích hoạt."
+        return True, 'Đổi mật khẩu thành công!'
     except Exception as e:
         db.rollback()
         return False, f"Lỗi hệ thống khi cập nhật mật khẩu: {e!s}"
@@ -339,9 +374,10 @@ def create_employee(admin_username: str, username: str, full_name: str, phone: s
         if exists:
             return False, f"Tên đăng nhập '{clean_user}' đã tồn tại trong hệ thống. Vui lòng chọn tên khác!"
 
+        temporary_password = '123456' if demo_enabled() else secrets.token_urlsafe(16)
         new_emp = User(
             username=clean_user,
-            password_hash=hash_password("123456"),
+            password_hash=hash_password(temporary_password),
             full_name=clean_name,
             phone=clean_phone,
             role=clean_role,
@@ -351,7 +387,7 @@ def create_employee(admin_username: str, username: str, full_name: str, phone: s
         )
         db.add(new_emp)
         db.commit()
-        return True, f"Tạo tài khoản nhân viên '{clean_user}' thành công! Mật khẩu mặc định: 123456 (Bắt buộc đổi khi đăng nhập)."
+        return True, f"Tạo tài khoản nhân viên '{clean_user}' thành công! Mật khẩu tạm: {temporary_password} (Bắt buộc đổi khi đăng nhập)."
     except Exception as e:
         db.rollback()
         return False, f"Lỗi cơ sở dữ liệu khi tạo nhân viên: {e!s}"
@@ -372,11 +408,12 @@ def reset_employee_password(admin_username: str, target_username: str) -> tuple[
         if not user:
             return False, f"Không tìm thấy tài khoản nhân viên '{clean_target}'."
 
-        user.password_hash = hash_password("123456")
+        temporary_password = '123456' if demo_enabled() else secrets.token_urlsafe(16)
+        user.password_hash = hash_password(temporary_password)
         user.must_change_password = True
         user.updated_at = datetime.now()
         db.commit()
-        return True, f"Đã reset mật khẩu của nhân viên '{user.full_name}' ({clean_target}) về mặc định: 123456. Nhân viên bắt buộc phải đổi mật khẩu gồm 6 chữ số khi đăng nhập lại."
+        return True, f"Đã reset mật khẩu của '{clean_target}'. Mật khẩu tạm: {temporary_password}. Bắt buộc đổi khi đăng nhập lại."
     except Exception as e:
         db.rollback()
         return False, f"Lỗi cơ sở dữ liệu khi reset mật khẩu: {e!s}"
@@ -425,7 +462,7 @@ def update_employee(admin_username: str, target_username: str, full_name: str, p
         if user.username == actor.username and (not is_active or not is_admin_role(clean_role)):
             return False, "Không thể tự khóa hoặc hạ quyền tài khoản đang sử dụng."
         if user.is_active and is_admin_role(user.role) and (not is_active or not is_admin_role(clean_role)):
-            other_admins = [u for u in db.query(User).filter(User.is_active == True).all()
+            other_admins = [u for u in db.query(User).filter(User.is_active).all()
                             if u.username != user.username and is_admin_role(u.role)]
             if not other_admins:
                 return False, "Phải giữ lại ít nhất một quản lý đang hoạt động."

@@ -75,6 +75,16 @@ SEMI_PRODUCT_SOP_INFO = {
         "definition": "Topping cốt lõi đặc trưng của Mixue được chế biến từ hạt trân châu đen sống (mã nguyên liệu kho: 12), qua quy trình luộc sôi - ủ nóng nở dẻo và ủ ngâm đường mật để hạt trân châu đạt độ bóng mịn, dẻo mềm bên ngoài và dai giòn đàn hồi bên trong.",
         "storage": "Đậy nắp kín, bảo quản ở nhiệt độ phòng (nhiệt độ thường quầy bar, tránh gió quạt hoặc điều hòa thổi trực tiếp).",
         "shelf_life": "4 giờ (Sau 4 tiếng trân châu bị lại gạo chai cứng, bắt buộc phải đổ bỏ hủy mẻ, tuyệt đối không bảo quản trong tủ lạnh hoặc tái sử dụng qua ngày).",
+        "brief_storage": "Đậy kín ở nhiệt độ phòng, tránh gió thổi trực tiếp.",
+        "brief_shelf_life": "4 giờ. Hết hạn phải bỏ; không bảo quản trong tủ lạnh hoặc dùng qua ngày.",
+        "brief_steps": [
+            "Đun sôi lượng nước theo cỡ mẻ đã chọn.",
+            "Cho trân châu từ từ vào, khuấy một chiều sát đáy để không dính nồi.",
+            "Nấu sôi trên lửa vừa **35 phút**, đảo nhẹ mỗi 5–7 phút.",
+            "Tắt bếp, đậy kín nắp và ủ **30 phút**.",
+            "Vớt ra, xả nhẹ bằng **2.000 ml nước lọc nguội**, để ráo.",
+            "Trộn với lượng đường mật của mẻ, ủ **10 phút**."
+        ],
         "steps": [
             "Đun sôi nước sạch theo tỷ lệ quy chuẩn trong nồi nấu trân châu (4,000 ml nước cho 1 mẻ tiêu chuẩn 1,000 g trân châu; 3,000 ml nước cho nửa mẻ 500 g).",
             "Khi nước sôi bùng, từ từ rải đều trân châu đen vào nồi, dùng vá khuấy đều một chiều liên tục chạm đáy nồi để các hạt không bị dính vào nhau hoặc bén đáy.",
@@ -195,6 +205,18 @@ SEMI_PRODUCT_SOP_INFO = {
             "Khuấy lại 2 lần trước khi rót vào khoang chứa của máy làm kem để kem đạt kết cấu xốp mịn hoàn hảo."
         ],
         "keywords": ["kem tuoi", "kem oc que", "bot kem", "hon hop kem", "pha kem", "tp11", "tp01"]
+    },
+    "NL07": {
+        "code": "NL07",
+        "name": "Thạch dừa dùng pha món (Nata de Coco)",
+        "definition": "Topping thạch dừa giòn sần sật dùng trực tiếp cho các món trà trái cây và trà sữa Mixue.",
+        "storage": "Đậy kín nắp khay tại quầy bar hoặc bảo quản lạnh trong tủ mát sau khi mở túi.",
+        "shelf_life": "Đổ bỏ cuối ngày đối với phần đã múc ra khay quầy bar (không để qua đêm ngoài quầy); phần trong hộp đậy kín bảo quản tủ mát tối đa 0+3 ngày.",
+        "steps": [
+            "Cắt túi thạch dừa, đổ cả phần cái và nước đường ngâm vào hộp/khay chuyên dụng sạch sẽ.",
+            "Dùng vá lỗ chuyên dụng khi múc định lượng vào cốc để không làm lệch lượng đường của món."
+        ],
+        "keywords": ["thach dua", "nata de coco", "nl07"]
     }
 }
 
@@ -450,8 +472,11 @@ class OperationsBOMAgent:
             "definition": matched_info["definition"],
             "batches": batches,
             "steps": matched_info["steps"],
+            "brief_steps": matched_info.get("brief_steps", matched_info["steps"]),
             "storage": matched_info["storage"],
+            "brief_storage": matched_info.get("brief_storage", matched_info["storage"]),
             "shelf_life": matched_info["shelf_life"],
+            "brief_shelf_life": matched_info.get("brief_shelf_life", matched_info["shelf_life"]),
             "evidence_refs": [
                 "file:DU_LIEU_CAN_NHAP/09_Cong_thuc_so_che_theo_me.csv",
                 "file:DU_LIEU_CAN_NHAP/13_Thoi_gian_so_che_theo_anh.csv",

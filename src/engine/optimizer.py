@@ -5,6 +5,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 import math
 from datetime import date
+from src.engine.weather import VN
+from datetime import datetime
 from typing import Any
 
 import pandas as pd
@@ -17,14 +19,18 @@ from src.models import (
     StockCount,
 )
 
-# Standard Batch Sizes for Prepared Toppings / Semi-finished Products
+# Provisional finished-output yields, not official recipe input quantities.
+# The user authorized estimates until drained-output measurements are available.
 TOPPING_BATCH_CONFIG = {
-    "TP02": {"name": "Hồng trà lạnh", "batch_size": 5000.0, "unit": "ml", "shelf_life": "4 giờ / Đổ bỏ cuối ngày"},
-    "TP03": {"name": "Trà xanh lạnh", "batch_size": 5000.0, "unit": "ml", "shelf_life": "4 giờ / Đổ bỏ cuối ngày"},
-    "TP04": {"name": "Trà sữa lạnh", "batch_size": 5000.0, "unit": "ml", "shelf_life": "Đổ bỏ cuối ngày"},
-    "NL06": {"name": "Trân châu nguyên vị", "batch_size": 1000.0, "unit": "g", "shelf_life": "4 giờ"},
-    "NL07": {"name": "Thạch dừa", "batch_size": 1000.0, "unit": "g", "shelf_life": "Đổ bỏ cuối ngày"},
-    "NL08": {"name": "Thạch đường đen", "batch_size": 1000.0, "unit": "g", "shelf_life": "Đổ bỏ cuối ngày"},
+    "TP02": {"name": "Trân châu nguyên vị đã nấu", "batch_size": 2000.0, "unit": "g", "shelf_life": "4 giờ theo hướng dẫn trân châu", "raw_batch_g": 1000.0, "yield_low": 1500.0, "yield_high": 2500.0},
+    "TP03": {"name": "Thạch đường đen đã chế biến", "batch_size": 1000.0, "unit": "g", "shelf_life": "Xem SOP đúng nguyên liệu"},
+    "TP04": {"name": "Thạch đào đã chế biến", "batch_size": 1000.0, "unit": "g", "shelf_life": "Xem SOP đúng nguyên liệu"},
+    "TP05": {"name": "Trà sữa lạnh đã pha", "batch_size": 5000.0, "unit": "ml", "shelf_life": "Xem SOP đúng nguyên liệu"},
+    "TP07": {"name": "Trà xanh đã ủ", "batch_size": 2500.0, "unit": "ml", "shelf_life": "Xem SOP đúng nguyên liệu"},
+    "TP08": {"name": "Hồng trà đã ủ", "batch_size": 2500.0, "unit": "ml", "shelf_life": "Xem SOP đúng nguyên liệu"},
+    "NL06": {"name": "Trân châu trắng", "batch_size": 1000.0, "unit": "g", "shelf_life": "Theo nhãn/SOP sản phẩm; không coi là trân châu đen cần luộc"},
+    "NL07": {"name": "Thạch dừa dùng pha món", "batch_size": 1000.0, "unit": "g", "shelf_life": "Xem SOP đúng nguyên liệu"},
+    "NL08": {"name": "Lô hội dùng pha món", "batch_size": 1000.0, "unit": "g", "shelf_life": "Xem SOP đúng nguyên liệu"},
 }
 
 # Standard Pack Sizes fallback
@@ -122,14 +128,21 @@ class OptimizerEngine:
             Ingredient.ingredient_group,
             RecipeBOM.quantity_per_item,
             RecipeBOM.unit
-        ).join(Ingredient, RecipeBOM.ingredient_id == Ingredient.ingredient_id).all()
+            , RecipeBOM.effective_from, RecipeBOM.effective_to
+        ).join(Ingredient, RecipeBOM.ingredient_id == Ingredient.ingredient_id).filter(RecipeBOM.is_optional.is_(False)).all()
 
         bom_df = pd.DataFrame(boms, columns=[
-            "sku_id", "ingredient_id", "ingredient_name", "ingredient_group", "quantity_per_item", "unit"
+            "sku_id", "ingredient_id", "ingredient_name", "ingredient_group", "quantity_per_item", "unit", 'effective_from', 'effective_to'
         ])
         bom_df["quantity_per_item"] = bom_df["quantity_per_item"].astype(float)
 
-        merged = pd.merge(forecast_df[["sku_id", "predicted_qty"]], bom_df, on="sku_id", how="inner")
+        forecast = forecast_df.copy()
+        forecast['target_date'] = pd.to_datetime(forecast['target_date']).dt.date if 'target_date' in forecast else datetime.now(VN).date()
+        merged = pd.merge(forecast[['sku_id', 'predicted_qty', 'target_date']], bom_df, on='sku_id', how='inner')
+        merged = merged[(merged['effective_from'] <= merged['target_date']) & (
+            merged['effective_to'].isna() | (merged['effective_to'] >= merged['target_date']))]
+        if merged.duplicated(['target_date', 'sku_id', 'ingredient_id']).any():
+            raise ValueError('Có công thức chồng lấn hiệu lực; chưa thể lập kế hoạch nguyên liệu.')
         merged["theoretical_qty"] = merged["predicted_qty"] * merged["quantity_per_item"]
 
         # Aggregate by ingredient
@@ -146,7 +159,8 @@ class OptimizerEngine:
         target_date: date,
         ingredient_demand_df: pd.DataFrame,
         buffer_pct: float = 0.10,
-        usable_stock_map: dict[str, float] | None = None
+        usable_stock_map: dict[str, float] | None = None,
+        batch_yield_map: dict[str, float] | None = None
     ) -> list[dict[str, Any]]:
         """Generates daily preparation batch recommendations for toppings.
         
@@ -156,9 +170,14 @@ class OptimizerEngine:
             Recommended_Qty = Batches * Batch_Size
         """
         usable_stock_map = usable_stock_map or {}
+        batch_yield_map = batch_yield_map or {}
+        catalog = {item.ingredient_id: item for item in self.db.query(Ingredient).filter(Ingredient.ingredient_id.in_(TOPPING_BATCH_CONFIG)).all()}
         prep_recommendations = []
 
         for ing_id, cfg in TOPPING_BATCH_CONFIG.items():
+            if ing_id not in catalog:
+                continue
+            ingredient = catalog[ing_id]
             # Find forecasted demand
             row = ingredient_demand_df[ingredient_demand_df["ingredient_id"] == ing_id]
             forecasted = float(row["theoretical_qty"].iloc[0]) if not row.empty else 0.0
@@ -170,7 +189,9 @@ class OptimizerEngine:
             buffered_demand = forecasted * (1.0 + buffer_pct)
             net_needed = max(0.0, buffered_demand - usable_stock)
 
-            batch_size = cfg["batch_size"]
+            batch_size = float(batch_yield_map.get(ing_id, cfg["batch_size"]))
+            if not math.isfinite(batch_size) or batch_size <= 0:
+                raise ValueError('Finished batch yield must be positive and finite')
             num_batches = math.ceil(net_needed / batch_size) if net_needed > 0 else 0
             recommended_prep = num_batches * batch_size
 
@@ -186,8 +207,8 @@ class OptimizerEngine:
             prep_recommendations.append({
                 "target_date": target_date.isoformat(),
                 "ingredient_id": ing_id,
-                "ingredient_name": cfg["name"],
-                "unit": cfg["unit"],
+                "ingredient_name": ingredient.ingredient_name,
+                "unit": ingredient.base_unit,
                 "batch_size": batch_size,
                 "forecasted_demand": round(forecasted, 1),
                 "buffer_pct": int(buffer_pct * 100),
@@ -196,7 +217,12 @@ class OptimizerEngine:
                 "recommended_prep_qty": recommended_prep,
                 "expected_waste_qty": round(expected_waste, 1),
                 "risk_level": risk,
-                "shelf_life_rule": cfg["shelf_life"]
+                "shelf_life_rule": cfg["shelf_life"],
+                "batch_yield_is_estimate": True,
+                "batch_yield_note": 'Sản lượng thành phẩm ước lượng; chưa phải định lượng nguyên liệu đầu vào hay SOP đã đo.',
+                "estimated_raw_input_g": num_batches * cfg['raw_batch_g'] if 'raw_batch_g' in cfg else None,
+                "batch_count_range": [math.ceil(net_needed / (batch_size * cfg.get('yield_high', cfg['batch_size']) / cfg['batch_size'])), math.ceil(net_needed / (batch_size * cfg.get('yield_low', cfg['batch_size']) / cfg['batch_size']))],
+                "preparation_action": 'Chia phần' if ing_id in {'NL06', 'NL07', 'NL08'} else 'Pha/nấu theo SOP tương ứng'
             })
 
         return prep_recommendations

@@ -2,14 +2,53 @@
 import base64
 import json
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from html import escape
 from pathlib import Path
+from src.runtime_settings import demo_enabled
+from src.dashboard.sales_view import business_today, daily_window
 
 import streamlit as st
 
 HERE = Path(__file__).resolve().parent
+
+
+def ui_icon(name):
+    """Small local SVG icons: consistent strokes without an external font."""
+    aliases = {'📊': 'chart', '🥤': 'cup', '⭐': 'star', '🗓️': 'calendar', '📋': 'recipe', '⏰': 'clock', '📦': 'box'}
+    paths = {
+        'chart': '<path d="M5 20v-6m7 6V5m7 15V10" stroke-width="3.5"/>',
+        'cup': '<path d="M6 9h13l-2 12H8L6 9Zm7 0 2-7M5 9h15"/>',
+        'star': '<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z"/>',
+        'calendar': '<rect x="4" y="5" width="16" height="16" rx="3"/><path d="M8 3v4m8-4v4M4 11h16"/>',
+        'store': '<path d="m3 9 2-6h14l2 6M4 10v11h16V10M9 21v-7h6v7M3 9c0 4 5 4 5 0 0 4 8 4 8 0 0 4 5 4 5 0"/>',
+        'search': '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
+        'bell': '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/>',
+        'box': '<path d="m12 3 9 5v10l-9 5-9-5V8l9-5Zm-9 5 9 5 9-5M12 13v10M7.5 5.5l9 5"/>',
+        'trend': '<path d="m3 17 6-6 4 4 8-11M15 4h6v6"/>',
+        'prep': '<path d="M3 12h18c0 7-3 9-9 9s-9-2-9-9Zm11-3 5-6M6 8l2-3"/>',
+        'recipe': '<rect x="5" y="3" width="14" height="19" rx="3"/><path d="M9 8h6m-6 5h6m-6 4h4"/>',
+        'users': '<circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6m2 3a5 5 0 0 1 3 5v2"/>',
+        'chat': '<path d="M21 11a9 9 0 0 1-9 9H4l-2 2V11a9 9 0 0 1 19 0Z"/><path d="M7 11h.01m5 0h.01m5 0h.01"/>',
+        'clock': '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2"/>',
+    }
+    path = paths.get(aliases.get(name, name), paths['star'])
+    return f'<svg class="mx-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{path}</svg>'
+
+
+def navigate_to(page):
+    st.session_state.main_navigation = page
+
+
+def render_mobile_navigation(pages, current):
+    st.session_state['mobile_navigation'] = current
+    short = {'Trang chủ': '🏠 Trang chủ', 'Báo cáo & kho': '📦 Kho', 'Dự báo': '📈 Dự báo', 'Sơ chế': '🥣 Sơ chế', 'Nhập hàng': '🛒 Nhập hàng', 'Tem & công thức': '📋 Công thức', '👥 Quản lý nhân viên': '👥 Nhân sự', '💬 Tuyết Vương AI': '✦ AI'}
+    def change_page():
+        navigate_to(st.session_state.mobile_navigation)
+    with st.container(key='mobile_dock'):
+        st.radio('Chuyển trang', pages, format_func=lambda p: short.get(p, p),
+                 horizontal=True, label_visibility='collapsed', key='mobile_navigation', on_change=change_page)
 
 _FALLBACK_SVG = (
     "data:image/svg+xml;utf8,"
@@ -24,7 +63,7 @@ def snow_king_image(size=52, mode="default"):
     """Use the user's authentic Snow King artwork everywhere in the app."""
     mode_class = " mascot-thinking" if mode == "thinking" else ""
     return (f'<span class="snowking-authentic{mode_class}" style="width:{size}px;height:{size}px;" title="Tuyết Vương Mixue">'
-            f'<img src="{asset("snow-king-reference.png")}" width="{size}" height="{size}" alt="Tuyết Vương Mixue"></span>')
+            f'<img src="{asset("snow-king-cutout.png")}" width="{size}" height="{size}" alt="Tuyết Vương Mixue"></span>')
 
 
 @lru_cache(maxsize=64)
@@ -42,11 +81,11 @@ def install_brand():
     css_path = HERE / 'brand.css'
     if css_path.is_file():
         css = css_path.read_text(encoding='utf-8').replace('__MIXUE_BACKGROUND_PATTERN__', asset('brand-pattern.svg')).replace('__MIXUE_LOGIN_SCENE__', asset('login-snow-world-v1.png')).replace('__MIXUE_LOGIN_MOBILE_SCENE__', asset('login-snow-world-mobile-v1.png'))
-        st.markdown('<style>' + css + '</style>', unsafe_allow_html=True)
-    st.markdown(f'''<div class="brandbar" role="banner"><div class="brandword">
-    <img class="brand-logo" src="{asset('snow-king-reference.png')}" alt="Tuyết Vương Mixue"><div><strong>MIXUE</strong>
-    <small>ICE CREAM &amp; TEA · BEVERAGEOPS</small></div></div>
-    <div class="brand-location"><b>39 Tôn Quang Phiệt</b>Không gian vận hành · Cửa hàng 2132</div></div>''', unsafe_allow_html=True)
+        st.html('<style>' + css + '</style>')
+    mockup_path = HERE / 'mockup.css'
+    if mockup_path.is_file():
+        st.html('<style>' + mockup_path.read_text(encoding='utf-8') + '</style>')
+    st.html('<style>' + (HERE / 'dashboard.css').read_text(encoding='utf-8') + '</style>')
     _motion_component()(key='mixue_motion_controller')
 
 
@@ -97,6 +136,156 @@ def normalized(text):
 
 def menu_group(sku):
     return {'DK': 'Kem', 'TS': 'Trà sữa', 'THQ': 'Trà trái cây', 'ST': 'Sữa trái cây', 'CF': 'Cà phê'}.get(''.join(c for c in sku if c.isalpha()), 'Khác')
+
+
+NAV_ICONS = {
+    'Trang chủ': '🏠', 'Báo cáo & kho': '📊', 'Dự báo': '📈', 'Sơ chế': '🥣', 'Nhập hàng': '📦',
+    'Tem & công thức': '📋', '👥 Quản lý nhân viên': '👥', '💬 Tuyết Vương AI': '💬',
+}
+NAV_LABELS = {'Tem & công thức': 'Công thức pha chế', 'Dự báo': 'Dự báo nhu cầu', 'Sơ chế': 'Sơ chế topping', '👥 Quản lý nhân viên': 'Quản lý nhân viên', '💬 Tuyết Vương AI': 'Tuyết Vương AI'}
+
+PAGE_HEROES = {
+    'Trang chủ': ('Xin chào, {name}!', 'Cùng kiểm soát vận hành quán Mixue 2132 hiệu quả hơn mỗi ngày ✨', 'Chất lượng hôm nay\nTạo nên khách hàng ngày mai!'),
+    'Báo cáo & kho': ('Báo cáo & quản lý kho', 'Theo dõi tồn kho, duyệt lệnh kho và đối soát doanh thu theo ca', 'Kho gọn gàng,\nVận hành trơn tru!'),
+    'Dự báo': ('Dự báo nhu cầu', 'Dự báo số ly bán ra và nhu cầu nguyên liệu cho ngày kế tiếp', 'Dự báo chuẩn,\nNhập hàng đủ!'),
+    'Sơ chế': ('Sơ chế topping', 'Lên kế hoạch sơ chế topping theo dự báo, hạn chế hao hụt', 'Sơ chế đúng lượng,\nKhông lãng phí!'),
+    'Nhập hàng': ('Nhập hàng & đề xuất', 'Tạo đơn nhập, nhận hàng và theo dõi các yêu cầu chờ duyệt', 'Đủ hàng mỗi ngày,\nKhông lo gián đoạn!'),
+    'Tem & công thức': ('Công thức pha chế', 'Tra cứu định lượng nguyên liệu và quy trình pha chế theo món', 'Đúng công thức,\nĐậm vị Mixue!'),
+    '👥 Quản lý nhân viên': ('Quản lý nhân sự & phân quyền chi nhánh', 'Quản trị danh sách nhân viên, cấp phát tài khoản mới và quyền reset mật khẩu', 'Chăm chút đội ngũ,\nTạo nên trải nghiệm ngọt ngào!'),
+    '💬 Tuyết Vương AI': ('Tuyết Vương AI — Trợ lý vận hành cửa hàng', 'Tra cứu dữ liệu cửa hàng, công thức và quy trình vận hành', 'Dữ liệu biến thành gợi ý,\nCông việc nhẹ hơn, cửa hàng tốt hơn!'),
+}
+
+
+def _initials(name):
+    parts = [p for p in (name or '').split() if p]
+    return (parts[0][0] + parts[-1][0]).upper() if len(parts) > 1 else (parts[0][:2].upper() if parts else 'NV')
+
+
+def nav_label(page):
+    return f"{NAV_ICONS.get(page, '•')}  {NAV_LABELS.get(page, page)}"
+
+
+def render_sidebar_top(user_name, user_title, user_badge):
+    st.markdown(f'''<div class="mx-logo">{snow_king_image(46)}<div><b>MIXUE</b><small>ICE CREAM &amp; TEA</small></div></div>
+    <div class="mx-store"><span class="mx-avatar" style="border-radius:10px;font-size:22px">🏪</span>
+    <div><b>Mixue 2132</b><small>39 Tôn Quang Phiệt<br>Hà Nội</small><em>Đang hoạt động</em></div></div>
+    <div class="mx-user"><span class="mx-avatar">{escape(_initials(user_name))}</span>
+    <div><b>{escape(user_name)}</b><small>{escape(user_title)}</small><span class="mx-role-pill">{escape(user_badge)}</span></div></div>''',
+                unsafe_allow_html=True)
+
+
+def render_sidebar_bottom():
+    st.markdown(f'''<div class="mx-side-foot">{snow_king_image(110)}<i>Sweet Moments<br>Make a Sweeter World</i></div>''', unsafe_allow_html=True)
+
+
+def render_topbar(user_name, notifications=0):
+    from src.auth import get_allowed_pages
+    today = datetime.now(timezone(timedelta(hours=7))).strftime('%d/%m/%Y')
+    bell = f'<span>{notifications}</span>' if notifications else ''
+    pages = get_allowed_pages(st.session_state.get('user_role', 'STAFF'))
+    commands = ''.join(f'<button type="button" data-command-page="{escape(nav_label(page))}">{escape(nav_label(page))}<span>↗</span></button>' for page in pages)
+    st.markdown(f'''<div class="mx-topbar">
+    <div class="mx-chip"><span class="mx-store-icon">{ui_icon('store')}</span><div><b>Mixue 2132</b><small>39 Tôn Quang Phiệt</small></div></div>
+    <div class="mx-chip mx-date">{ui_icon('calendar')}<span>{today}</span></div>
+    <button class="mx-search" type="button" data-command-open>{ui_icon('search')}<span>Tìm nhanh chức năng…</span><kbd>Ctrl K</kbd></button>
+    <button type="button" class="stage-motion-toggle mx-motion" aria-pressed="true" title="Bật hoặc tạm dừng chuyển động">Tạm dừng hiệu ứng</button>
+    <span class="mx-bell" title="{notifications} lệnh kho chờ duyệt">{ui_icon('bell')}{bell}</span><span class="mx-avatar" title="{escape(user_name)}">{escape(_initials(user_name))}</span></div>
+    <dialog class="mx-command" aria-label="Tìm nhanh chức năng"><div class="mx-command-head"><b>Bạn muốn làm gì?</b><button type="button" data-command-close aria-label="Đóng tìm kiếm">✕</button></div><input type="search" placeholder="Tìm trang, ví dụ: kho, dự báo, công thức…" aria-label="Tìm chức năng"><div class="mx-command-results">{commands}</div><p class="mx-command-empty" hidden>Không tìm thấy chức năng phù hợp.</p><small>Enter để mở · Esc để đóng</small></dialog>''', unsafe_allow_html=True)
+
+
+def render_page_hero(page, user_name=''):
+    title, sub, quote = PAGE_HEROES.get(page, (page, '', ''))
+    first = ' '.join((user_name or '').split()[-2:]) if '{name}' in title else ''
+    title = title.format(name=first or 'bạn')
+    bubble = escape(quote).replace('\n', '<br>')
+    st.markdown(f'''<section class="mx-hero" data-scene="{escape(page)}"><div class="mx-hero-copy"><span class="mx-eyebrow">MỖI NGÀY MỘT CHÚT NGỌT NGÀO <i>✦</i></span><h2>{escape(title)}</h2><p>{escape(sub)}</p><span class="mx-hero-status"><i></i> Không gian vận hành cửa hàng 2132</span></div>
+    <div class="mx-hero-art" aria-hidden="true"><span class="mx-orbit"></span><span class="mx-orbit second"></span><span class="mx-spark s1">✦</span><span class="mx-spark s2">✧</span><span class="mx-spark s3">♡</span><div class="mx-bubble">“{bubble}”</div><span class="mx-hero-drink" style="background-image:url('{asset('milk-tea.png')}')"></span>{snow_king_image(144)}</div></section>''', unsafe_allow_html=True)
+
+
+def _delta(cur, prev):
+    if not prev:
+        return ''
+    pct = (cur - prev) / prev * 100
+    cls, arrow = ('mx-up', '↑') if pct >= 0 else ('mx-down', '↓')
+    return f'<em><span class="{cls}">{arrow} {abs(pct):.0f}%</span> so với hôm qua</em>'
+
+
+def render_kpi_cards(items):
+    """items: list of (icon, label, value, footnote_html)."""
+    cards = ''.join(f'<div class="mx-kpi" data-tilt><div class="mx-kpi-ico tone-{i % 4}">{ui_icon(ico)}</div><div><small>{escape(lbl)}</small>'
+                    f'<strong>{escape(val)}</strong>{note}</div></div>' for i, (ico, lbl, val, note) in enumerate(items))
+    st.markdown(f'<div class="mx-kpis">{cards}</div>', unsafe_allow_html=True)
+
+
+def render_revenue_chart(sales, days=7):
+    daily = daily_window(sales, days=days)
+    known = daily[daily['available']]
+    top = float(known['revenue'].max()) if not known.empty else 1.0
+    top = top or 1.0
+    fmt = lambda v: f'{v:,.0f}'.replace(',', '.')
+    bars = []
+    for day, row in daily.iterrows():
+        if not row['available']:
+            bars.append(f'<div class="mx-bar mx-bar-missing" aria-label="{day:%d/%m}: Chưa có kết quả"><span>Chưa có</span></div>')
+        else:
+            bars.append(f'<div class="mx-bar" tabindex="0" aria-label="{day:%d/%m}: {fmt(row.revenue)} đồng"><span class="mx-bar-tip">{fmt(row.revenue)} đ<br>{row.cups:.0f} ly</span><i style="height:{max(row.revenue / top * 85, 2):.0f}%"></i></div>')
+    axis = ''.join(f'<span>{day:%d/%m}</span>' for day in daily.index)
+    total = f"{fmt(known['revenue'].sum())} <small>đ</small>" if len(known) == days else 'Chưa có kết quả' if known.empty else 'Chưa đủ dữ liệu'
+    st.markdown(f'''<div class="mx-card mx-revenue"><div class="mx-card-heading"><h3>{ui_icon('chart')} Doanh thu {days} ngày gần nhất</h3><span class="mx-tag">Đến hôm nay</span></div>
+    <div class="mx-revenue-total">{total}</div><p class="mx-caption">{daily.index[0]:%d/%m} – {daily.index[-1]:%d/%m/%Y} · Đã cập nhật {len(known)}/{days} ngày</p>
+    <div class="mx-chart">{''.join(bars)}</div><div class="mx-axis">{axis}</div><p class="mx-caption">Ngày chưa nhập dữ liệu hiển thị “Chưa có”, không tính thành 0.</p></div>''', unsafe_allow_html=True)
+
+
+def page_link(page, label):
+    return f'<button class="mx-text-link" type="button" data-command-page="{escape(nav_label(page))}">{escape(label)} <span>↗</span></button>'
+
+
+def render_shortcuts(user_role):
+    from src.auth import get_allowed_pages
+    pages = get_allowed_pages(user_role)
+    features = [('Báo cáo & kho', 'box', 'Tồn kho, báo cáo'), ('Dự báo', 'trend', 'Nhu cầu ngày kế tiếp'),
+                ('Sơ chế', 'prep', 'Kế hoạch mỗi ngày'), ('Nhập hàng', 'store', 'Đặt hàng, nhận kho'),
+                ('Tem & công thức', 'recipe', 'Định lượng chuẩn vị'), ('👥 Quản lý nhân viên', 'users', 'Đội ngũ & phân quyền'),
+                ('💬 Tuyết Vương AI', 'chat', 'Trợ lý của cửa hàng')]
+    cards = ''.join(f'<button type="button" class="mx-shortcut tone-{i}" data-command-page="{escape(nav_label(page))}"><span class="mx-shortcut-icon">{ui_icon(icon)}</span><span class="mx-shortcut-arrow">↗</span><b>{escape(NAV_LABELS.get(page, page))}</b><small>{desc}</small></button>'
+                    for i, (page, icon, desc) in enumerate(features) if page in pages)
+    st.markdown(f'<section class="mx-card mx-shortcuts"><div class="mx-card-heading"><h3>{ui_icon("box")} Không gian làm việc</h3><span class="mx-caption">Mọi thứ bạn cần, ngay tại đây</span></div><div class="mx-shortcut-grid">{cards}</div></section>', unsafe_allow_html=True)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def forecast_snapshot(target_date):
+    from src.engine.forecasting import ForecastingEngine
+    engine = ForecastingEngine()
+    try:
+        return engine.forecast_demand(target_date=target_date, model='auto')
+    finally:
+        engine.close()
+
+
+def render_home_overview(menu, sales):
+    """Read-only overview of actual sales, pending stock requests and D+1 demand."""
+    from src.engine.daily_stock_service import get_pending_requests
+    requests = get_pending_requests()
+    with st.container(key='home_analytics'):
+        left, right = st.columns([1.12, 1], gap='medium')
+        with left:
+            render_revenue_chart(sales)
+        with right:
+            rows = ''.join(f'<div class="mx-request"><span class="mx-list-icon tone-2">{ui_icon("box")}</span><div><b>{escape(r["ingredient_name"])}</b><small>{escape(r["type_vi"])} · {r["quantity"]:g} · {escape(r["recorded_by"])}</small></div><span class="mx-status">Chờ duyệt</span></div>' for r in requests[:4])
+            if not rows:
+                rows = '<div class="mx-all-clear"><span>✓</span><b>Mọi yêu cầu đã được xử lý</b><p>Bạn đã sẵn sàng cho một ca làm thật tốt!</p></div>'
+            st.markdown(f'<section class="mx-card mx-approvals"><div class="mx-card-heading"><h3>{ui_icon("clock")} Yêu cầu chờ phê duyệt <em>{len(requests)}</em></h3>{page_link("Báo cáo & kho", "Xem tất cả")}</div><p class="mx-caption">Theo dõi các lệnh kho cần bạn xử lý</p>{rows}<div class="mx-approval-foot"><i></i> Chỉ ghi sổ khi được quản lý phê duyệt</div></section>', unsafe_allow_html=True)
+
+    today = business_today()
+    latest = max(sales['business_date']) if not sales.empty else None
+    target = today + timedelta(days=1)
+    forecast = forecast_snapshot(target) if latest == today else sales.iloc[:0]
+    top_forecast = forecast.sort_values('predicted_qty', ascending=False).head(3) if not forecast.empty else forecast
+    product_rows = ''.join(f'<div class="mx-product-row"><img src="{asset(product_photo(r.sku_id, r.sku_name))}" alt="" loading="lazy"><span>{escape(r.sku_name)}</span><b>{r.predicted_qty:,.0f} <small>ly</small></b></div>' for r in top_forecast.itertuples())
+    total_label = f"{forecast['predicted_qty'].sum():,.0f} <small>ly dự kiến</small>" if not forecast.empty else 'Chưa đủ dữ liệu dự báo'
+    tops = sales[sales['business_date'] == today].groupby(['sku_id', 'sku_name'])['quantity_sold'].sum().sort_values(ascending=False).head(3)
+    best_rows = ''.join(f'<div class="mx-product-row"><span class="mx-rank">{i+1:02}</span><img src="{asset(product_photo(sku, name))}" alt="" loading="lazy"><span>{escape(name)}</span><b>{qty:,.0f} <small>ly</small></b></div>' for i, ((sku, name), qty) in enumerate(tops.items()))
+    st.markdown(f'''<div class="mx-summary-grid"><section class="mx-card"><div class="mx-card-heading"><h3>{ui_icon('trend')} Nhu cầu ngày kế tiếp</h3><span class="mx-tag">{target:%d/%m}</span></div><div class="mx-summary-number">{total_label}</div><p class="mx-caption">Trung bình trượt 7 ngày · dựa trên dữ liệu đến {latest.strftime('%d/%m/%Y') if latest else 'chưa có'}</p>{product_rows}{page_link('Dự báo', 'Khám phá dự báo')}</section><section class="mx-card"><div class="mx-card-heading"><h3>{ui_icon('star')} Món được yêu thích</h3><span class="mx-tag">{today:%d/%m}</span></div><p class="mx-caption">Top 3 sản phẩm theo số ly bán ra</p>{best_rows or '<p>Chưa có kết quả hôm nay.</p>'}{page_link('Tem & công thức', 'Tra cứu công thức')}</section><section class="mx-card mx-ai-note"><div class="mx-card-heading"><h3>{ui_icon('chat')} Một chút gợi ý từ AI</h3><span>✦</span></div><div class="mx-ai-intro">{snow_king_image(62)}<p>Một ngày vận hành tốt<br>bắt đầu từ sự chuẩn bị.</p></div><p>Xem dự báo, kiểm tra nguyên liệu và chuẩn bị topping trước giờ cao điểm cùng Tuyết Vương nhé!</p>{page_link('💬 Tuyết Vương AI', 'Trò chuyện với Tuyết Vương')}</section></div>''', unsafe_allow_html=True)
 
 
 def _SwitchToChatTab():
@@ -184,23 +373,31 @@ def render_home(menu, sales, user_role="STAFF"):
     is_admin = is_admin_role(user_role)
     number = lambda value: f'{value:,.0f}'.replace(',', '.')
 
-    render_brand_hero()
-    st.caption('Ảnh theo từng món trong thực đơn Mixue · Giá và công thức lấy từ dữ liệu cửa hàng')
-
-    if is_admin and not sales.empty:
-        last_day = sales['business_date'].max()
-        latest = sales[sales['business_date'] == last_day]
-        st.markdown(f'''<div class="statline" role="region" aria-label="Chỉ số nhanh trong ngày">
-        <div><small>DOANH THU · {last_day:%d/%m}</small><strong>{number(latest['revenue_vnd'].sum())} đ</strong></div>
-        <div><small>SẢN LƯỢNG · {last_day:%d/%m}</small><strong>{number(latest['quantity_sold'].sum())} ly</strong></div>
-        <div><small>THỰC ĐƠN</small><strong>{len(menu)} món</strong></div></div>''', unsafe_allow_html=True)
+    if is_admin:
+        today = business_today()
+        window = daily_window(sales, today=today, days=2)
+        current, previous = window.iloc[-1], window.iloc[0]
+        has_today = bool(current['available'])
+        comparison = bool(previous['available']) and has_today
+        days_with_data = sales['business_date'].nunique() if not sales.empty else 0
+        note = '<em>Dữ liệu đã nhập hôm nay · chưa phải tổng chốt ngày</em>' if has_today else '<em>Chưa cập nhật dữ liệu hôm nay</em>'
+        render_kpi_cards([
+            ('📊', f'Doanh thu hôm nay · {today:%d/%m}', f"{number(current.revenue)} đ" if has_today else 'Chưa có kết quả', _delta(current.revenue, previous.revenue) if comparison else note),
+            ('🥤', 'Số ly hôm nay', f"{number(current.cups)} ly" if has_today else 'Chưa có kết quả', _delta(current.cups, previous.cups) if comparison else note),
+            ('⭐', 'Số món trong thực đơn', f'{len(menu)} món', '<em>Trong thực đơn</em>'),
+            ('🗓️', 'Số ngày có dữ liệu', f'{days_with_data} ngày', '<em>Lịch sử bán hàng</em>'),
+        ])
     else:
         # Nhân viên KHÔNG được phép xem Doanh thu và Sản lượng
-        st.markdown(f'''<div class="statline" role="region" aria-label="Thông tin vận hành quầy">
-        <div><small>QUY MÔ THỰC ĐƠN</small><strong>{len(menu)} món</strong></div>
-        <div><small>TIÊU CHUẨN PHA CHẾ</small><strong>SOP Mixue Bar</strong></div>
-        <div><small>GIỜ PHỤC VỤ</small><strong>08:00 – 23:00</strong></div></div>''', unsafe_allow_html=True)
-    st.markdown('<div class="section-heading" id="mixue-menu"><h2>Món ngon, chuẩn vị.</h2><span>THỰC ĐƠN CỬA HÀNG · Tra cứu công thức từng món ↗</span></div>', unsafe_allow_html=True)
+        render_kpi_cards([
+            ('⭐', 'Quy mô thực đơn', f'{len(menu)} món', '<em>Tra cứu công thức từng món</em>'),
+            ('📋', 'Tiêu chuẩn pha chế', 'SOP Mixue Bar', '<em>Đúng công thức, đậm vị</em>'),
+            ('⏰', 'Giờ phục vụ', '08:00 – 23:00', '<em>Hàng ngày</em>'),
+        ])
+    render_shortcuts(user_role)
+    if is_admin:
+        render_home_overview(menu, sales)
+    st.markdown('<div class="section-heading" id="mixue-menu"><div><span class="mx-eyebrow">THE MIXUE MENU</span><h2>Món ngon, chuẩn vị.</h2></div><span>Một chút ngọt ngào cho mỗi ngày ✦</span></div>', unsafe_allow_html=True)
 
     filter_col1, filter_col2 = st.columns([1.2, 1.8], gap="medium")
     with filter_col1:
@@ -277,12 +474,13 @@ def render_force_change_password_screen():
         )
 
         with st.container(border=True):
-            st.warning("⚠️ **Lưu ý bảo mật:** Bạn đang dùng mật khẩu khởi tạo mặc định (`123456`). Để kích hoạt tài khoản làm việc tại quầy, bạn bắt buộc phải thiết lập **mật khẩu cá nhân mới gồm đúng 6 chữ số** (ví dụ: `686868`, `246810`).")
+            policy = 'đúng 6 chữ số' if demo_enabled() else 'từ 12 đến 128 ký tự'
+            st.warning(f'Bạn cần đổi mật khẩu tạm do quản lý cấp. Mật khẩu mới phải có {policy}.')
 
             with st.form("force_change_password_form", clear_on_submit=False):
-                old_pass = st.text_input("Mật khẩu hiện tại (Mặc định: 123456)", type="password", value="123456", key="force_old_pass")
-                new_pass = st.text_input("Mật khẩu mới (Bắt buộc đúng 6 chữ số)", type="password", placeholder="Nhập 6 số (ví dụ: 686868)", max_chars=6, key="force_new_pass")
-                confirm_pass = st.text_input("Xác nhận lại mật khẩu mới", type="password", placeholder="Nhập lại đúng 6 số trên", max_chars=6, key="force_confirm_pass")
+                old_pass = st.text_input('Mật khẩu hiện tại', type='password', key='force_old_pass')
+                new_pass = st.text_input(f'Mật khẩu mới ({policy})', type='password', max_chars=128, key='force_new_pass')
+                confirm_pass = st.text_input('Xác nhận lại mật khẩu mới', type='password', max_chars=128, key='force_confirm_pass')
                 
                 submitted = st.form_submit_button("Xác nhận Đổi Mật Khẩu & Vào Hệ Thống 🚀", type="primary", use_container_width=True)
 
@@ -340,6 +538,9 @@ def render_login_screen():
 
         st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
 
+        if not demo_enabled():
+            st.caption('Dùng tài khoản do quản lý cấp. Liên hệ quản lý nếu bạn chưa có tài khoản hoặc cần đặt lại mật khẩu.')
+            return
         with st.expander("🔑 Tài khoản dùng thử & đăng nhập nhanh", expanded=False):
             st.caption("Bấm chọn tài khoản bên dưới để đăng nhập trực tiếp thử nghiệm theo từng phân quyền:")
             cq1, cq2 = st.columns(2, gap="small")
@@ -382,21 +583,56 @@ def render_login_screen():
             """, unsafe_allow_html=True)
 
 
+def _render_chat_evidence(refs):
+    """Keep precise references in history; show readable source names on request."""
+    names = {
+        '09_Cong_thuc_so_che_theo_me': 'Công thức sơ chế theo mẻ',
+        '10_Quy_dinh_bao_quan_theo_anh': 'Quy định bảo quản',
+        '13_Thoi_gian_so_che_theo_anh': 'Thời gian sơ chế',
+        '15_Han_dung_nguyen_lieu_tren_anh': 'Hạn dùng nguyên liệu',
+        '16_Quy_tac_duong_va_topping': 'Quy tắc đường và topping',
+        'sales_daily': 'Dữ liệu bán hàng', 'daily_sales': 'Dữ liệu bán hàng',
+        'recipe_bom': 'Định lượng công thức', 'bom_recipes': 'Định lượng công thức',
+        'shift_reports': 'Báo cáo chốt ca', 'pos_slip': 'Phiếu POS',
+    }
+    labels = []
+    for ref in refs:
+        ref = str(ref)
+        label = next((name for key, name in names.items() if key in ref), None)
+        label = label or ref.removeprefix('file:').removeprefix('table:').split('/')[-1]
+        if label not in labels:
+            labels.append(label)
+    with st.expander('Nguồn dữ liệu', expanded=False):
+        st.caption(' · '.join(labels))
+
+
 def _render_chat_conversation(agent, role, user_name, history_height=250, key_suffix=""):
-    """Shared interactive chat body used by both the Floating Popover and Dedicated Fullscreen Chat Tab."""
+    """Persistent conversation with a normal page flow and one message composer."""
     from src.auth import is_admin_role
 
     clean_role = (role or "STAFF").strip().upper()
     is_admin = is_admin_role(clean_role)
 
-    if 'chat_history_vi' not in st.session_state:
-        if is_admin:
-            welcome_text = 'Xin chào Quản trị viên! Mình là **Tuyết Vương AI**. Bạn cần xem báo cáo doanh số, dự báo số ly, đối soát kho hay duyệt kế hoạch vận hành?'
-        else:
-            welcome_text = 'Xin chào! Mình là **Tuyết Vương AI** (Chế độ Nhân viên quầy). Bạn cần tra cứu công thức món nào, quy chuẩn sơ chế topping hay giải mã tem dán ly?'
-        st.session_state.chat_history_vi = [{'role': 'assistant', 'content': welcome_text}]
+    account_id = st.session_state.get('username', user_name)
+    saved = agent.conversation_history(clean_role, user_name, user_id=account_id)
+    conversations = saved['conversations']
+    choices = [row['id'] for row in conversations]
+    titles = {row['id']: row['title'] for row in conversations}
+    selector_key = f'chat_conversation_{account_id}_{clean_role}'
+    if choices:
+        selected = st.selectbox('Lịch sử trò chuyện', choices,
+                                index=choices.index(saved['conversation_id']),
+                                format_func=lambda ident: titles[ident], key=selector_key)
+        if selected != saved['conversation_id']:
+            agent.select_conversation(selected, clean_role, user_name, user_id=account_id)
+            st.session_state.pop('chat_input_val', None)
+            st.rerun()
+    st.session_state.agent_pending_approval = saved['pending_approval']
+    st.session_state.chat_history_vi = saved['messages'] or [
+        {'role': 'assistant', 'content': f'Xin chào {user_name}! Mình là **Tuyết Vương AI**.'}]
+    st.caption('Lịch sử được lưu riêng theo tài khoản. Mở cuộc trò chuyện cũ để tiếp tục ngữ cảnh.')
 
-    history = st.container(height=history_height, border=True)
+    history = st.container(height=history_height, border=False) if history_height else st.container()
     input_key = f"operations_chat{key_suffix}" if key_suffix else "operations_chat"
     prompt = st.chat_input('Hỏi Tuyết Vương…', key=input_key)
     prompt = st.session_state.pop('chat_input_val', None) or prompt
@@ -410,8 +646,16 @@ def _render_chat_conversation(agent, role, user_name, history_height=250, key_su
             with st.chat_message(message['role'], avatar=avatar):
                 st.markdown(message['content'])
                 if message.get('evidence'):
-                    with st.expander('Nguồn dữ liệu'):
-                        st.write(message['evidence'])
+                    _render_chat_evidence(message['evidence'])
+                if message['role'] == 'assistant' and message.get('message_id'):
+                    feedback_key = f"chat_rating_{message['message_id']}"
+                    if feedback_key not in st.session_state:
+                        st.session_state[feedback_key] = message.get('rating')
+                    def save_feedback(mid=message['message_id'], key=feedback_key):
+                        rating = st.session_state.get(key)
+                        if rating is not None:
+                            agent.record_feedback(mid, rating, clean_role, user_name, user_id=account_id)
+                    st.feedback('thumbs', key=feedback_key, on_change=save_feedback)
         thinking_slot = st.empty()
 
     if prompt:
@@ -422,8 +666,8 @@ def _render_chat_conversation(agent, role, user_name, history_height=250, key_su
             f'''<div class="snowking-thinking-card">
             {snow_king_image(42, mode="thinking")}
             <div class="thinking-text-wrap">
-                <div class="thinking-title">Tuyết Vương Multi-Agent đang phân tích <span class="thinking-dots"><span></span><span></span><span></span></span></div>
-                <div class="thinking-sub">Đang điều phối các Agent lục tìm Repo, Docs, Quy chuẩn và Database…</div>
+                <div class="thinking-title">Tuyết Vương đang trả lời bạn <span class="thinking-dots"><span></span><span></span><span></span></span></div>
+                <div class="thinking-sub">Chờ mình một chút nhé.</div>
                 <div class="thinking-shimmer"></div>
             </div>
             </div>''',
@@ -434,9 +678,12 @@ def _render_chat_conversation(agent, role, user_name, history_height=250, key_su
                 prompt,
                 user_role=clean_role,
                 user_name=user_name,
+                user_id=st.session_state.get('username', user_name),
                 chat_history=st.session_state.chat_history_vi
             )
             reply_msg = {'role': 'assistant', 'content': response['text'], 'evidence': response.get('evidence_refs', [])}
+            st.session_state.agent_pending_approval = response.get('pending_approval')
+            st.session_state.agent_execution_mode = response.get('execution_mode')
         except Exception:
             reply_msg = {'role': 'assistant', 'content': 'Mình chưa truy xuất được dữ liệu. Bạn hãy thử lại hoặc kiểm tra kết nối dữ liệu cửa hàng.'}
         st.session_state.chat_history_vi.append(reply_msg)
@@ -444,12 +691,138 @@ def _render_chat_conversation(agent, role, user_name, history_height=250, key_su
         with history, st.chat_message('assistant', avatar=assistant_avatar):
             st.markdown(reply_msg['content'])
             if reply_msg.get('evidence'):
-                with st.expander('Nguồn dữ liệu'):
-                    st.write(reply_msg['evidence'])
+                _render_chat_evidence(reply_msg['evidence'])
+
+    exec_mode = st.session_state.get('agent_execution_mode')
+    if exec_mode == 'llm':
+        st.caption('🟢 Chế độ AI Online (Gemini + LangGraph Tool Calling) · Đã xác thực nguồn dữ liệu.')
+    elif exec_mode == 'offline_fallback':
+        st.caption('⚡ Đã tự động chuyển sang Động cơ Tra cứu Cục bộ (do kết nối API gián đoạn) · Vẫn đảm bảo chính xác 100%.')
+    elif exec_mode == 'offline_rules':
+        st.caption('⚡ Chế độ Tra cứu Nhanh cục bộ (<50ms) · Bạn có thể bấm nút "⚡ Chế độ Nhanh (Offline)" phía trên để bật AI Online.')
+    pending = st.session_state.get('agent_pending_approval')
+    if pending:
+        with st.container(border=True):
+            st.markdown(f"**Xác nhận kế hoạch {pending['plan_id']}**")
+            with st.expander('Xem nội dung kế hoạch trước khi duyệt'):
+                st.json(pending['plan'])
+            accept, reject = st.columns(2)
+            approved = accept.button('Xác nhận phê duyệt', type='primary', key=f'approve_agent{key_suffix}', disabled=not is_admin)
+            cancelled = reject.button('Hủy xác nhận', key=f'reject_agent{key_suffix}')
+            if approved or cancelled:
+                result = agent.resume_approval(approved, clean_role, user_name,
+                                               user_id=st.session_state.get('username', user_name))
+                st.session_state.agent_pending_approval = result.get('pending_approval')
+                st.session_state.chat_history_vi.append({'role': 'assistant', 'content': result['text'],
+                                                         'evidence': result.get('evidence_refs', [])})
+                st.rerun()
+
+    # OCR Draft Review & Confirmation Card (Prompt 2)
+    active_ocr_draft = st.session_state.get('agent_pending_ocr_draft') or saved.get('pending_ocr_draft')
+    if active_ocr_draft:
+        with st.container(border=True):
+            st.markdown(f"### 📸 Dự Thảo Chốt Ca Từ Ảnh (`{active_ocr_draft['draft_id']}`)")
+            f_ids = active_ocr_draft.get("file_ids") or ([active_ocr_draft.get("file_id")] if active_ocr_draft.get("file_id") else [])
+            f_names = active_ocr_draft.get("filenames") or []
+            if len(f_ids) > 1:
+                f_meta = f"Mã tệp ({len(f_ids)} ảnh): " + ", ".join(f"`{f}`" for f in f_ids)
+                if f_names:
+                    f_meta += f" *({', '.join(f_names)})*"
+            else:
+                f_meta = f"Mã tệp: `{active_ocr_draft.get('file_id')}`"
+                if f_names:
+                    f_meta += f" *({f_names[0]})*"
+            st.caption(f"{f_meta} · Loại chứng từ: `{active_ocr_draft.get('document_type')}` · Trạng thái: **Đang chờ xác nhận**")
+
+            consistency = active_ocr_draft.get('consistency') or {}
+            discrepancies = consistency.get('discrepancies') or []
+            if discrepancies:
+                for d in discrepancies:
+                    st.warning(f"⚠️ {d['message']}")
+
+            with st.expander("✏️ Chỉnh sửa số liệu dự thảo trước khi xác nhận", expanded=False):
+                with st.form(key=f"ocr_edit_form_{active_ocr_draft['draft_id']}{key_suffix}"):
+                    c1, c2, c3 = st.columns(3)
+                    e_date = c1.text_input("Ngày báo cáo (YYYY-MM-DD)", value=active_ocr_draft.get('business_date') or "")
+                    cur_sc = active_ocr_draft.get('shift_code') or "CA_SANG"
+                    sc_opts = ["CA_SANG", "CA_CHIEU", "CA_TOI"]
+                    e_shift = c2.selectbox("Mã ca", sc_opts, index=sc_opts.index(cur_sc) if cur_sc in sc_opts else 0)
+                    e_signed = c3.text_input("Người ký", value=active_ocr_draft.get('signed_by') or "")
+
+                    fields_data = active_ocr_draft.get('fields', {})
+                    c_rev, c_col = st.columns(2)
+                    e_rev = c_rev.number_input("Tổng doanh thu POS (đ)", value=int(fields_data.get('pos_revenue_vnd') or 0), step=1000)
+                    e_col = c_col.number_input("Thực thu POS (đ)", value=int(fields_data.get('pos_collected_vnd') or 0), step=1000)
+
+                    c_cash, c_diff = st.columns(2)
+                    e_cash = c_cash.number_input("Tiền mặt thực tế (đ)", value=int(fields_data.get('cash_vnd') or 0), step=1000)
+                    e_diff = c_diff.number_input("Lệch tiền mặt (dư/thiếu đ)", value=int(fields_data.get('cash_diff_vnd') or 0), step=1000)
+
+                    c_shp, c_grb, c_exp = st.columns(3)
+                    e_shp = c_shp.number_input("ShopeeFood (đ)", value=int(fields_data.get('shopee_food_vnd') or 0), step=1000)
+                    e_grb = c_grb.number_input("GrabFood (đ)", value=int(fields_data.get('grab_food_vnd') or 0), step=1000)
+                    e_exp = c_exp.number_input("Chi phí trong ca (đ)", value=int(fields_data.get('expenses_vnd') or 0), step=1000)
+
+                    save_changes = st.form_submit_button("Lưu chỉnh sửa dự thảo")
+                    if save_changes:
+                        updates = {
+                            "report_date": e_date.strip() if e_date else None,
+                            "shift_code": e_shift,
+                            "signed_by": e_signed.strip(),
+                            "pos_revenue_vnd": e_rev,
+                            "pos_collected_vnd": e_col,
+                            "cash_vnd": e_cash,
+                            "cash_diff_vnd": e_diff,
+                            "shopee_food_vnd": e_shp,
+                            "grab_food_vnd": e_grb,
+                            "expenses_vnd": e_exp,
+                        }
+                        up_res = agent.update_ocr_draft(updates, user_role=clean_role, user_name=user_name, user_id=account_id, draft_id=active_ocr_draft['draft_id'])
+                        st.session_state.agent_pending_ocr_draft = up_res.get('draft')
+                        st.session_state.chat_history_vi.append({'role': 'assistant', 'content': up_res['text'], 'evidence': up_res.get('source_refs', [])})
+                        st.rerun()
+
+            c_act1, c_act2 = st.columns(2)
+            btn_confirm = c_act1.button("✅ Xác nhận ghi sổ doanh thu", type="primary", key=f"confirm_ocr_{active_ocr_draft['draft_id']}{key_suffix}")
+            btn_cancel = c_act2.button("🛑 Hủy dự thảo", key=f"cancel_ocr_{active_ocr_draft['draft_id']}{key_suffix}")
+            if btn_confirm:
+                c_res = agent.confirm_ocr_draft(True, user_role=clean_role, user_name=user_name, user_id=account_id, draft_id=active_ocr_draft['draft_id'])
+                st.session_state.agent_pending_ocr_draft = None
+                st.session_state.chat_history_vi.append({'role': 'assistant', 'content': c_res['text'], 'evidence': c_res.get('evidence_refs', [])})
+                st.rerun()
+            elif btn_cancel:
+                c_res = agent.confirm_ocr_draft(False, user_role=clean_role, user_name=user_name, user_id=account_id, draft_id=active_ocr_draft['draft_id'])
+                st.session_state.agent_pending_ocr_draft = None
+                st.session_state.chat_history_vi.append({'role': 'assistant', 'content': c_res['text'], 'evidence': c_res.get('evidence_refs', [])})
+                st.rerun()
+
+    with st.expander("📸 Tải ảnh chứng từ chốt ca (POS / Sổ viết tay / Hóa đơn)", expanded=False):
+        uploaded_slips = st.file_uploader(
+            "Chọn file ảnh chụp phiếu POS, sổ chốt ca viết tay hoặc hóa đơn (hỗ trợ chọn nhiều ảnh cùng lúc)",
+            type=["jpg", "jpeg", "png", "webp"],
+            accept_multiple_files=True,
+            key=f"ocr_slip_uploader_{account_id}{key_suffix}",
+        )
+        if uploaded_slips:
+            count = len(uploaded_slips)
+            st.caption(f"📁 Đã chọn {count} ảnh chứng từ: " + ", ".join(f"`{f.name}`" for f in uploaded_slips[:3]) + ("..." if count > 3 else ""))
+            btn_txt = f"🚀 Gửi {count} ảnh cho Tuyết Vương AI đọc" if count > 1 else "🚀 Gửi ảnh cho Tuyết Vương AI đọc"
+            if st.button(btn_txt, key=f"btn_process_slip_{account_id}{key_suffix}"):
+                with st.spinner(f"Tuyết Vương đang kiểm tra bố cục và nhận diện {count} chứng từ..." if count > 1 else "Tuyết Vương đang kiểm tra bố cục và nhận diện chứng từ..."):
+                    files_payload = [(f.name, f.getvalue()) for f in uploaded_slips]
+                    img_res = agent.process_image_message(
+                        files=files_payload,
+                        user_role=clean_role,
+                        user_name=user_name,
+                        user_id=account_id,
+                    )
+                st.session_state.agent_pending_ocr_draft = img_res.get('draft')
+                st.session_state.chat_history_vi.append({'role': 'assistant', 'content': img_res['text'], 'evidence': img_res.get('source_refs', [])})
+                st.rerun()
 
 
 def render_chat(agent, role, user_name, mode="auto"):
-    """Render Chatbot either as a Dedicated Fullscreen Tab or as a Floating Bottom-Right Popover Button."""
+    """Render the dedicated conversation page; never mount a floating duplicate."""
     from src.auth import is_admin_role
 
     clean_role = (role or "STAFF").strip().upper()
@@ -464,54 +837,79 @@ def render_chat(agent, role, user_name, mode="auto"):
             ('Dự báo số ly', 'Dự báo doanh số ngày mai'),
             ('Kiểm tra tồn kho', 'Đối soát tồn kho'),
             ('Sơ chế topping', 'Ngày mai nên sơ chế bao nhiêu mẻ topping?'),
-            ('Giải mã tem', 'Giải mã mã tem 24101'),
+            ('Quy trình bảo quản', 'Cách bảo quản nguyên liệu sau khi mở bao bì?'),
         ]
     else:
         quick = [
             ('Công thức Trà sữa', 'Công thức TS1'),
             ('Sơ chế trân châu', 'Quy trình sơ chế trân châu và hạn dùng'),
             ('Sơ chế thạch đào', 'Cách sơ chế thạch đào và hạn bảo quản'),
-            ('Giải mã tem', 'Giải mã mã tem 24101'),
+            ('Quy trình bảo quản', 'Cách bảo quản nguyên liệu sau khi mở bao bì?'),
         ]
 
     def ask_quick(question):
         st.session_state.chat_input_val = question
 
     def render_quick_questions():
-        with st.container(key="chat_quick_questions"):
-            st.markdown('<div class="chat-quick-label"><span>⚡ Câu hỏi gợi ý nhanh</span><span>Chạm để hỏi</span></div>', unsafe_allow_html=True)
+        with st.expander('Gợi ý câu hỏi', expanded=False), st.container(key="chat_quick_questions"):
             for row in (quick[:2], quick[2:]):
                 for col, (label, question) in zip(st.columns(2, gap="small"), row):
                     col.button(label, key=f'chat_{label}', use_container_width=True,
                                on_click=ask_quick, args=(question,))
 
-    if effective_mode == "fullscreen":
-        with st.container(key="chat_panel_box", border=True):
-            role_label = "Quản trị viên" if is_admin else "Nhân viên"
-            st.markdown(
-                f'''<div class="chat-head">{snow_king_image(42)}
-                <div><strong>Tuyết Vương AI</strong><small><span class="chat-online-dot"></span>Đang trực tuyến · {escape(user_name)} ({role_label})</small></div></div>''',
-                unsafe_allow_html=True,
-            )
-            _render_chat_conversation(agent, clean_role, user_name, history_height=430, key_suffix="")
-            render_quick_questions()
-            if st.button('Bắt đầu cuộc trò chuyện mới', key='clear_chat', use_container_width=True):
-                st.session_state.pop('chat_history_vi', None)
-                st.rerun()
-    else:
-        with st.container(key="chat_fab_container"):
-            if hasattr(st, "popover"):
-                with st.popover("🍦 Chat Tuyết Vương AI"):
-                    st.markdown(
-                        f'''<div class="chat-head">{snow_king_image(38)}
-                        <div><strong>Tuyết Vương AI</strong><small><span class="chat-online-dot"></span>Trợ lý vận hành · Hỏi nhanh tại chỗ</small></div></div>''',
-                        unsafe_allow_html=True,
-                    )
-                    _render_chat_conversation(agent, clean_role, user_name, history_height=240, key_suffix="")
-                    render_quick_questions()
-                    st.button("⤢ Mở màn hình Chat lớn", key="open_fullscreen_chat", use_container_width=True, on_click=_SwitchToChatTab)
-                    if st.button('Xóa lịch sử', key='clear_chat', use_container_width=True):
-                        st.session_state.pop('chat_history_vi', None)
-                        st.rerun()
-            else:
-                st.button("🍦 Mở màn hình Chat Tuyết Vương AI", key="fab_open_chat_tab", type="primary", on_click=_SwitchToChatTab)
+    def _handle_new_conversation():
+        act_id = st.session_state.get('username', user_name)
+        new_id = agent.new_conversation(clean_role, user_name, user_id=act_id)
+        st.session_state[f"chat_conversation_{act_id}_{clean_role}"] = new_id
+        st.session_state.pop('agent_pending_approval', None)
+        st.session_state['chat_history_vi'] = [
+            {'role': 'assistant', 'content': f'Xin chào {user_name}! Mình là **Tuyết Vương AI**.'}
+        ]
+
+    is_online_now = bool(getattr(agent, "is_llm_online", lambda: False)())
+
+    def _handle_toggle_llm():
+        if hasattr(agent, "set_llm_mode"):
+            target = not bool(agent.is_llm_online())
+            _, notice = agent.set_llm_mode(target)
+            st.session_state["llm_mode_notice"] = notice
+
+    with st.container(key="chat_panel_box"):
+        title, mode_col, action = st.columns([3.2, 1.3, 1.1])
+        title.markdown('### Tuyết Vương AI')
+        mode_label = '🟢 AI Online (Gemini)' if is_online_now else '⚡ Chế độ Nhanh (Offline)'
+        mode_col.button(
+            mode_label,
+            key='toggle_llm_mode_btn',
+            on_click=_handle_toggle_llm,
+            use_container_width=True,
+            help='Bấm để chuyển đổi trực tiếp giữa Mô hình AI Online (Gemini + Tool Calling) và Chế độ Tra cứu Nhanh cục bộ (<50ms)',
+        )
+        action.button('＋ Trò chuyện mới', key='clear_chat', on_click=_handle_new_conversation, use_container_width=True)
+        if llm_notice := st.session_state.pop("llm_mode_notice", None):
+            st.info(llm_notice)
+        _render_chat_conversation(
+            agent,
+            clean_role,
+            user_name,
+            history_height=None if effective_mode == "fullscreen" else 280,
+        )
+        render_quick_questions()
+        with st.expander('Dữ liệu và chức năng có thể tra cứu'):
+            render_chat_context(is_admin)
+
+
+def render_chat_context(is_admin):
+    """Only expose the sources allowed for the current user's role."""
+    from src.database import SessionLocal
+    from src.models import Ingredient, MenuItem, RecipeBOM
+    with SessionLocal() as db:
+        sources = [('recipe', 'Thực đơn cửa hàng', f'{db.query(MenuItem).count()} món trong thực đơn'),
+                   ('cup', 'Công thức & định lượng', f'{db.query(RecipeBOM).count()} định lượng nguyên liệu'),
+                   ('box', 'Danh mục nguyên liệu', f'{db.query(Ingredient).count()} nguyên liệu')]
+    rows = ''.join(f'<div class="mx-source-row"><span>{ui_icon(icon)}</span><div><b>{label}</b><small>{detail}</small></div><i>✓</i></div>' for icon, label, detail in sources)
+    links = page_link('Tem & công thức', 'Mở sổ tay công thức')
+    if is_admin:
+        links += page_link('Dự báo', 'Xem dự báo nhu cầu')
+        links += page_link('Báo cáo & kho', 'Kiểm tra kho & báo cáo')
+    st.markdown(f'<aside class="mx-context"><section class="mx-card"><div class="mx-card-heading"><h3>{ui_icon("recipe")} Dữ liệu của cửa hàng</h3></div><p>Các nguồn dữ liệu có sẵn để tra cứu</p>{rows}</section><section class="mx-card mx-ai-note"><div class="mx-ai-intro">{snow_king_image(54)}<b>Luôn sẵn sàng<br>giúp bạn một tay.</b></div><p>Bạn có thể hỏi công thức, dữ liệu cửa hàng hoặc quy trình sơ chế. Mở phần “Nguồn dữ liệu” dưới câu trả lời để xem thông tin đối chiếu.</p><div class="mx-context-links">{links}</div></section></aside>', unsafe_allow_html=True)

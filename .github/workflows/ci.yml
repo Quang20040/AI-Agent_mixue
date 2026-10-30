@@ -34,3 +34,7 @@ jobs:
           PYTHONPATH: .
         run: |
           python -m pytest tests/ -v --tb=short
+
+      - name: Verify System Healthcheck
+        run: |
+          python scripts/healthcheck.py

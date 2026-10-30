@@ -17,7 +17,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 import csv
 import random
 from datetime import date, timedelta
-from decimal import Decimal
 from pathlib import Path
 
 from src.ingestion import import_all

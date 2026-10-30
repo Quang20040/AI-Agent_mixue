@@ -47,8 +47,11 @@ def test_approval_survives_new_agent_and_is_idempotent(isolated_db):
         agent = MixueOperationsAgent(db)
         assert not agent.tool_approve_plan(plan["plan_id"], "STAFF").get("is_approved")
         result = agent.process_query("Ký duyệt đơn nhập hàng PLAN_PO_ABCD1234", "ADMIN", "Manager")
-        assert result["tool_called"] == "approve_plan"
+        assert result['raw_result']['status'] == 'PENDING_APPROVAL'
+        assert plan_service.get_plan(plan['plan_id'])['status'] == 'PENDING_APPROVAL'
+        result = agent.resume_approval(True, 'ADMIN', 'Manager')
         assert result["raw_result"]["is_approved"]
+        agent.close()
     with isolated_db() as db:
         fresh_agent = MixueOperationsAgent(db)
         repeat = fresh_agent.tool_approve_plan(plan["plan_id"], "ADMIN", "Other Manager")
@@ -79,3 +82,33 @@ def test_store_name_does_not_override_revenue_question(isolated_db):
         agent = MixueOperationsAgent(db)
         result = agent.process_query("Doanh thu cửa hàng hôm nay", "ADMIN")
         assert result["tool_called"] == "get_daily_sales"
+
+
+def test_compound_query_and_tfidf_rag_and_mode_toggle(isolated_db):
+    from src.models import ShiftReportRecord
+
+    with isolated_db() as db:
+        # 1. Verify ShiftReportRecord table exists in relational schema
+        assert ShiftReportRecord.__tablename__ == "shift_reports"
+        agent = MixueOperationsAgent(db)
+        try:
+            # 2. Verify multi-intent compound query decomposition across domains
+            compound = agent._process_offline_query(
+                "Hạn dùng TP02 bảo quản bao lâu đồng thời số lượng nhân viên chính thức là bao nhiêu?",
+                user_role="ADMIN",
+                user_name="Manager",
+            )
+            assert "---" in compound["text"]
+            assert "Trân châu" in compound["text"]
+            assert "1 nhân viên chính thức" in compound["text"]
+            assert "get_employees_overview" in compound["tool_called"]
+
+            # 3. Verify semantic synonym expansion + TF-IDF cosine in RepoDocsAgent
+            hits = agent.multi_agent.docs_agent.search("trân châu để ngoài nhiệt độ phòng được mấy tiếng")
+            assert hits and any(h["metadata"].get("code") == "TP02" for h in hits)
+
+            # 4. Verify runtime LLM mode switcher
+            ok, msg = agent.set_llm_mode(False)
+            assert ok and not agent.is_llm_online()
+        finally:
+            agent.close()
