@@ -29,7 +29,7 @@ flowchart TB
         direction TB
         Q1["① Chất lượng ảnh<br/>analyze_image_layout_and_quality"]
         Q2["② Tách vùng chứng từ<br/>pos_receipt · handwritten_ledger · composite"]
-        Q3["③ Đọc thô bằng Vision LLM<br/>raw_text · source · evidence"]
+        Q3["③ Vision LLM chép nguyên trang<br/>day_sheet.py: mọi ca trên ảnh, chỉ chép chữ"]
         Q4["④ Quy tắc kiểm chứng<br/>enforce_reading_uncertainty<br/>unit_explicit · is_calculated · layout 3.1"]
         Q5["⑤ Đối soát số học<br/>check_ocr_consistency<br/>sổ ca · POS · chéo POS↔sổ tay"]
         Q6["⑥ Dự thảo DRAFT_OCR_…<br/>trường uncertain điền gợi ý, tô vàng + review_reason"]
@@ -75,7 +75,15 @@ flowchart TB
 
 ### 1.1. Trụ cột 1 — Verifiable Vision OCR
 
-Mô hình Vision chỉ là **bộ đọc**; quyết định một con số có được vào biểu mẫu hay không nằm ở tầng kiểm chứng tất định (`src/engine/vision_ocr.py`):
+Mô hình Vision chỉ là **bộ chép chữ**; quyết định một con số có được vào biểu mẫu hay không nằm ở tầng kiểm chứng tất định (`src/engine/day_sheet.py`, `src/engine/vision_ocr.py`).
+
+**Đọc cả trang, một lần cho mọi ca** (`day_sheet.py`) — học theo cách các trợ lý đa phương thức đọc bảng viết tay tốt nhất:
+
+1. Ảnh được dựng thẳng theo EXIF, tăng tương phản nhẹ và phóng lên cạnh dài ≥ 1600 px trước khi gửi (ảnh điện thoại 768×1024 chữ viết tay nhỏ).
+2. Mô hình **chép toàn trang trước** (`transcription`, từng hàng "nhãn in sẵn | chữ viết tay"), rồi chép **nguyên văn** từng ô cho **mọi mục ca có trên ảnh** (`1. Ca sáng`, `2. Ca chiều`, `3. Ca tối` = 3.2 + 4 + 5) và phiếu POS nếu có — kèm mức đọc được `clear/unsure/illegible/empty`. Mô hình **không quy đổi, không cộng**.
+3. `parse_cell` (tất định) đổi chữ thành tiền: `653` → 653.000 (số tắt), `962 + 629` → 1.591.000, `2014 (dư20k)` → tiền mặt 2.014.000 + dư 20.000, `41k …; 15k …` → khoản chi 56.000. Mọi quy đổi/cộng vẫn bị đánh dấu ⚠️ để người xác nhận.
+4. Một lần đọc được **lưu theo ảnh**: đổi ca trên màn hình (hoặc nhắn `đọc lại ảnh cho ca chiều` trong chat) không gọi lại mô hình. Ảnh không chứa ca đang chọn được đánh dấu, không trộn vào báo cáo của ca đó.
+5. Kiểm thử trên bản chép của 3 ảnh thật ngày 14/10/2026 (`data/ocr_eval/day_sheet_transcripts.json`, `tests/test_day_sheet.py`): cả 33 ô của 3 ca khớp báo cáo đã duyệt. Đây là phép đo tầng quy tắc trên bản chép mô phỏng, không phải độ chính xác của mô hình.
 
 | Quy tắc | Hành vi | Ví dụ |
 |---|---|---|

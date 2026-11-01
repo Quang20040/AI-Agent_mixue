@@ -99,6 +99,8 @@ class OcrChatMixin:
         }
         fields = draft.get("fields", {})
         readings = draft.get("field_readings", {})
+        meta = draft.get("meta") or {}
+        suggestions = {k: v for k, v in (meta.get("suggestions") or {}).items() if fields.get(k) is None}
         consistency = draft.get("consistency", {})
         uncertain = draft.get("uncertain_fields", [])
 
@@ -135,7 +137,9 @@ class OcrChatMixin:
                 lines.append(f"- **{label}:** **{int(val):,} đ** *(nguồn: `{src}`" + (f", đọc thô: `{raw_t}`)*" if raw_t else ")*"))
             elif r.get("status") in {"uncertain", "unreadable"} or k in uncertain:
                 norm_v = r.get("normalized_value")
-                norm_hint = f", gợi ý chuẩn hóa: `{norm_v:,} đ`" if isinstance(norm_v, int) else ""
+                hint = suggestions.get(k) or {}
+                norm_hint = (f", **gợi ý: {int(hint['value']):,} đ** ({hint.get('basis', '')})" if hint.get("value") is not None
+                             else f", gợi ý chuẩn hóa: `{norm_v:,} đ`" if isinstance(norm_v, int) else "")
                 reason = r.get("review_reason") or "Chưa rõ đơn vị hoặc cần xác nhận"
                 lines.append(f"- **{label}:** ⚠️ **[Để trống chờ xác nhận]** *(đọc thô: `{raw_t or '—'}`{norm_hint} — {reason})*")
 
@@ -147,6 +151,17 @@ class OcrChatMixin:
         else:
             lines.append("\n**2. ✅ Kiểm tra nhất quán:** Các khoản đã xác nhận hiện khớp nhau.")
 
+        shift_names = {"CA_SANG": "Ca sáng", "CA_CHIEU": "Ca chiều", "CA_TOI": "Ca tối"}
+        detected = meta.get("detected_shifts") or []
+        if len(detected) > 1:
+            lines.append("\n📑 **Ảnh có nhiều ca:** " + ", ".join(shift_names.get(x, x) for x in detected)
+                         + f". Dự thảo này lấy số của **{shift_names.get(fields.get('shift_code'), fields.get('shift_code'))}**; "
+                         "muốn ca khác, nhắn ví dụ `đọc lại ảnh cho ca chiều`.")
+        if not meta.get("shift_present", True):
+            lines.append("\n⚠️ Ảnh không có mục của ca này; các ô để trống.")
+        if suggestions:
+            lines.append(f"\n💡 Có **{len(suggestions)} ô có số gợi ý** (quy đổi số viết tắt ×1.000, cộng biểu thức). "
+                         "Nhắn **`dùng số gợi ý`** để điền tất cả, hoặc sửa từng ô bằng lời.")
         if uncertain:
             uncertain_vi = [field_labels.get(f, f) for f in uncertain]
             lines.append(
@@ -278,6 +293,11 @@ class OcrChatMixin:
             "model": extracted.get("model", ""),
             "file_ids": ids,
             "filenames": filenames,
+            "meta": {
+                "suggestions": extracted.get("suggestions") or {},
+                "detected_shifts": (extracted.get("day_sheet") or {}).get("detected_shifts", []),
+                "shift_present": (extracted.get("day_sheet") or {}).get("shift_present", True),
+            },
         }
         saved_draft = store.save_ocr_draft(
             owner,
@@ -1047,6 +1067,27 @@ class OcrChatMixin:
             return {"forced_call": {"name": "request_shift_draft_confirmation",
                                     "args": {"draft_id": active_ocr["draft_id"]}}}
 
+        # Same photos, another shift: "đọc lại ảnh cho ca chiều" (the page reading is cached, no new model call).
+        shift_words = [code for code, words in (("CA_SANG", "ca sang"), ("CA_CHIEU", "ca chieu"), ("CA_TOI", "ca toi"))
+                       if words in q_norm]
+        if active_ocr and shift_words and re.search(r"\bdoc( lai)?\b", q_norm) and active_ocr.get("file_ids"):
+            args = {"file_ids": active_ocr["file_ids"][:6], "shift_code": shift_words[0]}
+            if (active_ocr.get("fields") or {}).get("report_date"):
+                args["report_date"] = active_ocr["fields"]["report_date"]
+            return {"forced_call": {"name": "inspect_attached_shift_image", "args": args}}
+
+        # Step 2a: accept the highlighted suggestions for every still-empty field in one message.
+        if active_ocr and "goi y" in q_norm and any(w in q_norm for w in ("dung", "dong y", "lay", "ap dung", "chap nhan")):
+            fields = active_ocr.get("fields") or {}
+            hints = (active_ocr.get("meta") or {}).get("suggestions") or {}
+            edits = {k: v["value"] for k, v in hints.items()
+                     if k in self._OCR_UPDATE_FIELDS and fields.get(k) is None and v.get("value") is not None}
+            if not edits:
+                return {"direct_text": "Dự thảo hiện không còn ô trống nào có số gợi ý.",
+                        "tool_called": "update_shift_ocr_draft"}
+            return {"forced_call": {"name": "update_shift_ocr_draft",
+                                    "args": {"draft_id": active_ocr["draft_id"], **edits}}}
+
         # Step 2: natural-language edits of uncertain fields.
         if active_ocr:
             edits = {k: v for k, v in self._parse_conversational_ocr_edits(user_query).items()
@@ -1067,8 +1108,8 @@ class OcrChatMixin:
                 "1. Mở mục **📸 Đính kèm ảnh chứng từ** ngay dưới khung chat, chọn ảnh sổ chốt ca viết tay và/hoặc hóa đơn POS "
                 "(hoặc bấm một ảnh mẫu của ngày 14/10/2026), rồi bấm **Gửi cho Tuyết Vương đọc**.\n"
                 "2. Mình gọi `inspect_attached_shift_image`: tách vùng 🧾 POS và ✍️ sổ tay, kiểm tra độ mờ, giữ chuỗi đọc thô, "
-                "để trống các số chưa rõ đơn vị (không tự nhân 1.000, không tự cộng `962 + 629`) và đối soát cộng ngang.\n"
-                "3. Bạn sửa trường ⚠️ bằng lời, ví dụ: `Sửa tiền mặt thành 653000, chuyển khoản 1591000`.\n"
+                "đọc mọi ca có trên trang, gợi ý số cho ô viết tắt (653 → 653.000, `962 + 629` → 1.591.000) nhưng vẫn đánh dấu ⚠️, và đối soát cộng ngang.\n"
+                "3. Nhắn `dùng số gợi ý` để điền các ô ⚠️, hoặc sửa bằng lời, ví dụ: `Sửa tiền mặt thành 653000`.\n"
                 "4. Gõ `Yêu cầu phê duyệt lưu báo cáo chốt ca` — luồng LangGraph dừng ở `interrupt()` chờ Quản lý bấm **Phê duyệt**."),
                 "tool_called": "ocr_guidance"}
         return None

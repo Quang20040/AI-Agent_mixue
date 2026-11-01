@@ -355,21 +355,6 @@ _NO_SUGGESTION_REASONS = (
 )
 
 
-def _vnd_term(term: str, handwritten: bool) -> tuple[int, bool] | None:
-    """One written number -> (VND, scaled ×1000?). '653' in the ledger is shorthand for 653.000 đ."""
-    text = term.strip().lower()
-    negative = text.startswith('-')
-    explicit_k = bool(re.search(r'(k|nghìn|nghin|ngàn|ngan)\b', text))
-    grouped = bool(re.search(r'\d[.,]\d{3}\b', text))
-    digits = re.sub(r'\D', '', text)
-    if not digits:
-        return None
-    amount = int(digits)
-    scaled = explicit_k or (handwritten and not grouped and 0 < amount < 100_000)
-    amount = amount * 1000 if scaled else amount
-    return (-amount if negative else amount), scaled
-
-
 def suggest_value(name: str, reading: MoneyReading) -> dict[str, Any] | None:
     """Pre-fill suggestion for a field the verification layer did NOT accept as read.
 
@@ -381,19 +366,16 @@ def suggest_value(name: str, reading: MoneyReading) -> dict[str, Any] | None:
         return None
     if reading.source == 'both_conflicting' or any(marker in reading.review_reason for marker in _NO_SUGGESTION_REASONS):
         return None
+    from src.engine.day_sheet import parse_cell
     handwritten = reading.source == 'handwritten_ledger'
     raw = (reading.raw_text or '').strip()
-    terms = [t for t in re.split(r'\s*\+\s*', raw) if re.search(r'\d', t)] if raw else []
-    if terms:
-        parsed = [_vnd_term(t, handwritten) for t in terms]
-        if any(p is None for p in parsed):
-            return None
-        value = sum(p[0] for p in parsed)
-        scaled = any(p[1] for p in parsed)
+    parsed = parse_cell(raw, handwritten=handwritten, expenses=name == 'expenses_vnd') if raw else None
+    if parsed and parsed['value'] is not None:
+        value = parsed['value']
         steps = []
-        if len(terms) > 1:
+        if parsed['is_expression']:
             steps.append('cộng các số hạng')
-        if scaled:
+        if parsed['scaled']:
             steps.append('quy đổi số viết tắt ×1.000')
         basis = f'Sổ ghi "{raw}"' if handwritten else f'Đọc được "{raw}"'
         basis += (' → ' + ', '.join(steps) if steps else '') + f' = {value:,.0f} đ'.replace(',', '.')
@@ -610,6 +592,9 @@ def build_ocr_prompt(shift_hint: str | None, target_date: str | None) -> str:
 def merge_image_extractions(results, *, names, shas, shift_hint, target_date):
     """Reconcile independent readings; never sum repeated photos or hide conflicts."""
     good = [(index, result) for index, result in enumerate(results) if result.get('status') == 'NEEDS_REVIEW']
+    # Images that actually contain the requested shift lead (document type, regions, date).
+    good.sort(key=lambda item: not (item[1].get('day_sheet') or {}).get('shift_present', True))
+    any_shift = any((r.get('day_sheet') or {}).get('shift_present', True) for _, r in good)
     if not good:
         failure = dict(results[0])
         failure['image_failures'] = [{'image': names[i], 'error_code': r.get('error_code'), 'error_type': r.get('error_type')} for i, r in enumerate(results)]
@@ -649,7 +634,8 @@ def merge_image_extractions(results, *, names, shas, shift_hint, target_date):
         if result.get('status') != 'NEEDS_REVIEW':
             warnings.append(f'Ảnh {i+1} chưa đọc được ({result.get("error_code", "OCR_ERROR")}); các ảnh còn lại vẫn được giữ để kiểm tra.')
         else:
-            warnings.extend(result.get('warnings', []))
+            warnings.extend(w for w in result.get('warnings', [])
+                            if not (any_shift and w.startswith('Ảnh này không có mục')))
     merged = ShiftReading(fields=fields, document_date=next(iter(dates)) if len(dates) == 1 else None,
                           document_type='composite' if has_ledger and has_pos else 'handwritten_ledger' if has_ledger else good[0][1].get('document_type', 'unknown'),
                           raw_text='\n'.join(f'Ảnh {i+1}: {r.get("raw_text_extracted", "")}' for i, r in good)[:16000],
@@ -673,6 +659,23 @@ def merge_image_extractions(results, *, names, shas, shift_hint, target_date):
                   requested_shift_present='yes' if any(r.get('requested_shift_present') == 'yes' for _, r in good) else 'unknown',
                   image_results=[{'image': names[i], 'status': r.get('status'), 'document_date': r.get('document_date'),
                                   'field_readings': r.get('field_readings', {}), 'error_code': r.get('error_code')} for i, r in enumerate(results)])
+    for key in MONEY_FIELDS:
+        if output.get(key) is None and key not in output['suggestions']:
+            hint = next(((r.get('suggestions') or {}).get(key) for _, r in good if (r.get('suggestions') or {}).get(key)), None)
+            if hint and output['field_readings'][key]['status'] == 'not_present':
+                output['suggestions'][key] = hint
+    sheets = [r['day_sheet'] for _, r in sorted(good) if r.get('day_sheet')]
+    if sheets:
+        from src.engine.day_sheet import SHIFTS
+        found = {s for sheet in sheets for s in sheet['detected_shifts']}
+        output['day_sheet'] = {
+            'detected_shifts': [s for s in SHIFTS if s in found],
+            'shift_present': any(sheet['shift_present'] for sheet in sheets),
+            'has_pos_slip': any(sheet['has_pos_slip'] for sheet in sheets),
+            'images': [img for sheet in sheets for img in sheet['images']],
+            'transcription': '\n\n'.join(f'--- {sheet["images"][0]["name"]} ---\n{sheet["transcription"]}' for sheet in sheets),
+        }
+        output['shift_code'] = shift_hint or output.get('shift_code')
     output['regions'] = {source: {'present': any(r.get('regions', {}).get(source, {}).get('present') for _, r in good),
                                  'raw_text': '\n'.join(f'Ảnh {i+1}: {r.get("regions", {}).get(source, {}).get("raw_text", "")}' for i, r in good),
                                  'fields': [key for key, reading in merged.fields.items() if reading.source == source]}
@@ -710,13 +713,15 @@ def _inline_refs(schema: dict[str, Any]) -> dict[str, Any]:
 
 def build_ocr_reader(cfg: AgentSettings, mode: str = 'json_schema_strict'):
     """The configured vision model, bound to the JSON extraction format for `mode`."""
-    reader = cfg.model_copy(update={'model': ocr_model_id(cfg), 'max_output_tokens': 6000, 'max_retries': 0}).build_model()
+    reader = cfg.model_copy(update={'model': ocr_model_id(cfg), 'max_output_tokens': 12000, 'max_retries': 0}).build_model()
     if mode == 'json_object':
         response_format: dict[str, Any] = {'type': 'json_object'}
-    elif mode == 'json_schema_inline':
-        response_format = {'type': 'json_schema', 'json_schema': {'name': 'shift_ocr', 'schema': _inline_refs(extraction_schema())}}
     else:
-        response_format = {'type': 'json_schema', 'json_schema': {'name': 'shift_ocr', 'strict': True, 'schema': extraction_schema()}}
+        from src.engine.day_sheet import day_sheet_schema
+        schema = day_sheet_schema()  # already $ref-free
+        response_format = {'type': 'json_schema', 'json_schema': {'name': 'day_sheet', 'schema': schema}}
+        if mode == 'json_schema_strict':
+            response_format['json_schema']['strict'] = True
     options: dict[str, Any] = {'response_format': response_format}
     if cfg.provider == 'openrouter':
         options['extra_body'] = {'provider': {'require_parameters': True}, 'reasoning': {'effort': 'none'}}
@@ -808,11 +813,24 @@ def extract_image(
 
         with ThreadPoolExecutor(max_workers=2) as pool:
             results = list(pool.map(read_one, valid_images))
+        if not shift_hint:
+            # No shift chosen: pick one shift for all images (readings are cached, so this costs no model calls).
+            found = [s for r in results for s in (r.get('day_sheet') or {}).get('detected_shifts', [])]
+            if found:
+                from src.engine.day_sheet import SHIFTS
+                shift_hint = next(s for s in SHIFTS if s in found)
+                with ThreadPoolExecutor(max_workers=2) as pool:
+                    results = list(pool.map(read_one, valid_images))
         return merge_image_extractions(results, names=[item[1] for item in valid_images],
                                        shas=[item[3] for item in valid_images], shift_hint=shift_hint, target_date=target_date)
 
     modes = [None] if model is not None else list(OCR_OUTPUT_MODES)
     attempts: list[str] = []
+    # One reading covers every shift on the page: switching the shift on screen re-uses it.
+    sheet_key = (valid_images[0][3], ocr_model_id(cfg)) if model is None else None
+    if sheet_key and sheet_key in _DAY_SHEETS:
+        sheet, model_name = _DAY_SHEETS[sheet_key]
+        return _from_day_sheet(sheet, valid_images, shift_hint, target_date, ['cache'], model_name)
     while True:
         mode = modes.pop(0)
         outcome = _read_with_mode(valid_images, mode, model, cfg, shift_hint, target_date)
@@ -828,22 +846,82 @@ def extract_image(
     if isinstance(outcome, dict):
         return outcome
     result, model_name = outcome
+    from src.engine.day_sheet import DaySheet
+    if isinstance(result, DaySheet):
+        if sheet_key:
+            if len(_DAY_SHEETS) > 64:
+                _DAY_SHEETS.pop(next(iter(_DAY_SHEETS)))
+            _DAY_SHEETS[sheet_key] = (result, model_name)
+        return _from_day_sheet(result, valid_images, shift_hint, target_date, attempts, model_name)
     return _finish_extraction(result, valid_images, shift_hint, target_date, attempts, model_name)
+
+
+_DAY_SHEETS: dict[tuple[str, str], tuple[Any, str]] = {}
+
+
+def _from_day_sheet(sheet, valid_images, shift_hint, target_date, attempts, model_name):
+    """Per-shift result from a whole-page reading (same output shape as before, plus `day_sheet`)."""
+    from src.engine import day_sheet as ds
+    shifts = ds.detected_shifts(sheet)
+    chosen = shift_hint or (shifts[0] if shifts else 'CA_TOI')
+    reading = ds.shift_reading_from_day_sheet(sheet, chosen)
+    if not shift_hint and len(shifts) > 1:
+        reading.warnings.append('Ảnh có ' + ', '.join(ds.SHIFT_LABELS[s] for s in shifts)
+                                + f'; đang lấy số của {ds.SHIFT_LABELS[chosen]}. Chọn ca khác để lấy số của ca đó.')
+    reading = enforce_reading_uncertainty(reading, shift_hint=chosen)
+    out = _finish_extraction(reading, valid_images, chosen, target_date, attempts, model_name)
+    out['shift_code'] = chosen
+    for field, hint in ds.default_zero_suggestions(sheet, chosen).items():
+        if out.get(field) is None and field not in out['suggestions'] \
+                and out['field_readings'][field]['status'] == 'not_present':
+            out['suggestions'][field] = hint
+    out['day_sheet'] = {
+        'detected_shifts': shifts,
+        'shift_present': reading.requested_shift_present == 'yes',
+        'document_kind': sheet.document_kind,
+        'has_pos_slip': sheet.pos_slip.present,
+        'transcription': sheet.transcription,
+        'images': [{'name': valid_images[0][1], 'sha256': valid_images[0][3], 'shifts': shifts,
+                    'has_pos_slip': sheet.pos_slip.present}],
+    }
+    return out
+
+
+def _model_image(data: bytes, mime: str) -> tuple[bytes, str]:
+    """What the vision model sees: upright, RGB, readable size (small phone photos are upscaled)."""
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            image = ImageOps.exif_transpose(image).convert('RGB')
+            longest = max(image.size)
+            target = 2048 if longest > 2048 else (1600 if longest < 1600 else longest)
+            if target != longest:
+                scale = target / longest
+                image = image.resize((round(image.width * scale), round(image.height * scale)), Image.LANCZOS)
+            image = ImageOps.autocontrast(image, cutoff=1)
+            buffer = io.BytesIO()
+            image.save(buffer, 'JPEG', quality=92)
+            return buffer.getvalue(), 'image/jpeg'
+    except (OSError, ValueError):
+        return data, mime
 
 
 def _read_with_mode(valid_images, mode, model, cfg, shift_hint, target_date):
     """One model call. Returns a ShiftReading, an early-exit dict, or the exception raised."""
     try:
+        from src.engine.day_sheet import DaySheet, build_day_sheet_prompt, day_sheet_schema
         reader = model or build_ocr_reader(cfg, mode)
-        prompt = build_ocr_prompt(shift_hint, target_date)
+        # Live models transcribe the whole day sheet; injected readers (tests, replay) may answer either shape.
+        prompt = build_day_sheet_prompt(target_date) if model is None else build_ocr_prompt(shift_hint, target_date)
         if mode == 'json_object':
             prompt += ('\n\nChỉ trả về MỘT đối tượng JSON hợp lệ (không markdown) đúng JSON Schema sau:\n'
-                       + json.dumps(_inline_refs(extraction_schema()), ensure_ascii=False))
+                       + json.dumps(day_sheet_schema(), ensure_ascii=False))
 
         if len(valid_images) == 1:
             data_single, _, mime_single, _, _ = valid_images[0]
+            if model is None:
+                data_single, mime_single = _model_image(data_single, mime_single)
             human_content: list[dict[str, Any]] = [
-                {'type': 'text', 'text': 'Đọc ảnh này và trả kết quả để con người kiểm tra.'},
+                {'type': 'text', 'text': 'Chép lại chứng từ trong ảnh này theo hướng dẫn.'},
                 {'type': 'image_url', 'image_url': {'url': f'data:{mime_single};base64,' + base64.b64encode(data_single).decode()}},
             ]
         else:
@@ -871,8 +949,12 @@ def _read_with_mode(valid_images, mode, model, cfg, shift_hint, target_date):
         if isinstance(content, list):
             content = ''.join(part['text'] for part in content if isinstance(part, dict) and isinstance(part.get('text'), str))
         content = re.sub(r'^```(?:json)?\s*|\s*```$', '', str(content).strip())
-        reading = enforce_reading_uncertainty(ShiftReading.model_validate_json(content), shift_hint=shift_hint)
-        return reading, str(getattr(answer, 'response_metadata', {}).get('model_name') or ocr_model_id(cfg))
+        model_name = str(getattr(answer, 'response_metadata', {}).get('model_name') or ocr_model_id(cfg))
+        payload = json.loads(content)
+        if isinstance(payload, dict) and 'sections' in payload:
+            return DaySheet.model_validate(payload), model_name
+        reading = enforce_reading_uncertainty(ShiftReading.model_validate(payload), shift_hint=shift_hint)
+        return reading, model_name
     except Exception as exc:  # noqa: BLE001 - classified by _ocr_error; SDK errors never reach the UI raw
         return exc
 
@@ -880,7 +962,7 @@ def _read_with_mode(valid_images, mode, model, cfg, shift_hint, target_date):
 def _ocr_error(exc: Exception, attempts: list[str]) -> dict[str, Any]:
     """Map a failed provider call to a Vietnamese message; keep a short technical detail for admins."""
     status_code = getattr(exc, 'status_code', None)
-    if isinstance(exc, ValidationError):
+    if isinstance(exc, (ValidationError, json.JSONDecodeError)):
         code, message = 'INVALID_EXTRACTION', 'Mô hình đã phản hồi nhưng dữ liệu chưa đúng cấu trúc. Thử lại ảnh này hoặc nhập tay; chưa có số liệu để lưu.'
     elif status_code == 429:
         code, message = 'RATE_LIMITED', 'Dịch vụ đọc ảnh đang giới hạn lượt gọi. Chờ một chút rồi thử lại; chưa có số liệu để lưu.'

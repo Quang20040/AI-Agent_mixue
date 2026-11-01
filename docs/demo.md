@@ -37,7 +37,7 @@ Bấm **Mở Chốt Ca & Đối Soát OCR** trên thẻ *TRỤ CỘT 1*.
 Chỉ vào dải ①→⑥ ở đầu trang: chất lượng ảnh → tách vùng chứng từ → đọc thô → quy tắc kiểm chứng → đối soát số học → người xác nhận.
 
 ### 2.2. Đọc sổ chốt ca viết tay (1:15 – 2:45)
-1. Bấm **📷 Sổ Ca Sáng** → **Đọc ảnh bằng AI**.
+1. Bấm **🗂️ Cả 3 ảnh mẫu của ngày** → **Đọc 3 ảnh bằng AI** (mỗi ảnh gửi một lần). Chỉ vào thẻ dưới mỗi ảnh: ảnh 1 có *Ca sáng + Ca chiều*, ảnh 2 *Ca tối*, ảnh 3 *Ca tối + Phiếu POS*. Đổi sang **Ca chiều** / **Ca tối** ở góc trên: số đổi ngay, không đọc lại; ảnh không có ca đó bị làm mờ.
 2. Trình bày kết quả:
    - Badge loại chứng từ **✍️ Sổ tay viết tay**, badge độ nét ảnh.
    - Bảng từng trường: **Nguồn** (🧾 POS / ✍️ sổ tay), **Trạng thái** (✅ Đọc rõ · ⚠️ Cần kiểm tra · ❌ Không có/Mờ), **Đọc thô** (`653`, `962 + 629`), **Chuẩn hóa** và **Lý do cần xác nhận**.

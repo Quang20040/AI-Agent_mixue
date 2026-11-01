@@ -239,6 +239,16 @@
 .vocr-suggest small { color: #b45309; }
 .st-key-ocr_staff_inbox { background: #fff; border: 1px solid #fde68a !important; border-radius: 20px !important; padding: 18px !important; margin-top: 16px; }
 
+/* OCR day workspace: shift status row and images tagged by shift */
+.px-shift-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 14px; }
+.px-shift-chip { display: inline-flex; align-items: center; gap: 8px; background: #fff; border: 1px solid var(--px-line); border-radius: 999px; padding: 6px 12px; font-size: 13px; }
+.px-shift-chip.px-shift-current { border-color: var(--px-red); box-shadow: 0 0 0 3px #e6001214; }
+[class*="st-key-ocr_img_"] { border: 1px solid var(--px-line); border-radius: 14px; padding: 8px; background: #fff; }
+[class*="st-key-ocr_img_on_"] { border-color: #86efac; }
+[class*="st-key-ocr_img_off_"] { opacity: .55; }
+[class*="st-key-ocr_img_off_"]:hover { opacity: .9; }
+[class*="st-key-ocr_rm_"] button { min-height: 32px !important; padding: 0 !important; }
+
 /* ---------- CSS-only motion ---------- */
 @keyframes px-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 @keyframes px-msg-in { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }

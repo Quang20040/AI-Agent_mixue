@@ -1047,7 +1047,8 @@ def _render_chat_conversation(agent, role, user_name, history_height=250, key_su
                 for d in discrepancies:
                     st.warning(f"⚠️ {d['message']}")
             with st.expander('🔎 Bằng chứng từng trường: nguồn · trạng thái · đọc thô · lý do', expanded=not active_ocr_draft.get('is_complete')):
-                vocr.render_field_table(active_ocr_draft.get('field_readings', {}), active_ocr_draft.get('fields', {}))
+                vocr.render_field_table(active_ocr_draft.get('field_readings', {}), active_ocr_draft.get('fields', {}),
+                                        ((active_ocr_draft.get('meta') or {}).get('suggestions') or {}))
 
             with st.expander("✏️ Chỉnh sửa số liệu dự thảo trước khi xác nhận", expanded=False):
                 with st.form(key=f"ocr_edit_form_{active_ocr_draft['draft_id']}{key_suffix}"):

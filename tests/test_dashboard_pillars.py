@@ -4,6 +4,7 @@ from pathlib import Path
 from streamlit.testing.v1 import AppTest
 
 from src.auth import CORE_PAGES, get_allowed_pages, page_group
+from src.engine.vision_ocr import extract_image
 
 APP = Path(__file__).resolve().parents[1] / 'src' / 'dashboard' / 'app.py'
 
@@ -217,3 +218,41 @@ def test_chat_page_has_langgraph_rail_with_rbac_counts():
         assert 'px-chat-head' in html and 'px-rail' in html and 'Luồng LangGraph' in html
         assert ('duyệt được interrupt' in html) is admin
         assert 'Quyền hạn (máy chủ xác thực)' in html
+
+
+def test_day_photos_are_read_once_and_each_shift_fills_its_own_numbers(monkeypatch):
+    """Load the whole day's photos, read once, then switch shifts: each shows its own numbers and photos."""
+    from test_day_sheet import DayReader
+    reader = DayReader()
+
+    def fake(*args, shift_hint=None, target_date=None, image_path=None, image_paths=None, **kwargs):
+        return extract_image(image_path=image_path, image_paths=image_paths, model=reader,
+                             shift_hint=shift_hint, target_date=target_date)
+    monkeypatch.setattr('src.dashboard.shift_closing_ui.extract_shift_data_from_image', fake)
+    app = _login()
+    app.radio(key='main_navigation').set_value('📸 Chốt ca & OCR').run()
+    app.button(key='ocr_sample_all').click().run()
+    app.button(key='run_shift_ocr').click().run()
+    assert not app.exception
+    calls_after_read = reader.calls
+    assert calls_after_read == 3  # one call per photo, covering all shifts
+
+    def number(label):
+        return next(item for item in app.number_input if item.label == label).value
+
+    assert number('Tiền mặt thu tại quầy (đ)') == 653000
+    html = ' '.join(m.value for m in app.markdown)
+    assert 'đã duyệt, đã ghi sổ' in html and 'Gửi lại sẽ tạo bản cập nhật' in ' '.join(i.value for i in app.info)
+    # Switch to the afternoon: numbers change, nothing is sent to the model again.
+    app.session_state['shift_ocr_selection'] = ('CA_CHIEU', 'Ca chiều')
+    app.run()
+    assert not app.exception
+    assert number('Tiền mặt thu tại quầy (đ)') == 2014000
+    assert number('Chênh lệch tiền mặt dư/thiếu (đ)') == 20000
+    assert number('Chuyển khoản ngân hàng (đ)') == 3861000
+    # Photos without the afternoon are marked, not mixed in.
+    app.session_state['shift_ocr_selection'] = ('CA_TOI', 'Ca tối')
+    app.run()
+    assert number('Khoản chi trong ca (đ)') == 56000
+    assert number('Tổng doanh thu POS (đ, nếu có)') == 10119000
+    assert number('Tổng thu về thực tế (đ)') == 9877000

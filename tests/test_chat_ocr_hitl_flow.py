@@ -200,3 +200,43 @@ def test_governance_overview_reflects_server_side_role(offline_agent):
     assert staff['raw_result']['is_admin'] is False
     assert 'request_shift_draft_confirmation' in staff['raw_result']['denied_tools']
     assert staff['raw_result']['recent_plans'] == []
+
+
+class DayPageReader:
+    """Vision model stub answering with the day-sheet transcription of the real 14/10 morning+afternoon page."""
+
+    def __init__(self):
+        from pathlib import Path
+        data = json.loads((Path(__file__).resolve().parents[1] / 'data' / 'ocr_eval' / 'day_sheet_transcripts.json')
+                          .read_text(encoding='utf-8'))
+        self.sheet = data['20261014_ca_sang_chieu.jpg']
+
+    def bind(self, **kwargs):
+        return self
+
+    def invoke(self, messages):
+        return AIMessage(content=json.dumps(self.sheet, ensure_ascii=False))
+
+
+def test_chat_reads_a_two_shift_page_and_uses_suggestions_on_request(offline_agent, no_writes):
+    first = offline_agent.process_image_message(file_bytes=_image(), filename='so_ngay_14.jpg',
+                                                user_query='chốt ca ngày 14/10/2026', ocr_model=DayPageReader(), **MANAGER)
+    draft = first['draft']
+    assert draft['fields']['shift_code'] == 'CA_SANG'
+    assert draft['meta']['detected_shifts'] == ['CA_SANG', 'CA_CHIEU']
+    assert 'Ảnh có nhiều ca' in first['text'] and 'dùng số gợi ý' in first['text']
+    assert draft['fields']['cash_vnd'] is None  # suggestion shown, not silently written
+
+    accepted = offline_agent.process_query('dùng số gợi ý', **MANAGER)
+    assert accepted['tool_called'] == 'update_shift_ocr_draft'
+    fields = accepted['pending_ocr_draft']['fields']
+    assert fields['cash_vnd'] == 653000 and fields['bank_transfer_vnd'] == 1591000 and fields['total_collected_vnd'] == 2328000
+
+    offline_agent._ocr_model_override = DayPageReader()  # stands in for the configured vision model
+    afternoon = offline_agent.process_query('đọc lại ảnh cho ca chiều', **MANAGER)
+    assert afternoon['tool_called'] == 'inspect_attached_shift_image', afternoon['text'][:300]
+    pending = offline_agent.get_active_ocr_draft()
+    assert pending['fields']['shift_code'] == 'CA_CHIEU'
+    assert pending['meta']['suggestions']['cash_vnd']['value'] == 2014000
+    assert pending['fields']['cash_diff_vnd'] == 20000  # "(dư20k)" has an explicit unit: read directly
+    assert no_writes == []

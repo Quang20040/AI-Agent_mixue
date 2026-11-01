@@ -15,7 +15,10 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from html import escape
+
 from src.auth import normalize_role
+from src.engine.day_sheet import SHIFT_LABELS
 from src.dashboard import ocr_components as vocr
 from src.engine.shift_service import (
     SHIFT_PHOTOS_DIR,
@@ -26,6 +29,59 @@ from src.engine.shift_service import (
     get_daily_closing_summary,
     latest_shift_report_date,
 )
+
+
+def _render_shift_chips(approved, read_shifts, shift_code):
+    """Where each shift of this day stands, so the user never wonders which shift is done."""
+    chips = []
+    for code, label in SHIFT_SHORT.items():
+        if code in approved:
+            state, text = 'ok', 'đã duyệt, đã ghi sổ'
+        elif code in read_shifts:
+            state, text = 'pos', 'có trong ảnh đã đọc'
+        else:
+            state, text = 'unk', 'chưa có số'
+        current = ' px-shift-current' if code == shift_code else ''
+        chips.append(f'<span class="px-shift-chip{current}"><b>{label}</b> <span class="vocr-badge vocr-{state}">{text}</span></span>')
+    st.markdown('<div class="px-shift-row" aria-label="Trạng thái các ca trong ngày">' + ''.join(chips) + '</div>',
+                unsafe_allow_html=True)
+
+
+def _render_day_images(day_images, chosen_d_str, chosen_date, shift_code, coverage):
+    """Photos of the day, each tagged with the shifts it contains; photos without the selected shift are dimmed."""
+    def remove_image(path):
+        images = st.session_state['ocr_day_images'].get(chosen_d_str, [])
+        if path in images:
+            images.remove(path)
+
+    if day_images:
+        st.markdown(f'<div class="px-mini-head">Ảnh của ngày {chosen_date:%d/%m/%Y} · {len(day_images)}</div>',
+                    unsafe_allow_html=True)
+    for idx, p in enumerate(day_images):
+        sha = hashlib.sha256(Path(p).read_bytes()).hexdigest()
+        info = coverage.get(sha)
+        has_shift = info is None or shift_code in info.get('shifts', []) or (
+            shift_code == 'CA_TOI' and info.get('has_pos_slip'))
+        with st.container(key=f"ocr_img_{'on' if has_shift else 'off'}_{idx}"):
+            st.image(p, use_container_width=True)
+            if info is None:
+                tags = '<span class="vocr-badge vocr-unk">Chưa đọc</span>'
+            else:
+                tags = ' '.join(f'<span class="vocr-badge {"vocr-ok" if s == shift_code else "vocr-unk"}">'
+                                f'{SHIFT_SHORT[s]}</span>' for s in info.get('shifts', []))
+                if info.get('has_pos_slip'):
+                    tags += ' <span class="vocr-badge vocr-pos">Phiếu POS</span>'
+                if not has_shift:
+                    tags += f' <small>· không có {SHIFT_SHORT[shift_code]}</small>'
+            name_col, rm_col = st.columns([4, 1], vertical_alignment='center')
+            name_col.markdown(f'<small>Ảnh {idx + 1} · {escape(Path(p).name[:28])}</small><br>{tags or "—"}',
+                              unsafe_allow_html=True)
+            rm_col.button('✕', key=f'ocr_rm_{idx}_{sha[:8]}', help='Bỏ ảnh này khỏi ngày',
+                          on_click=remove_image, args=(p,))
+
+
+
+SHIFT_SHORT = {'CA_SANG': 'Ca sáng', 'CA_CHIEU': 'Ca chiều', 'CA_TOI': 'Ca tối'}
 
 
 def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = False):
@@ -41,12 +97,16 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
     if 'shift_chosen_date_picker' not in st.session_state:
         st.session_state.shift_chosen_date_picker = latest_shift_report_date()
 
-    def choose_sample(filename, ca):
-        p_str = str(SHIFT_PHOTOS_DIR / filename)
-        st.session_state.preview_image_path = p_str
-        st.session_state.preview_image_paths = [p_str]
-        st.session_state.shift_ocr_selection = next(item for item in shift_options if item[0] == ca)
-        st.session_state.extracted_cache = None
+    def choose_sample(filenames, ca):
+        sample_day = latest_shift_report_date()
+        st.session_state.shift_chosen_date_picker = sample_day
+        day_images = st.session_state.setdefault('ocr_day_images', {}).setdefault(sample_day.isoformat(), [])
+        for filename in filenames:
+            p_str = str(SHIFT_PHOTOS_DIR / filename)
+            if p_str not in day_images:
+                day_images.append(p_str)
+        if ca:
+            st.session_state.shift_ocr_selection = next(item for item in shift_options if item[0] == ca)
 
     with st.container(key='ocr_page_head'):
         head, date_col, shift_col = st.columns([3.2, 1, 1.5], gap='medium', vertical_alignment='bottom')
@@ -83,6 +143,12 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
         f'<div class="px-kpi"><small>{label}</small><b class="px-num {tone}">{value}</b><span>{note}</span></div>'
         for label, value, note, tone in cards) + '</section>', unsafe_allow_html=True)
 
+    approved = {r.get('shift_code') for r in get_all_shift_reports(chosen_d_str)}
+    chips_slot = st.container()  # filled after the reading, so the status is current
+    if shift_code in approved:
+        st.info(f'{SHIFT_LABELS[shift_code]} ngày {chosen_date:%d/%m/%Y} đã được duyệt và ghi sổ. '
+                'Gửi lại sẽ tạo bản cập nhật và vẫn phải được Quản lý phê duyệt.')
+
     # 3. KHU VỰC TẢI ẢNH CHỐT CA & AI OCR EXTRACTOR
     with st.container(key='ocr_workspace'):
         col_upload, col_result = st.columns([1, 2.1], gap="medium")
@@ -90,98 +156,104 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
         with col_upload:
             with st.container(border=True, key='ocr_image_card'):
                 st.markdown('<div class="px-card-title">Ảnh chứng từ</div>', unsafe_allow_html=True)
-                if "preview_image_path" not in st.session_state:
-                    st.session_state.preview_image_path = None
-                if "preview_image_paths" not in st.session_state:
-                    st.session_state.preview_image_paths = []
+                day_images = st.session_state.setdefault('ocr_day_images', {}).setdefault(chosen_d_str, [])
+                day_images[:] = [p for p in day_images if p and Path(p).is_file()]
+                st.session_state.setdefault('ocr_day_reading', {})
 
                 st.markdown(f'<div class="px-mini-head">Ảnh mẫu {latest_shift_report_date():%d/%m/%Y}</div>', unsafe_allow_html=True)
-                samples = [("📷 Sổ Ca Sáng", '20261014_ca_sang_chieu.jpg', 'CA_SANG'),
-                           ("📷 Sổ Ca Chiều", '20261014_ca_sang_chieu.jpg', 'CA_CHIEU'),
-                           ("📷 Sổ Ca Tối", '20261014_ca_toi_tong_ket.jpg', 'CA_TOI'),
-                           ("🧾 Hóa đơn POS", '20261014_pos_slip.jpg', 'CA_TOI')]
+                samples = [("📷 Sổ Ca Sáng", ['20261014_ca_sang_chieu.jpg'], 'CA_SANG'),
+                           ("📷 Sổ Ca Chiều", ['20261014_ca_sang_chieu.jpg'], 'CA_CHIEU'),
+                           ("📷 Sổ Ca Tối", ['20261014_ca_toi_tong_ket.jpg'], 'CA_TOI'),
+                           ("🧾 Hóa đơn POS", ['20261014_pos_slip.jpg'], 'CA_TOI')]
                 for row in (samples[:2], samples[2:]):
-                    for column, (label, filename, ca) in zip(st.columns(2, gap='small'), row):
-                        column.button(label, use_container_width=True, on_click=choose_sample, args=(filename, ca))
+                    for column, (label, filenames, ca) in zip(st.columns(2, gap='small'), row):
+                        column.button(label, use_container_width=True, on_click=choose_sample, args=(filenames, ca))
+                st.button('🗂️ Cả 3 ảnh mẫu của ngày', key='ocr_sample_all', use_container_width=True, on_click=choose_sample,
+                          args=(['20261014_ca_sang_chieu.jpg', '20261014_ca_toi_tong_ket.jpg', '20261014_pos_slip.jpg'], None))
 
                 uploaded_files = st.file_uploader(
-                    "Kéo thả hoặc chọn ảnh (POS, sổ ca, phiếu chi) — chọn được nhiều ảnh",
+                    "Thêm ảnh của ngày này (sổ chốt ca, phiếu POS) — một ảnh có thể chứa nhiều ca",
                     type=["jpg", "jpeg", "png", "webp"],
                     accept_multiple_files=True,
                     key="shift_photo_uploader"
                 )
-
                 if uploaded_files:
-                    saved_paths = []
-                    upload_dir = SHIFT_UPLOADS_DIR
-                    upload_dir.mkdir(parents=True, exist_ok=True)
-                    has_oversized = False
+                    seen = st.session_state.setdefault('ocr_uploaded_seen', set())
+                    SHIFT_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
                     for uf in uploaded_files:
                         contents = uf.getvalue()
+                        digest = hashlib.sha256(contents).hexdigest()
+                        if (chosen_d_str, digest) in seen:
+                            continue  # already added (or removed on purpose) for this day
+                        seen.add((chosen_d_str, digest))
                         if len(contents) > 10 * 1024 * 1024:
                             st.error(f"Ảnh '{uf.name}' vượt 10 MB. Hãy chọn ảnh nhỏ hơn.")
-                            has_oversized = True
                             continue
-                        digest = hashlib.sha256(contents).hexdigest()
-                        save_path = upload_dir / (digest + Path(uf.name).suffix.lower())
+                        save_path = SHIFT_UPLOADS_DIR / (digest + Path(uf.name).suffix.lower())
                         if not save_path.exists():
                             save_path.write_bytes(contents)
-                        saved_paths.append(str(save_path))
+                        if str(save_path) not in day_images:
+                            day_images.append(str(save_path))
 
-                    if not has_oversized and saved_paths:
-                        if st.session_state.get('preview_image_paths') != saved_paths:
-                            st.session_state.preview_image_paths = saved_paths
-                            st.session_state.preview_image_path = saved_paths[0]
-                            st.session_state.extracted_cache = None
-
-                cur_paths = st.session_state.get("preview_image_paths") or ([st.session_state.get("preview_image_path")] if st.session_state.get("preview_image_path") else [])
-                cur_paths = [p for p in cur_paths if p and Path(p).is_file()]
-
-                if len(cur_paths) == 1:
-                    p = cur_paths[0]
-                    st.image(p, caption=f"Ảnh chốt ca: {Path(p).name}", use_container_width=True)
-                elif len(cur_paths) > 1:
-                    st.markdown(f"**📸 Đã tải lên {len(cur_paths)} ảnh chứng từ / hóa đơn:**")
-                    cols = st.columns(min(len(cur_paths), 3))
-                    for idx, p in enumerate(cur_paths):
-                        with cols[idx % min(len(cur_paths), 3)]:
-                            st.image(p, caption=f"Ảnh #{idx+1}: {Path(p).name}", use_container_width=True)
+                images_slot = st.container()  # filled after the reading below, so tags are current
 
         with col_result:
             with st.container(border=True, key='ocr_evidence_card'):
                 st.markdown('<div class="px-card-title">Bằng chứng từng trường</div>', unsafe_allow_html=True)
 
                 curr_shift_code = shift_code
-                cur_paths = st.session_state.get("preview_image_paths") or ([st.session_state.get("preview_image_path")] if st.session_state.get("preview_image_path") else [])
-                cur_paths = [p for p in cur_paths if p and Path(p).is_file()]
-
+                cur_paths = list(day_images)
                 if cur_paths:
                     digests = [hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in cur_paths]
                     image_digest = hashlib.sha256(''.join(digests).encode()).hexdigest()
                 else:
                     image_digest = 'none'
+                cache_key = ('ocr_day_v3', image_digest, curr_shift_code, chosen_d_str, st.session_state.get('username'))
+                results = st.session_state.setdefault('ocr_shift_results', {})
 
-                cache_key = ('ocr_per_image_v2', image_digest, curr_shift_code, chosen_d_str, st.session_state.get('username'))
-                if st.session_state.get('ocr_cache_key') != cache_key:
-                    st.session_state.extracted_cache = None
-                    st.session_state.pop('ocr_review_started', None)
-                    st.session_state.ocr_cache_key = cache_key
+                def read_shift(shift):
+                    return extract_shift_data_from_image(
+                        image_paths=cur_paths if len(cur_paths) > 1 else None,
+                        image_path=cur_paths[0] if len(cur_paths) == 1 else None,
+                        shift_hint=shift, target_date=chosen_d_str)
 
                 num_imgs = len(cur_paths)
                 btn_ocr_title = f"Đọc {num_imgs} ảnh bằng AI" if num_imgs > 1 else "Đọc ảnh bằng AI"
-                st.caption(f"Bấm '{btn_ocr_title}' sẽ gửi ảnh đến nhà cung cấp AI đã cấu hình để phân tích và đối soát. Bạn cũng có thể nhập tay.")
-
+                st.caption('Mỗi ảnh chỉ gửi cho AI một lần; một lần đọc lấy số của mọi ca có trong ảnh, '
+                           'đổi ca ở trên sẽ hiện số của ca đó mà không đọc lại.')
                 if st.button(btn_ocr_title, key='run_shift_ocr', disabled=image_digest == 'none'):
-                    with st.spinner(f"Đang đọc và đối soát {num_imgs} ảnh chứng từ…" if num_imgs > 1 else 'Đang đọc nội dung ảnh…'):
-                        st.session_state.extracted_cache = extract_shift_data_from_image(
-                            image_paths=cur_paths if num_imgs > 1 else None,
-                            image_path=cur_paths[0] if num_imgs == 1 else None,
-                            shift_hint=curr_shift_code,
-                            target_date=chosen_d_str,
-                        )
+                    with st.spinner(f"Đang đọc {num_imgs} ảnh chứng từ…" if num_imgs > 1 else 'Đang đọc nội dung ảnh…'):
+                        results[cache_key] = read_shift(curr_shift_code)
+                    if (results[cache_key] or {}).get('status') == 'NEEDS_REVIEW':
+                        st.session_state.setdefault('ocr_day_read', {})[chosen_d_str] = image_digest
                     st.session_state.ocr_review_started = time.time()
+
+                elif cache_key not in results and st.session_state.get('ocr_day_read', {}).get(chosen_d_str) == image_digest:
+                    # Same photos already read for this day: show the newly selected shift from that reading.
+                    results[cache_key] = read_shift(curr_shift_code)
+                st.session_state.extracted_cache = results.get(cache_key)
+                current_sheet = (st.session_state.extracted_cache or {}).get('day_sheet')
+                if current_sheet:
+                    st.session_state['ocr_day_reading'][chosen_d_str] = current_sheet
+                # Evidence attached to this shift's report: only photos that contain this shift.
+                sheet_imgs = {img['sha256']: img for img in (current_sheet or {}).get('images', [])}
+                shift_paths = [p for p, d in zip(cur_paths, digests if cur_paths else [])
+                               if (img := sheet_imgs.get(d)) is None or curr_shift_code in img['shifts']
+                               or (curr_shift_code == 'CA_TOI' and img.get('has_pos_slip'))]
+                with chips_slot:
+                    _render_shift_chips(approved, set(((st.session_state.get('ocr_day_reading') or {}).get(chosen_d_str) or {})
+                                                      .get('detected_shifts', [])), shift_code)
+                with images_slot:
+                    day_cover = (st.session_state.get('ocr_day_reading') or {}).get(chosen_d_str) or {}
+                    _render_day_images(day_images, chosen_d_str, chosen_date, shift_code,
+                                       {img['sha256']: img for img in day_cover.get('images', [])})
                 extracted = st.session_state.get('extracted_cache') or {}
                 vocr.render_pipeline_steps(extracted, slot=steps_slot)
+                sheet_info = extracted.get('day_sheet') or {}
+                if extracted.get('status') == 'NEEDS_REVIEW' and sheet_info and not sheet_info.get('shift_present', True):
+                    found = ', '.join(SHIFT_SHORT[x] for x in sheet_info.get('detected_shifts', [])) or 'không có ca nào'
+                    st.warning(f'Các ảnh của ngày này chưa có mục **{SHIFT_SHORT[shift_code]}** (ảnh đang có: {found}). '
+                               'Thêm ảnh có ca này, hoặc nhập tay.')
                 if extracted.get('status') == 'NEEDS_REVIEW':
                     count_txt = f" · {extracted.get('image_count')} ảnh" if extracted.get('image_count', 1) > 1 else ""
                     st.markdown(f"**Loại chứng từ:** {vocr.document_badge(extracted.get('document_type'))}{count_txt}",
@@ -402,7 +474,7 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                             signed_by=in_signer,
                             notes=in_notes,
                             bank_transfer_formula=in_bank_formula,
-                            image_paths=cur_paths,
+                            image_paths=shift_paths,
                             review_seconds=review_secs,
                             review_meta={
                                 'suggested_fields': suggested_open,
