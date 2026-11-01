@@ -220,7 +220,7 @@
 [data-testid="stSidebar"] .st-key-main_navigation [data-testid="stRadioOption"]:focus-within,
 [data-testid="stSidebar"] .st-key-main_navigation label:focus-within { outline: 2px solid #ffc2c8 !important; outline-offset: 1px; }
 [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] [class*="st-key-pillar_open_"][class*="_card"]) { align-items: stretch; }
-[data-testid="stColumn"]:has([class*="st-key-pillar_open_"][class*="_card"]) > div { height: 100%; }
+[data-testid="stColumn"]:has([class*="st-key-pillar_open_"][class*="_card"]) div:has(> [class*="st-key-pillar_open_"][class*="_card"]) { height: 100%; }
 [class*="st-key-pillar_open_"][class*="_card"] { height: 100%; justify-content: space-between; }
 .vocr-step div, .vocr-step div * { font-size: 12px !important; line-height: 1.45 !important; }
 .vocr-step b { font-size: 13px !important; }

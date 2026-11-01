@@ -190,7 +190,7 @@ def nav_label(page):
 
 def _icon_mask(name):
     from urllib.parse import quote
-    svg = ui_icon(name).replace('class="mx-icon" ', '').replace('currentColor', '#000')
+    svg = ui_icon(name).replace('<svg class="mx-icon" ', '<svg xmlns="http://www.w3.org/2000/svg" ').replace('currentColor', '#000')
     return 'url("data:image/svg+xml,' + quote(svg, safe='') + '")'
 
 
