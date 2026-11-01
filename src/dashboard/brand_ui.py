@@ -69,10 +69,23 @@ def snow_king_image(size=52, mode="default"):
             f'<img src="{asset("snow-king-cutout.png")}" width="{size}" height="{size}" alt="Tuyết Vương Mixue"></span>')
 
 
+STATIC_DIR = HERE / 'static'
+
+
+def static_url(name):
+    """URL of a browser-cached copy built by scripts/build_static_assets.py, or None."""
+    path = Path(name)
+    served = path.with_suffix('.webp') if path.suffix.lower() in {'.png', '.jpg', '.jpeg'} else path
+    return f'app/static/{served.as_posix()}' if (STATIC_DIR / served).is_file() else None
+
+
 @lru_cache(maxsize=64)
 def asset(name):
+    """Image URL for HTML/CSS. Prefer the static copy (sent once, cached) over inline base64."""
     if name in ('snow-king.png', 'chat-avatar.png'):
         name = 'snow-king-reference.png'
+    if url := static_url(name):
+        return url
     asset_path = HERE / 'assets' / name
     if asset_path.is_file():
         mime = {'.webp': 'image/webp', '.svg': 'image/svg+xml'}.get(asset_path.suffix, 'image/png')

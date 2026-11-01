@@ -6,6 +6,12 @@ secondaryBackgroundColor = "#F6F7F9"
 textColor = "#18202D"
 font = "sans serif"
 
+[server]
+# Serve src/dashboard/static/ at /app/static/ so images are downloaded once and cached.
+enableStaticServing = true
+# Compress the websocket stream (page HTML is resent on every interaction).
+enableWebsocketCompression = true
+
 [browser]
 gatherUsageStats = false
 

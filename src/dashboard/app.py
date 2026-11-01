@@ -187,7 +187,7 @@ def get_cached_daily_revenue():
     return df
 
 
-@st.fragment(run_every="30s")
+@st.fragment
 def render_live_home():
     render_home(get_cached_menu_list(), get_cached_sales(), user_role=user_role)
 
