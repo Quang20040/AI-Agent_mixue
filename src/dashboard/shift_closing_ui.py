@@ -114,7 +114,7 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
             '<div class="px-page-head"><span class="px-eyebrow">Trụ cột 1 · Verifiable Vision OCR</span>'
             '<h2>Chốt ca &amp; Đối soát OCR</h2>'
             '<p>Mô hình chỉ đọc; quy tắc kiểm chứng quyết định số nào được vào biểu mẫu. '
-            'Số chưa chắc để trống chờ bạn xác nhận.</p></div>',
+            'Một lần đọc lấy số của mọi ca trên ảnh; số chưa chắc được điền gợi ý và tô vàng để bạn kiểm tra.</p></div>',
             unsafe_allow_html=True)
         chosen_date = date_col.date_input("Ngày làm việc", key="shift_chosen_date_picker")
         with shift_col:
