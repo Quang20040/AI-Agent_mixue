@@ -23,6 +23,8 @@ ROOT = Path(__file__).resolve().parents[2]
 SHIFT_DATA_FILE = Path(setting("SHIFT_DATA_FILE") or ROOT / "data" / "shift_reports.json")
 _CONFIGURED_SHIFT_DATA_FILE = SHIFT_DATA_FILE
 SHIFT_PHOTOS_DIR = ROOT / "data" / "shift_photos"
+# Uploaded evidence photos must survive redeploys, so production points this at the persistent disk.
+SHIFT_UPLOADS_DIR = Path(setting("SHIFT_UPLOADS_DIR") or SHIFT_PHOTOS_DIR / "uploads")
 OCR_EDITS_LOG_FILE = Path(setting("OCR_EDITS_LOG_FILE") or ROOT / "data" / "agent_private" / "ocr_user_edits.jsonl")
 SHIFT_PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -505,7 +507,7 @@ def delete_shift_report(report_id: str, *, delete_uploaded_image: bool = False, 
             return False, "Không tìm thấy báo cáo ca cần xóa."
         ok = _save_raw_shift_data(new_data)
         if ok and delete_uploaded_image:
-            uploads_dir = (SHIFT_PHOTOS_DIR / "uploads").resolve()
+            uploads_dir = SHIFT_UPLOADS_DIR.resolve()
             for r in removed:
                 img_path_str = r.get("image_path")
                 if img_path_str:

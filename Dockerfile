@@ -39,16 +39,15 @@ ENV TZ=Asia/Ho_Chi_Minh
 
 # Copy application code and database seeds
 COPY --chown=appuser:appgroup . /app
-RUN mkdir -p /app/data /app/backups /opt/seed_data \
+RUN mkdir -p /app/data /app/backups /opt/seed_data /var/data \
     && if [ -f /app/data/beverageops.db ]; then cp /app/data/beverageops.db /opt/seed_data/beverageops.db; fi \
     && if [ -f /app/data/shift_reports.json ]; then cp /app/data/shift_reports.json /opt/seed_data/shift_reports.json; fi \
-    && chown -R appuser:appgroup /app /opt/seed_data
+    && chown -R appuser:appgroup /app /opt/seed_data /var/data
 
-USER appuser
-
+# The entrypoint starts as root only to chown a mounted persistent disk, then drops to appuser.
 EXPOSE 8501
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD sh -c 'curl -f http://localhost:${PORT:-8501}/_stcore/health || exit 1'
 
-CMD ["sh", "-c", "mkdir -p /app/data && if [ ! -f /app/data/beverageops.db ] && [ -f /opt/seed_data/beverageops.db ]; then cp /opt/seed_data/beverageops.db /app/data/beverageops.db; fi && if [ ! -f /app/data/shift_reports.json ] && [ -f /opt/seed_data/shift_reports.json ]; then cp /opt/seed_data/shift_reports.json /app/data/shift_reports.json; fi && exec streamlit run src/dashboard/app.py --server.port=${PORT:-8501} --server.address=0.0.0.0 --server.headless=true"]
+CMD ["sh", "scripts/docker_entrypoint.sh"]

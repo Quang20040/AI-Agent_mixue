@@ -18,6 +18,7 @@ import streamlit as st
 from src.dashboard import ocr_components as vocr
 from src.engine.shift_service import (
     SHIFT_PHOTOS_DIR,
+    SHIFT_UPLOADS_DIR,
     delete_shift_report,
     extract_shift_data_from_image,
     get_all_shift_reports,
@@ -111,7 +112,7 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
 
                 if uploaded_files:
                     saved_paths = []
-                    upload_dir = SHIFT_PHOTOS_DIR / 'uploads'
+                    upload_dir = SHIFT_UPLOADS_DIR
                     upload_dir.mkdir(parents=True, exist_ok=True)
                     has_oversized = False
                     for uf in uploaded_files:

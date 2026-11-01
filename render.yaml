@@ -1,17 +1,34 @@
-# Render.com Blueprint cho BeverageOps AI — Chi nhánh Mixue 39 Tôn Quang Phiệt (CH 2132)
+# Render Blueprint — BeverageOps AI, Mixue 39 Tôn Quang Phiệt (CH 2132), bản dùng thật cho quán.
+#
+# - Gói "starter" vì chỉ gói trả phí mới gắn được ổ đĩa bền vững (persistent disk).
+# - Mọi dữ liệu quán ghi ra (CSDL SQLite, báo cáo chốt ca, ảnh chứng từ, checkpoint LangGraph,
+#   nhật ký audit) nằm trên ổ /var/data nên KHÔNG mất khi deploy lại.
+# - Tài khoản demo (mật khẩu 123/123456) bị khóa ở production; tài khoản chủ quán được tạo
+#   ở lần khởi động đầu từ OWNER_USERNAME / OWNER_INITIAL_PASSWORD và buộc đổi mật khẩu khi đăng nhập.
+# Các biến "sync: false" được nhập tay trên Render lúc tạo Blueprint, không nằm trong Git.
 services:
   - type: web
     name: mixue-beverageops-ai
     runtime: docker
+    plan: starter
+    region: singapore
+    branch: fix/quality-improvement
     dockerfilePath: ./Dockerfile
     healthCheckPath: /_stcore/health
+    autoDeploy: true
+    disk:
+      name: mixue-data
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: PORT
         value: "8501"
       - key: APP_ENV
-        value: development
+        value: production
       - key: APP_DEMO_MODE
-        value: "true"
+        value: "false"
+      - key: PERSIST_DIR
+        value: /var/data
       - key: STORE_ID
         value: "2132"
       - key: TZ
@@ -19,7 +36,7 @@ services:
       - key: POSTGRES_MCP_ENABLED
         value: "false"
       - key: LLM_ENABLED
-        value: "false"
+        value: "true"
       - key: LLM_PROVIDER
         value: gemini
       - key: LLM_MODEL
@@ -27,4 +44,10 @@ services:
       - key: ALLOW_EXTERNAL_DATA_TRANSFER
         value: "true"
       - key: GEMINI_API_KEY
+        sync: false
+      - key: OWNER_USERNAME
+        sync: false
+      - key: OWNER_FULL_NAME
+        sync: false
+      - key: OWNER_INITIAL_PASSWORD
         sync: false
