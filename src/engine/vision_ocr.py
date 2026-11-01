@@ -13,6 +13,7 @@ import base64
 import hashlib
 import io
 import json
+import logging
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -27,6 +28,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from src.agent.config import ROOT, AgentSettings
 from src.engine.weather import VN
+
+logger = logging.getLogger(__name__)
 
 MONEY_FIELDS = (
     'cash_vnd',
@@ -618,18 +621,50 @@ def ocr_model_id(cfg: AgentSettings) -> str:
     return variables.get('OCR_MODEL') or cfg.model
 
 
-def build_ocr_reader(cfg: AgentSettings):
-    """The configured vision model, bound to the strict JSON extraction schema."""
+# Structured-output strategies, strongest first. Providers differ in which JSON Schema features
+# they accept (Gemini's OpenAI-compatible endpoint has rejected strict schemas with $ref), so a
+# 400 "invalid request" moves to the next strategy. Every answer is still validated by Pydantic.
+OCR_OUTPUT_MODES = ('json_schema_strict', 'json_schema_inline', 'json_object')
+
+
+def _inline_refs(schema: dict[str, Any]) -> dict[str, Any]:
+    """Replace local $ref with their definitions so providers without $ref support accept the schema."""
+    defs = schema.get('$defs', {})
+
+    def resolve(item):
+        if isinstance(item, dict):
+            ref = item.get('$ref')
+            if isinstance(ref, str) and ref.startswith('#/$defs/'):
+                return resolve(defs[ref.split('/')[-1]])
+            return {key: resolve(value) for key, value in item.items() if key != '$defs'}
+        if isinstance(item, list):
+            return [resolve(value) for value in item]
+        return item
+
+    return resolve(schema)
+
+
+def build_ocr_reader(cfg: AgentSettings, mode: str = 'json_schema_strict'):
+    """The configured vision model, bound to the JSON extraction format for `mode`."""
     reader = cfg.model_copy(update={'model': ocr_model_id(cfg), 'max_output_tokens': 6000, 'max_retries': 0}).build_model()
-    options: dict[str, Any] = {
-        'response_format': {
-            'type': 'json_schema',
-            'json_schema': {'name': 'shift_ocr', 'strict': True, 'schema': extraction_schema()},
-        }
-    }
+    if mode == 'json_object':
+        response_format: dict[str, Any] = {'type': 'json_object'}
+    elif mode == 'json_schema_inline':
+        response_format = {'type': 'json_schema', 'json_schema': {'name': 'shift_ocr', 'schema': _inline_refs(extraction_schema())}}
+    else:
+        response_format = {'type': 'json_schema', 'json_schema': {'name': 'shift_ocr', 'strict': True, 'schema': extraction_schema()}}
+    options: dict[str, Any] = {'response_format': response_format}
     if cfg.provider == 'openrouter':
         options['extra_body'] = {'provider': {'require_parameters': True}, 'reasoning': {'effort': 'none'}}
     return reader.bind(**options)
+
+
+def _provider_detail(exc: Exception) -> str:
+    """Short provider error text for logs and the admin UI (no credentials, no image data)."""
+    status = getattr(exc, 'status_code', None)
+    text = re.sub(r'data:image/[^\s"\']+', '<image>', str(exc))
+    text = re.sub(r'(key|token)=[^\s&"\']+', r'\1=<redacted>', text, flags=re.IGNORECASE)
+    return (f'HTTP {status}: ' if status else f'{type(exc).__name__}: ') + ' '.join(text.split())[:300]
 
 
 def extract_image(
@@ -712,9 +747,34 @@ def extract_image(
         return merge_image_extractions(results, names=[item[1] for item in valid_images],
                                        shas=[item[3] for item in valid_images], shift_hint=shift_hint, target_date=target_date)
 
+    modes = [None] if model is not None else list(OCR_OUTPUT_MODES)
+    attempts: list[str] = []
+    while True:
+        mode = modes.pop(0)
+        outcome = _read_with_mode(valid_images, mode, model, cfg, shift_hint, target_date)
+        if not isinstance(outcome, Exception):
+            break
+        # The provider's own text goes to the server log only (Render → Logs); the result shown in
+        # the UI carries the status code and error class, never SDK text that could hold secrets.
+        status = getattr(outcome, 'status_code', None)
+        attempts.append(f'{mode}: ' + (f'HTTP {status} ' if status else '') + type(outcome).__name__)
+        logger.warning('OCR provider call failed (mode=%s, model=%s): %s', mode, ocr_model_id(cfg), _provider_detail(outcome))
+        if not (modes and getattr(outcome, 'status_code', None) == 400):
+            return _ocr_error(outcome, attempts)
+    if isinstance(outcome, dict):
+        return outcome
+    result, model_name = outcome
+    return _finish_extraction(result, valid_images, shift_hint, target_date, attempts, model_name)
+
+
+def _read_with_mode(valid_images, mode, model, cfg, shift_hint, target_date):
+    """One model call. Returns a ShiftReading, an early-exit dict, or the exception raised."""
     try:
-        reader = model or build_ocr_reader(cfg)
+        reader = model or build_ocr_reader(cfg, mode)
         prompt = build_ocr_prompt(shift_hint, target_date)
+        if mode == 'json_object':
+            prompt += ('\n\nChỉ trả về MỘT đối tượng JSON hợp lệ (không markdown) đúng JSON Schema sau:\n'
+                       + json.dumps(_inline_refs(extraction_schema()), ensure_ascii=False))
 
         if len(valid_images) == 1:
             data_single, _, mime_single, _, _ = valid_images[0]
@@ -747,31 +807,42 @@ def extract_image(
         if isinstance(content, list):
             content = ''.join(part['text'] for part in content if isinstance(part, dict) and isinstance(part.get('text'), str))
         content = re.sub(r'^```(?:json)?\s*|\s*```$', '', str(content).strip())
-        result = enforce_reading_uncertainty(ShiftReading.model_validate_json(content), shift_hint=shift_hint)
-    except Exception as exc:  # noqa: BLE001 - credentials and image data must not leak from SDK errors
-        status_code = getattr(exc, 'status_code', None)
-        if isinstance(exc, ValidationError):
-            code, message = 'INVALID_EXTRACTION', 'Mô hình đã phản hồi nhưng dữ liệu chưa đúng cấu trúc. Thử lại ảnh này hoặc nhập tay; chưa có số liệu để lưu.'
-        elif status_code == 429:
-            code, message = 'RATE_LIMITED', 'Dịch vụ đọc ảnh đang giới hạn lượt gọi. Chờ một chút rồi thử lại; chưa có số liệu để lưu.'
-        elif 'timeout' in type(exc).__name__.lower():
-            code, message = 'TIMEOUT', 'Dịch vụ đọc ảnh phản hồi quá chậm. Thử lại hoặc đọc từng ảnh; chưa có số liệu để lưu.'
-        elif status_code in {401, 403}:
-            code, message = 'AUTH_ERROR', 'Dịch vụ đọc ảnh từ chối quyền truy cập. Cần kiểm tra khóa API và quyền mô hình; chưa có số liệu để lưu.'
-        elif status_code == 404 or 'modelnotfound' in type(exc).__name__.lower():
-            code, message = 'MODEL_UNAVAILABLE', 'Mô hình đọc ảnh đã chọn hiện không khả dụng với tài khoản này. Cần kiểm tra cấu hình mô hình; chưa có số liệu để lưu.'
-        else:
-            code, message = 'PROVIDER_ERROR', 'Chưa kết nối được dịch vụ đọc ảnh hoặc mô hình không nhận yêu cầu. Thử lại; chưa có số liệu để lưu.'
-        return {
-            'status': 'OCR_ERROR',
-            'error_code': code,
-            'error_type': type(exc).__name__,
-            'validation_errors': [
-                {'field': list(item['loc']), 'type': item['type']} for item in exc.errors()
-            ] if isinstance(exc, ValidationError) else [],
-            'message': message,
-        }
+        reading = enforce_reading_uncertainty(ShiftReading.model_validate_json(content), shift_hint=shift_hint)
+        return reading, str(getattr(answer, 'response_metadata', {}).get('model_name') or ocr_model_id(cfg))
+    except Exception as exc:  # noqa: BLE001 - classified by _ocr_error; SDK errors never reach the UI raw
+        return exc
 
+
+def _ocr_error(exc: Exception, attempts: list[str]) -> dict[str, Any]:
+    """Map a failed provider call to a Vietnamese message; keep a short technical detail for admins."""
+    status_code = getattr(exc, 'status_code', None)
+    if isinstance(exc, ValidationError):
+        code, message = 'INVALID_EXTRACTION', 'Mô hình đã phản hồi nhưng dữ liệu chưa đúng cấu trúc. Thử lại ảnh này hoặc nhập tay; chưa có số liệu để lưu.'
+    elif status_code == 429:
+        code, message = 'RATE_LIMITED', 'Dịch vụ đọc ảnh đang giới hạn lượt gọi. Chờ một chút rồi thử lại; chưa có số liệu để lưu.'
+    elif 'timeout' in type(exc).__name__.lower():
+        code, message = 'TIMEOUT', 'Dịch vụ đọc ảnh phản hồi quá chậm. Thử lại hoặc đọc từng ảnh; chưa có số liệu để lưu.'
+    elif status_code in {401, 403}:
+        code, message = 'AUTH_ERROR', 'Dịch vụ đọc ảnh từ chối quyền truy cập. Cần kiểm tra khóa API và quyền mô hình; chưa có số liệu để lưu.'
+    elif status_code == 404 or 'modelnotfound' in type(exc).__name__.lower():
+        code, message = 'MODEL_UNAVAILABLE', 'Mô hình đọc ảnh đã chọn hiện không khả dụng với tài khoản này. Cần kiểm tra cấu hình mô hình; chưa có số liệu để lưu.'
+    else:
+        code, message = 'PROVIDER_ERROR', 'Chưa kết nối được dịch vụ đọc ảnh hoặc mô hình không nhận yêu cầu. Thử lại; chưa có số liệu để lưu.'
+    return {
+        'status': 'OCR_ERROR',
+        'error_code': code,
+        'error_type': type(exc).__name__,
+        'validation_errors': [
+            {'field': list(item['loc']), 'type': item['type']} for item in exc.errors()
+        ] if isinstance(exc, ValidationError) else [],
+        'message': message,
+        'provider_detail': attempts[-1] if attempts else '',
+        'attempts': attempts,
+    }
+
+
+def _finish_extraction(result, valid_images, shift_hint, target_date, attempts, model_name):
+    """Verification rules applied to a parsed reading (consistency, blur, layout traps)."""
     consistency = check_ocr_consistency(result)
     warnings = list(result.warnings)
 
@@ -841,6 +912,9 @@ def extract_image(
         'image_sha256': image_sha,
         'image_count': len(valid_images),
         'image_names': [item[1] for item in valid_images],
-        'model': str(getattr(answer, 'response_metadata', {}).get('model_name', ocr_model_id(cfg))),
+        'model': model_name,
+        'output_fallbacks': attempts,
         'extracted_at': datetime.now(VN).isoformat(timespec='seconds'),
     }
+
+

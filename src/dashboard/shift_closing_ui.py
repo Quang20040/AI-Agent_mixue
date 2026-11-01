@@ -222,6 +222,9 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                             st.text(extracted.get('raw_text_extracted', ''))
                 elif extracted:
                     st.warning(extracted.get('message', 'Chưa đọc được ảnh; hãy nhập số liệu thủ công.'))
+                    if extracted.get('attempts'):
+                        with st.expander('Chi tiết kỹ thuật (nội dung lỗi đầy đủ nằm trong log máy chủ)'):
+                            st.code('\n'.join(extracted['attempts']), language=None)
 
                 with st.form('confirm_shift_report_' + hashlib.sha256(str(cache_key).encode()).hexdigest()[:16]):
                     f_col1, f_col2 = st.columns(2)
