@@ -177,8 +177,21 @@ def _initials(name):
     return (parts[0][0] + parts[-1][0]).upper() if len(parts) > 1 else (parts[0][:2].upper() if parts else 'NV')
 
 
+NAV_SVG = {
+    'Trang chủ': 'home', '💬 Tuyết Vương AI': 'chat', '📸 Chốt ca & OCR': 'camera', 'Báo cáo & kho': 'chart',
+    'Dự báo': 'trend', 'Sơ chế': 'prep', 'Nhập hàng': 'store', 'Tem & công thức': 'recipe', '👥 Quản lý nhân viên': 'users',
+}
+
+
 def nav_label(page):
-    return f"{NAV_ICONS.get(page, '•')}  {NAV_LABELS.get(page, page)}"
+    """Plain text label; the line icon is drawn by CSS (see nav_group_css) like in the design."""
+    return NAV_LABELS.get(page, page)
+
+
+def _icon_mask(name):
+    from urllib.parse import quote
+    svg = ui_icon(name).replace('class="mx-icon" ', '').replace('currentColor', '#000')
+    return 'url("data:image/svg+xml,' + quote(svg, safe='') + '")'
 
 
 def nav_group_css(pages):
@@ -193,6 +206,12 @@ def nav_group_css(pages):
             rules.append(f'[data-testid="stSidebar"] .st-key-main_navigation [role="radiogroup"] > *:nth-child({index})::before'
                          f'{{content:"{title}";display:block;font-size:11px;font-weight:700;letter-spacing:.06em;'
                          f'color:#6b5560;margin:16px 12px 6px;}}')
+    for index, page in enumerate(pages, 1):
+        if page in NAV_SVG:
+            mask = _icon_mask(NAV_SVG[page])
+            rules.append(f'[data-testid="stSidebar"] .st-key-main_navigation [role="radiogroup"] > *:nth-child({index}) p::before'
+                         f'{{content:"";display:inline-block;width:18px;height:18px;margin-right:10px;vertical-align:-4px;'
+                         f'background:currentColor;-webkit-mask:{mask} center/contain no-repeat;mask:{mask} center/contain no-repeat;}}')
     if rules:
         st.html('<style>' + ''.join(rules) + '</style>')
 
@@ -222,9 +241,10 @@ def render_topbar(user_name, notifications=0, page='Trang chủ'):
     bell = f'<span>{notifications}</span>' if notifications else ''
     pages = get_allowed_pages(st.session_state.get('user_role', 'STAFF'))
     commands = ''.join(f'<button type="button" data-command-page="{escape(nav_label(page))}">{escape(nav_label(page))}<span>↗</span></button>' for page in pages)
-    title = NAV_LABELS.get(page, page).split(' (')[0]
+    from src.auth import CHAT_PAGE, OCR_PAGE
+    title = '' if page in (CHAT_PAGE, OCR_PAGE) else NAV_LABELS.get(page, page).split(' (')[0]
     st.markdown(f'''<div class="mx-topbar px-topbar">
-    <div class="px-top-title"><small>{WEEKDAYS_VI[now.weekday()]}, {now:%d/%m/%Y} · {shift_of_day(now.hour)}</small><h1>{escape(title)}</h1></div>
+    <div class="px-top-title"><small>{WEEKDAYS_VI[now.weekday()]}, {now:%d/%m/%Y} · {shift_of_day(now.hour)}</small>{f'<h1>{escape(title)}</h1>' if title else ''}</div>
     <button class="mx-search" type="button" data-command-open>{ui_icon('search')}<span>Tìm chức năng, món, mã tem…</span><kbd>Ctrl K</kbd></button>
     <button type="button" class="stage-motion-toggle mx-motion" aria-pressed="true" title="Bật hoặc tạm dừng chuyển động">Tạm dừng hiệu ứng</button>
     <span class="mx-bell" title="{notifications} việc chờ duyệt">{ui_icon('bell')}{bell}</span></div>
@@ -449,14 +469,14 @@ def render_home_kpis(sales, menu):
     else:
         cards.append(('Doanh thu POS', 'Chưa có dữ liệu', 'Nhập dữ liệu bán hàng để xem', ''))
     summary, latest = state.get('summary') or {}, state.get('latest')
-    if latest and summary.get('total_collected'):
+    if latest and summary.get('total_collected_vnd'):
         reports = get_all_shift_reports(latest)
         signer = next((r.get('signed_by') for r in reversed(reports) if r.get('signed_by')), '')
         variance = summary.get('variance_pos_vnd') or 0
-        cards += [(f'Tổng thu sổ chốt ca · {latest:%d/%m}', f"{number(summary['total_collected'])} đ",
+        cards += [(f'Tổng thu sổ chốt ca · {latest:%d/%m}', f"{number(summary['total_collected_vnd'])} đ",
                    'Đã duyệt' + (f' · ký: {escape(signer)}' if signer else ''), ''),
                   ('Lệch so với thực thu POS', f"{number(variance).replace('-', '−')} đ",
-                   f"POS {number(summary.get('pos_collected') or 0)} đ · " + ('trong ngưỡng' if abs(variance) < 50_000 else 'cần kiểm tra'),
+                   f"POS {number(summary.get('pos_collected_vnd') or 0)} đ · " + ('trong ngưỡng' if abs(variance) < 50_000 else 'cần kiểm tra'),
                    'ok' if abs(variance) < 50_000 else 'bad')]
     else:
         cards.append(('Thực đơn', f'{len(menu)} món', 'Tra cứu công thức từng món', ''))
@@ -470,7 +490,7 @@ def render_shortcuts(user_role):
     pages = get_allowed_pages(user_role)
     features = [('Báo cáo & kho', 'box', 'Sổ kho, doanh thu POS'), ('Dự báo', 'trend', 'Nhu cầu theo thời tiết'),
                 ('Sơ chế', 'prep', 'Tối ưu mẻ topping'), ('Nhập hàng', 'store', 'Dự thảo đơn PO'),
-                ('Tem & công thức', 'recipe', 'Giải mã tem, BOM'), ('👥 Quản lý nhân viên', 'users', 'Đội ngũ & phân quyền')]
+                ('Tem & công thức', 'recipe', 'Giải mã tem, BOM')]
     cards = ''.join(f'<button type="button" class="mx-shortcut tone-{i}" data-command-page="{escape(nav_label(page))}"><span class="mx-shortcut-icon">{ui_icon(icon)}</span><span class="mx-shortcut-arrow">↗</span><b>{escape(NAV_LABELS.get(page, page))}</b><small>{desc}</small></button>'
                     for i, (page, icon, desc) in enumerate(features) if page in pages)
     if cards:
@@ -1208,7 +1228,7 @@ def render_chat(agent, role, user_name, mode="auto"):
         render_action_chips()
         if effective_mode == "fullscreen":
             main_col, rail_col = st.columns([2.6, 1], gap="medium")
-            with main_col:
+            with main_col, st.container(key='chat_main_card'):
                 _render_chat_conversation(agent, clean_role, user_name, history_height=None)
             with rail_col:
                 render_agent_rail(agent, clean_role, user_name, is_online_now)

@@ -215,6 +215,20 @@
 .st-key-ocr_image_card button { min-height: 40px; border-radius: 12px !important; }
 .st-key-run_shift_ocr button { background: var(--px-red) !important; color: #fff !important; border: 0 !important; min-height: 44px; border-radius: 12px !important; padding: 0 20px !important; }
 
+/* Pass 3 fixes */
+.px-brand span { font-size: 11.5px; line-height: 1.35; }
+[data-testid="stSidebar"] .st-key-main_navigation [data-testid="stRadioOption"]:focus-within,
+[data-testid="stSidebar"] .st-key-main_navigation label:focus-within { outline: 2px solid #ffc2c8 !important; outline-offset: 1px; }
+[data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] [class*="st-key-pillar_open_"][class*="_card"]) { align-items: stretch; }
+[data-testid="stColumn"]:has([class*="st-key-pillar_open_"][class*="_card"]) > div { height: 100%; }
+[class*="st-key-pillar_open_"][class*="_card"] { height: 100%; justify-content: space-between; }
+.vocr-step div, .vocr-step div * { font-size: 12px !important; line-height: 1.45 !important; }
+.vocr-step b { font-size: 13px !important; }
+.st-key-chat_main_card { background: #fff; border: 1px solid var(--px-line); border-radius: 20px; padding: 18px 20px; }
+.st-key-chat_main_card [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) { background: var(--px-red) !important; border-radius: 18px 18px 4px 18px !important; }
+.st-key-chat_main_card [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) p { color: #fff !important; }
+.px-topbar .px-top-title:not(:has(h1)) small { font-size: 13px; }
+
 /* ---------- CSS-only motion ---------- */
 @keyframes px-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 @keyframes px-msg-in { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
