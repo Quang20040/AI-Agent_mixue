@@ -15,7 +15,8 @@ services:
     branch: fix/quality-improvement
     dockerfilePath: ./Dockerfile
     healthCheckPath: /_stcore/health
-    autoDeploy: true
+    # Chỉ deploy khi CI (test + Docker smoke) trên nhánh này đã pass.
+    autoDeployTrigger: checksPass
     disk:
       name: mixue-data
       mountPath: /var/data

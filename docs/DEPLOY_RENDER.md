@@ -17,7 +17,7 @@ Mọi dữ liệu quán ghi ra (CSDL, báo cáo chốt ca, ảnh chứng từ, c
 
 ## Những lần sau
 
-- Mỗi lần merge vào `fix/quality-improvement`, Render tự build và deploy lại; dữ liệu trên `/var/data` được giữ nguyên.
+- Mỗi lần merge vào `fix/quality-improvement`, Render chờ CI (test + Docker smoke) pass rồi mới tự deploy (`autoDeployTrigger: checksPass`); CI lỗi thì bản đang chạy giữ nguyên. Dữ liệu trên `/var/data` được giữ nguyên.
 - Nhật ký khởi động có một dòng `Owner bootstrap: …`:
   `PROVISIONED` (vừa tạo), `EXISTS` (đã có, không đụng mật khẩu), `SKIPPED` (không cấu hình), `WEAK_PASSWORD` / `INVALID_USERNAME` (cần sửa biến).
 
