@@ -25,7 +25,6 @@ if (-not (Test-Path "$DataDir\shift_reports.json")) { Copy-Item "$Repo\data\shif
 $Posix = $DataDir -replace '\\', '/'
 $env:APP_ENV = "production"
 $env:APP_DEMO_MODE = "false"
-$env:STORE_ID = "2132"
 $env:TZ = "Asia/Ho_Chi_Minh"
 $env:DATABASE_URL = "sqlite:///$Posix/beverageops.db"
 $env:SHIFT_DATA_FILE = "$DataDir\shift_reports.json"

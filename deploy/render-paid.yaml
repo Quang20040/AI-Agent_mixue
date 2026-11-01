@@ -31,8 +31,6 @@ services:
         value: "false"
       - key: PERSIST_DIR
         value: /var/data
-      - key: STORE_ID
-        value: "2132"
       - key: TZ
         value: Asia/Ho_Chi_Minh
       - key: POSTGRES_MCP_ENABLED

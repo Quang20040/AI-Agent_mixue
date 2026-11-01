@@ -26,8 +26,6 @@ services:
         value: development
       - key: APP_DEMO_MODE
         value: "true"
-      - key: STORE_ID
-        value: "2132"
       - key: TZ
         value: Asia/Ho_Chi_Minh
       - key: POSTGRES_MCP_ENABLED

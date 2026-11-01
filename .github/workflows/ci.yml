@@ -54,7 +54,7 @@ jobs:
         run: |
           docker volume create mixue-data
           docker run -d --name app -p 8501:8501 -v mixue-data:/var/data \
-            -e APP_ENV=production -e APP_DEMO_MODE=false -e PERSIST_DIR=/var/data -e STORE_ID=2132 \
+            -e APP_ENV=production -e APP_DEMO_MODE=false -e PERSIST_DIR=/var/data \
             -e OWNER_USERNAME=chuquan_ci -e OWNER_INITIAL_PASSWORD='CI-only-password-2132' \
             beverageops:ci
           for i in $(seq 1 60); do
@@ -69,6 +69,8 @@ jobs:
           docker logs app 2>&1 | grep "Owner bootstrap: PROVISIONED"
           docker exec app sh -c 'ls -la /var/data && test -f /var/data/beverageops.db && test -f /var/data/shift_reports.json'
           test "$(docker exec app stat -c %U /proc/1)" = appuser   # app runs unprivileged
+          # The page itself must initialise (store identity, DB, agent), not just the health endpoint.
+          docker exec -w /app -e PYTHONPATH=/app app python -c "from src.database import SessionLocal; from src.runtime_settings import resolve_store_id; db = SessionLocal(); print('store', resolve_store_id(db))"
 
       - name: Restart keeps the owner password (no re-provisioning)
         run: |
