@@ -27,7 +27,7 @@ Cả hai không cần thẻ ngân hàng. Khóa Gemini lấy miễn phí ở Goog
    ```
    LLM_ENABLED=true
    LLM_PROVIDER=gemini
-   LLM_MODEL=gemini-2.5-flash
+   LLM_MODEL=gemini-3.5-flash
    ALLOW_EXTERNAL_DATA_TRANSFER=true
    GEMINI_API_KEY=...
    ```

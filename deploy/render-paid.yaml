@@ -40,7 +40,8 @@ services:
       - key: LLM_PROVIDER
         value: gemini
       - key: LLM_MODEL
-        value: gemini-2.5-flash
+        # gemini-2.5-flash đã ngừng hoạt động từ 16/10/2026.
+        value: gemini-3.5-flash
       - key: ALLOW_EXTERNAL_DATA_TRANSFER
         value: "true"
       - key: GEMINI_API_KEY
