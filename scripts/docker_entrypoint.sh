@@ -14,7 +14,7 @@ if [ "$(id -u)" = "0" ]; then
     mkdir -p "$PERSIST_DIR"
     chown -R appuser:appgroup "$PERSIST_DIR"
   fi
-  exec setpriv --reuid=appuser --regid=appgroup --init-groups sh "$0" "$@"
+  exec env HOME=/app USER=appuser setpriv --reuid=appuser --regid=appgroup --init-groups sh "$0" "$@"
 fi
 
 if [ -n "${PERSIST_DIR:-}" ]; then
