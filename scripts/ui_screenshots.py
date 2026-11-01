@@ -13,7 +13,7 @@ from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
 PORT = 8599
-PAGES = [('home', None), ('ocr', '📸 Chốt ca & OCR'), ('chat', '💬 Tuyết Vương AI')]
+PAGES = [('home', None), ('ocr', 'đối soát ocr'), ('chat', 'tuyết vương ai')]
 
 
 def wait_server(url, timeout=90):
@@ -32,6 +32,16 @@ def settle(page, ms=2500):
     page.wait_for_timeout(ms)
 
 
+def shoot(page, path, width):
+    """Streamlit scrolls inside its main container, so grow the viewport to the content first."""
+    height = page.evaluate("""() => Math.max(...['[data-testid=\"stMain\"]', '[data-testid=\"stAppViewContainer\"]', 'section.main']
+        .map(s => document.querySelector(s)?.scrollHeight || 0), document.body.scrollHeight)""")
+    page.set_viewport_size({'width': width, 'height': min(max(int(height), 900), 6000)})
+    page.wait_for_timeout(1200)
+    page.screenshot(path=str(path), full_page=True)
+    page.set_viewport_size({'width': width, 'height': 900})
+
+
 def main(out):
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -47,23 +57,17 @@ def main(out):
                 page = browser.new_page(viewport={'width': width, 'height': 900}, device_scale_factor=1)
                 page.goto(url)
                 settle(page, 4000)
-                page.screenshot(path=str(out / f'login{suffix}.png'), full_page=True)
+                shoot(page, out / f'login{suffix}.png', width)
                 page.get_by_text('Tài khoản dùng thử').first.click()
                 page.wait_for_timeout(800)
                 page.get_by_role('button', name='Quản Lý (Admin)').first.click()
                 settle(page, 5000)
                 for name, nav in PAGES:
                     if nav:
-                        target = page.locator('.st-key-main_navigation label', has_text=nav.split(' ', 1)[1]).first
-                        if width < 600 or not target.is_visible():
-                            page.goto(url)  # mobile: navigation lives behind the collapsed sidebar
-                            settle(page, 3000)
-                            page.evaluate("t => [...document.querySelectorAll('.st-key-main_navigation label')].find(l => l.textContent.includes(t))?.click()",
-                                          nav.split(' ', 1)[1])
-                        else:
-                            target.click()
+                        page.evaluate("t => [...document.querySelectorAll('.st-key-main_navigation label')]"
+                                      ".find(l => l.textContent.toLowerCase().includes(t))?.click()", nav)
                         settle(page, 5000)
-                    page.screenshot(path=str(out / f'{name}{suffix}.png'), full_page=True)
+                    shoot(page, out / f'{name}{suffix}.png', width)
                 page.close()
             browser.close()
     finally:
