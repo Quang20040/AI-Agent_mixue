@@ -189,16 +189,14 @@ def get_cached_daily_revenue():
 
 @st.fragment(run_every="30s")
 def render_live_home():
-    st.button('Làm mới dữ liệu', key='refresh_home_data')
     render_home(get_cached_menu_list(), get_cached_sales(), user_role=user_role)
-    st.caption('Tự làm mới mỗi 30 giây khi đang mở trang · Theo ngày Việt Nam · Chỉ có số liệu khi đã nhập dữ liệu bán hàng.')
 
 
 # ==============================================================================
 # THANH ĐIỀU HƯỚNG BÊN TRÁI (SIDEBAR) — NHẬN DIỆN CHI NHÁNH & PHÂN QUYỀN
 # ==============================================================================
 with st.sidebar:
-    render_sidebar_top(user_name, user_title, user_badge)
+    render_sidebar_top()
 
     allowed_tabs = get_allowed_pages(user_role)
     current_nav = st.session_state.get("main_navigation")
@@ -219,18 +217,17 @@ with st.sidebar:
         width="stretch",
     )
 
-    st.divider()
-    if st.button("🚪 Đăng xuất", key="btn_logout", use_container_width=True):
+    render_sidebar_bottom(user_name, user_title, user_badge)
+    if st.button("Đăng xuất", key="btn_logout", icon=":material/logout:", use_container_width=True):
         agent.reset_conversation(start_new=False)
         st.session_state.pop('agent_pending_approval', None)
         for k in ["authenticated", "user", "username", "user_role", "user_name", "user_title", "user_badge", "must_change_password", "main_navigation", "chat_history_vi", "last_activity"]:
             st.session_state.pop(k, None)
         st.rerun()
-    render_sidebar_bottom()
 
 _pending_notifications = len(get_pending_requests()) if is_admin else 0
-render_topbar(user_name, _pending_notifications)
-if section not in (CHAT_PAGE, "Trang chủ"):
+render_topbar(user_name, _pending_notifications, section)
+if section not in (CHAT_PAGE, OCR_PAGE, "Trang chủ"):
     render_page_hero(section, user_name)
 render_mobile_navigation(allowed_tabs, section)
 

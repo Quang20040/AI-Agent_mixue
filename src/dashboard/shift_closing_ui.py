@@ -29,133 +29,81 @@ from src.engine.shift_service import (
 def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = False):
     """Hiển thị toàn bộ phân hệ Chốt Ca Bằng Ảnh & Đối Soát Doanh Thu."""
     vocr.install_css()
-    st.markdown(
-        '<div class="px-page-head" style="margin:2px 0 6px"><span class="px-eyebrow">Trụ cột 1 · Verifiable Vision OCR</span>'
-        '<h2 style="margin:2px 0 4px;padding:0;font-size:26px;font-weight:800;color:#1f2430">Chốt ca &amp; Đối soát OCR</h2>'
-        '<p style="margin:0;font-size:14px;color:#4b5563">Mô hình chỉ đọc; quy tắc kiểm chứng quyết định số nào được vào biểu mẫu. '
-        'Số chưa chắc để trống chờ bạn xác nhận, và chỉ ghi sổ khi Quản lý phê duyệt.</p></div>',
-        unsafe_allow_html=True)
+    shift_options = [
+        ("CA_SANG", "Ca sáng"),
+        ("CA_CHIEU", "Ca chiều"),
+        ("CA_TOI", "Ca tối"),
+    ]
+    if st.session_state.get('shift_ocr_selection') not in shift_options:
+        st.session_state.shift_ocr_selection = shift_options[0]
+    if 'shift_chosen_date_picker' not in st.session_state:
+        st.session_state.shift_chosen_date_picker = latest_shift_report_date()
+
+    def choose_sample(filename, ca):
+        p_str = str(SHIFT_PHOTOS_DIR / filename)
+        st.session_state.preview_image_path = p_str
+        st.session_state.preview_image_paths = [p_str]
+        st.session_state.shift_ocr_selection = next(item for item in shift_options if item[0] == ca)
+        st.session_state.extracted_cache = None
+
+    with st.container(key='ocr_page_head'):
+        head, date_col, shift_col = st.columns([3.2, 1, 1.5], gap='medium', vertical_alignment='bottom')
+        head.markdown(
+            '<div class="px-page-head"><span class="px-eyebrow">Trụ cột 1 · Verifiable Vision OCR</span>'
+            '<h2>Chốt ca &amp; Đối soát OCR</h2>'
+            '<p>Mô hình chỉ đọc; quy tắc kiểm chứng quyết định số nào được vào biểu mẫu. '
+            'Số chưa chắc để trống chờ bạn xác nhận.</p></div>',
+            unsafe_allow_html=True)
+        chosen_date = date_col.date_input("Ngày làm việc", key="shift_chosen_date_picker")
+        with shift_col:
+            selected_shift_type = st.segmented_control(
+                "Chọn ca", shift_options, format_func=lambda x: x[1], key='shift_ocr_selection',
+                selection_mode='single', label_visibility='collapsed',
+            ) or shift_options[0]
+    shift_code = selected_shift_type[0]
     steps_slot = st.empty()
-
-    with st.expander("📋 Quy chế chốt ca & bàn giao doanh thu", expanded=False):
-        st.markdown(
-            "- **Ca sáng (8h–13h):** bàn giao tiền mặt quầy, chuyển khoản, app Shopee/Grab/Be và két cố định 1.000.000 đ.\n"
-            "- **Ca chiều (13h–18h):** như ca sáng, ghi rõ tiền mặt dư/thiếu nếu có.\n"
-            "- **Ca tối (18h–23h):** tổng hợp doanh thu cả ngày, trừ khoản chi phát sinh và chốt số cầm tiền mặt.")
-
-    # 1. BỘ CHỌN NGÀY LÀM VIỆC
-    col_d1, col_d2 = st.columns([1, 2.5])
-    with col_d1:
-        default_d = latest_shift_report_date()
-        chosen_date = st.date_input(
-            "📅 Chọn ngày làm việc cần kiểm tra / chốt ca",
-            value=default_d,
-            key="shift_chosen_date_picker"
-        )
-    with col_d2:
-        st.write("")
-        st.write("")
-        st.caption(f"Đang hiển thị dữ liệu sổ chốt ca ngày **{chosen_date.strftime('%d/%m/%Y')}**.")
 
     chosen_d_str = chosen_date.isoformat()
 
     # 2. BẢNG THỐNG KÊ TỔNG KẾT NGÀY (KPI CARDS)
     summary = get_daily_closing_summary(chosen_d_str)
-
-    m1, m2, m3, m4, m5 = st.columns(5)
-    with m1:
-        st.metric(
-            label="💎 Tổng Thực Thu Về",
-            value=f"{summary['total_collected_vnd']:,.0f} đ",
-            help="Tổng số tiền thực tế thu về sau khi đã trừ chi phí phát sinh"
-        )
-    with m2:
-        st.metric(
-            label="💵 Tiền Mặt Gom Ca",
-            value=f"{summary['total_cash_vnd']:,.0f} đ",
-            help="Tổng tiền mặt kiểm đếm trong ca (đã để lại két 1 triệu)"
-        )
-    with m3:
-        st.metric(
-            label="📱 Chuyển Khoản Ngân Hàng",
-            value=f"{summary['total_bank_vnd']:,.0f} đ",
-            help="Doanh thu khách thanh toán quét mã QR/chuyển khoản"
-        )
-    with m4:
-        st.metric(
-            label="🛵 App Giao Hàng",
-            value=f"{summary['total_delivery_apps_vnd']:,.0f} đ",
-            help="Tổng doanh thu từ ShopeeFood, GrabFood và BeFood"
-        )
-    with m5:
-        var_pos = summary["variance_pos_vnd"]
-        pos_rev = summary["pos_revenue_vnd"]
-        st.metric(
-            label="🏷️ Đối Soát POS",
-            value=f"{pos_rev:,.0f} đ",
-            delta=f"{var_pos:+,.0f} đ" if abs(var_pos) > 100 else "Khớp 99.99%",
-            delta_color="normal" if abs(var_pos) <= 50000 else "inverse",
-            help="So sánh Thực thu sổ chốt với Thực thu máy in POS cuối ngày"
-        )
-
-    st.divider()
+    var_pos = summary["variance_pos_vnd"]
+    money = lambda v: f'{v:,.0f}'.replace(',', '.')
+    cards = [
+        (f"Tổng thu về · {chosen_date:%d/%m}", f"{money(summary['total_collected_vnd'])} đ", 'Sau khi trừ khoản chi', ''),
+        ("Tiền mặt gom ca", f"{money(summary['total_cash_vnd'])} đ", 'Đã để lại két cố định', ''),
+        ("Chuyển khoản", f"{money(summary['total_bank_vnd'])} đ", 'QR / chuyển khoản', ''),
+        ("App giao hàng", f"{money(summary['total_delivery_apps_vnd'])} đ", 'ShopeeFood · GrabFood · BeFood', ''),
+        ("Lệch so với thực thu POS", f"{money(var_pos).replace('-', '−')} đ", f"POS {money(summary['pos_revenue_vnd'])} đ",
+         'ok' if abs(var_pos) <= 50000 else 'bad'),
+    ]
+    st.markdown('<section class="px-kpis" aria-label="Tổng kết ngày">' + ''.join(
+        f'<div class="px-kpi"><small>{label}</small><b class="px-num {tone}">{value}</b><span>{note}</span></div>'
+        for label, value, note, tone in cards) + '</section>', unsafe_allow_html=True)
 
     # 3. KHU VỰC TẢI ẢNH CHỐT CA & AI OCR EXTRACTOR
-    with st.expander("📸 **Tải Ảnh Chốt Ca & Trích Xuất Dữ Liệu Tự Động Bằng AI (OCR)**", expanded=True):
-        st.write("##### 📤 Tải ảnh chụp sổ bàn giao hoặc hóa đơn POS")
-        st.caption("Hệ thống hỗ trợ ảnh chụp sổ chốt viết tay của nhân viên (Ca sáng, Ca chiều, Ca tối) hoặc hóa đơn in từ máy POS.")
-
-        col_upload, col_result = st.columns([1.1, 1.4], gap="large")
+    with st.container(key='ocr_workspace'):
+        col_upload, col_result = st.columns([1, 2.1], gap="medium")
 
         with col_upload:
-            with st.container(border=True):
-                st.write("**1. Chọn Ca & Tải Ảnh Lên**")
-
-                def choose_sample(filename, ca):
-                    p_str = str(SHIFT_PHOTOS_DIR / filename)
-                    st.session_state.preview_image_path = p_str
-                    st.session_state.preview_image_paths = [p_str]
-                    st.session_state.shift_ocr_selection = next(item for item in shift_options if item[0] == ca)
-                    st.session_state.extracted_cache = None
-
-                shift_options = [
-                    ("CA_SANG", "🌅 1. Ca sáng bàn giao (8h - 13h)"),
-                    ("CA_CHIEU", "☀️ 2. Ca chiều bàn giao (13h - 18h)"),
-                    ("CA_TOI", "🌙 3. Ca tối & Chốt tổng cả ngày (18h - 23h)"),
-                ]
-                selected_shift_type = st.selectbox(
-                    "Chọn ca làm việc đang chốt",
-                    shift_options,
-                    format_func=lambda x: x[1], key='shift_ocr_selection'
-                )
-                shift_code = selected_shift_type[0]
-
-                st.write("**Hoặc sử dụng ảnh chụp thực tế có sẵn:**")
-                btn_c1, btn_c2, btn_c3, btn_c4 = st.columns(4)
-
+            with st.container(border=True, key='ocr_image_card'):
+                st.markdown('<div class="px-card-title">Ảnh chứng từ</div>', unsafe_allow_html=True)
                 if "preview_image_path" not in st.session_state:
                     st.session_state.preview_image_path = None
                 if "preview_image_paths" not in st.session_state:
                     st.session_state.preview_image_paths = []
 
-                with btn_c1:
-                    st.button("📷 Sổ Ca Sáng", use_container_width=True, on_click=choose_sample,
-                              args=('20261014_ca_sang_chieu.jpg', 'CA_SANG'))
-
-                with btn_c2:
-                    st.button("📷 Sổ Ca Chiều", use_container_width=True, on_click=choose_sample,
-                              args=('20261014_ca_sang_chieu.jpg', 'CA_CHIEU'))
-
-                with btn_c3:
-                    st.button("📷 Sổ Ca Tối", use_container_width=True, on_click=choose_sample,
-                              args=('20261014_ca_toi_tong_ket.jpg', 'CA_TOI'))
-
-                with btn_c4:
-                    st.button("🧾 Hóa đơn POS", use_container_width=True, on_click=choose_sample,
-                              args=('20261014_pos_slip.jpg', 'CA_TOI'))
+                st.markdown(f'<div class="px-mini-head">Ảnh mẫu {latest_shift_report_date():%d/%m/%Y}</div>', unsafe_allow_html=True)
+                samples = [("📷 Sổ Ca Sáng", '20261014_ca_sang_chieu.jpg', 'CA_SANG'),
+                           ("📷 Sổ Ca Chiều", '20261014_ca_sang_chieu.jpg', 'CA_CHIEU'),
+                           ("📷 Sổ Ca Tối", '20261014_ca_toi_tong_ket.jpg', 'CA_TOI'),
+                           ("🧾 Hóa đơn POS", '20261014_pos_slip.jpg', 'CA_TOI')]
+                for row in (samples[:2], samples[2:]):
+                    for column, (label, filename, ca) in zip(st.columns(2, gap='small'), row):
+                        column.button(label, use_container_width=True, on_click=choose_sample, args=(filename, ca))
 
                 uploaded_files = st.file_uploader(
-                    "Kéo thả hoặc duyệt ảnh từ thiết bị (có thể chọn nhiều ảnh cùng lúc: Hóa đơn POS, Sổ ca, Phiếu chi...):",
+                    "Kéo thả hoặc chọn ảnh (POS, sổ ca, phiếu chi) — chọn được nhiều ảnh",
                     type=["jpg", "jpeg", "png", "webp"],
                     accept_multiple_files=True,
                     key="shift_photo_uploader"
@@ -198,9 +146,8 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                             st.image(p, caption=f"Ảnh #{idx+1}: {Path(p).name}", use_container_width=True)
 
         with col_result:
-            with st.container(border=True):
-                st.write("**2. Kết Quả Trích Xuất AI & Xác Nhận Số Liệu**")
-                st.caption("AI tách vùng chứng từ (POS vs sổ viết tay), giữ giá trị đọc thô, kiểm tra tính nhất quán và để trống các ô mơ hồ/mâu thuẫn.")
+            with st.container(border=True, key='ocr_evidence_card'):
+                st.markdown('<div class="px-card-title">Bằng chứng từng trường</div>', unsafe_allow_html=True)
 
                 curr_shift_code = shift_code
                 cur_paths = st.session_state.get("preview_image_paths") or ([st.session_state.get("preview_image_path")] if st.session_state.get("preview_image_path") else [])
@@ -421,10 +368,20 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
     render_page_approval(user_role, user_name, is_admin)
     render_ocr_benchmark_panel()
 
-    st.write("")
-    st.write("### 📋 Danh Sách Các Ca Đã Chốt Trong Ngày " + chosen_date.strftime("%d/%m/%Y"))
-
     day_reports = get_all_shift_reports(chosen_d_str)
+    with st.container(border=True, key='ocr_day_card'):
+        render_day_reports(day_reports, chosen_date, is_admin)
+
+    with st.expander("Quy chế chốt ca & bàn giao doanh thu", expanded=False):
+        st.markdown(
+            "- **Ca sáng (8h–13h):** bàn giao tiền mặt quầy, chuyển khoản, app Shopee/Grab/Be và két cố định 1.000.000 đ.\n"
+            "- **Ca chiều (13h–18h):** như ca sáng, ghi rõ tiền mặt dư/thiếu nếu có.\n"
+            "- **Ca tối (18h–23h):** tổng hợp doanh thu cả ngày, trừ khoản chi phát sinh và chốt số cầm tiền mặt.")
+
+
+def render_day_reports(day_reports, chosen_date, is_admin):
+    """Approved shifts of the chosen day, with the original evidence photos on demand."""
+    st.markdown(f'<div class="px-card-title">Các ca trong ngày {chosen_date:%d/%m/%Y}</div>', unsafe_allow_html=True)
 
     if not day_reports:
         st.info(f"Chưa có báo cáo ca nào được ghi nhận cho ngày **{chosen_date.strftime('%d/%m/%Y')}**. Hãy tải ảnh và lưu ca đầu tiên ở trên!")
@@ -449,7 +406,7 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
         df_shifts = pd.DataFrame(table_rows)
         st.dataframe(df_shifts, use_container_width=True, hide_index=True)
 
-        st.write("##### 🔍 Kiểm Tra Ảnh Gốc Chốt Ca Từng Nhân Viên")
+        st.caption('Ảnh gốc từng ca (bằng chứng đã lưu cùng báo cáo):')
         detail_cols = st.columns(len(day_reports))
         for idx, rep in enumerate(day_reports):
             with detail_cols[idx]:
@@ -472,6 +429,12 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                                 st.error(d_msg)
 
 
+@st.cache_data(show_spinner=False)
+def _default_benchmark():
+    from src.engine.ocr_evaluation import run_ocr_benchmark
+    return run_ocr_benchmark("scripted")
+
+
 def render_ocr_benchmark_panel():
     """Error-taxonomy benchmark: 4 synthetic images or the labelled real store photos."""
     from src.agent.config import AgentSettings
@@ -483,7 +446,8 @@ def render_ocr_benchmark_panel():
         run_ocr_benchmark,
     )
 
-    with st.expander("🧪 Kiểm định & Phân loại lỗi OCR (Error Taxonomy Benchmark)", expanded=False):
+    with st.container(border=True, key='ocr_benchmark_card'):
+        st.markdown('<div class="px-card-title">Kiểm định &amp; phân loại lỗi OCR</div>', unsafe_allow_html=True)
         dataset = st.radio(
             "Bộ dữ liệu kiểm định",
             ["synthetic", "real"],
@@ -509,6 +473,8 @@ def render_ocr_benchmark_panel():
                 st.session_state["ocr_benchmark_report"] = (run_ocr_benchmark("live", settings=settings) if dataset == "synthetic"
                                                             else run_dataset_benchmark(mode="live", settings=settings))
         report = st.session_state.get("ocr_benchmark_report")
+        if report is None and dataset == "synthetic":
+            report = _default_benchmark()  # deterministic and offline, so the numbers are visible on arrival
         if report:
             st.markdown(f"**Chế độ:** `{report['mode']}`")
             runtime = report.get("runtime") or {}

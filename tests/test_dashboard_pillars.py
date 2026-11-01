@@ -174,3 +174,4 @@ def test_chat_page_has_langgraph_rail_with_rbac_counts():
         html = ' '.join(m.value for m in app.markdown)
         assert 'px-chat-head' in html and 'px-rail' in html and 'Luồng LangGraph' in html
         assert ('duyệt được interrupt' in html) is admin
+        assert 'Quyền hạn (máy chủ xác thực)' in html

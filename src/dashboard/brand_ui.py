@@ -32,6 +32,9 @@ def ui_icon(name):
         'users': '<circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6m2 3a5 5 0 0 1 3 5v2"/>',
         'chat': '<path d="M21 11a9 9 0 0 1-9 9H4l-2 2V11a9 9 0 0 1 19 0Z"/><path d="M7 11h.01m5 0h.01m5 0h.01"/>',
         'clock': '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2"/>',
+        'camera': '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
+        'home': '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+        'logout': '<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>',
     }
     path = paths.get(aliases.get(name, name), paths['star'])
     return f'<svg class="mx-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{path}</svg>'
@@ -151,9 +154,9 @@ NAV_LABELS = {
     '📸 Chốt ca & OCR': 'Chốt Ca & Đối Soát OCR (Chữ viết tay & POS)',
 }
 NAV_GROUP_TITLES = {
-    'core': '⭐ 2 TRỤ CỘT AI CỦA ĐỀ TÀI',
-    'support': '🛠️ DỮ LIỆU & CÔNG CỤ PHỤ TRỢ VẬN HÀNH',
-    'admin': '⚙️ QUẢN TRỊ CHI NHÁNH',
+    'core': 'TRỤ CỘT AI CỦA ĐỀ TÀI',
+    'support': 'CÔNG CỤ PHỤ TRỢ',
+    'admin': 'QUẢN TRỊ',
 }
 
 PAGE_HEROES = {
@@ -188,37 +191,43 @@ def nav_group_css(pages):
             seen.add(group)
             title = NAV_GROUP_TITLES[group].replace('"', '')
             rules.append(f'[data-testid="stSidebar"] .st-key-main_navigation [role="radiogroup"] > *:nth-child({index})::before'
-                         f'{{content:"{title}";display:block;font-size:10.5px;font-weight:800;letter-spacing:.05em;'
-                         f'color:#be123c;margin:12px 6px 4px;}}')
+                         f'{{content:"{title}";display:block;font-size:11px;font-weight:700;letter-spacing:.06em;'
+                         f'color:#6b5560;margin:16px 12px 6px;}}')
     if rules:
         st.html('<style>' + ''.join(rules) + '</style>')
 
 
-def render_sidebar_top(user_name, user_title, user_badge):
-    st.markdown(f'''<div class="mx-logo">{snow_king_image(46)}<div><b>MIXUE</b><small>ICE CREAM &amp; TEA</small></div></div>
-    <div class="mx-store"><span class="mx-avatar" style="border-radius:10px;font-size:22px">🏪</span>
-    <div><b>Mixue 2132</b><small>39 Tôn Quang Phiệt<br>Hà Nội</small><em>Đang hoạt động</em></div></div>
-    <div class="mx-user"><span class="mx-avatar">{escape(_initials(user_name))}</span>
-    <div><b>{escape(user_name)}</b><small>{escape(user_title)}</small><span class="mx-role-pill">{escape(user_badge)}</span></div></div>''',
-                unsafe_allow_html=True)
+def render_sidebar_top(user_name='', user_title='', user_badge=''):
+    """Brand block: red tile with Tuyết Vương, store name and product name."""
+    st.markdown(f'''<div class="px-brand"><span class="px-brand-tile"><img src="{asset('snow-king-cutout.png')}" alt="Tuyết Vương"></span>
+    <div><strong>MIXUE 2132</strong><span>39 Tôn Quang Phiệt · BeverageOps AI</span></div></div>''', unsafe_allow_html=True)
 
 
-def render_sidebar_bottom():
-    st.markdown(f'''<div class="mx-side-foot">{snow_king_image(110)}<i>Sweet Moments<br>Make a Sweeter World</i></div>''', unsafe_allow_html=True)
+def render_sidebar_bottom(user_name='', user_title='', user_badge=''):
+    """Signed-in user, pinned under the navigation (logout button follows)."""
+    st.markdown(f'''<div class="px-side-user"><span class="px-avatar">{escape(_initials(user_name))}</span>
+    <div><strong>{escape(user_name)}</strong><span>{escape(user_title)}</span></div></div>''', unsafe_allow_html=True)
 
 
-def render_topbar(user_name, notifications=0):
+WEEKDAYS_VI = ('Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy', 'Chủ nhật')
+
+
+def shift_of_day(hour):
+    return 'Ca sáng' if hour < 13 else 'Ca chiều' if hour < 18 else 'Ca tối'
+
+
+def render_topbar(user_name, notifications=0, page='Trang chủ'):
     from src.auth import get_allowed_pages
-    today = datetime.now(timezone(timedelta(hours=7))).strftime('%d/%m/%Y')
+    now = datetime.now(timezone(timedelta(hours=7)))
     bell = f'<span>{notifications}</span>' if notifications else ''
     pages = get_allowed_pages(st.session_state.get('user_role', 'STAFF'))
     commands = ''.join(f'<button type="button" data-command-page="{escape(nav_label(page))}">{escape(nav_label(page))}<span>↗</span></button>' for page in pages)
-    st.markdown(f'''<div class="mx-topbar">
-    <div class="mx-chip"><span class="mx-store-icon">{ui_icon('store')}</span><div><b>Mixue 2132</b><small>39 Tôn Quang Phiệt</small></div></div>
-    <div class="mx-chip mx-date">{ui_icon('calendar')}<span>{today}</span></div>
-    <button class="mx-search" type="button" data-command-open>{ui_icon('search')}<span>Tìm nhanh chức năng…</span><kbd>Ctrl K</kbd></button>
+    title = NAV_LABELS.get(page, page).split(' (')[0]
+    st.markdown(f'''<div class="mx-topbar px-topbar">
+    <div class="px-top-title"><small>{WEEKDAYS_VI[now.weekday()]}, {now:%d/%m/%Y} · {shift_of_day(now.hour)}</small><h1>{escape(title)}</h1></div>
+    <button class="mx-search" type="button" data-command-open>{ui_icon('search')}<span>Tìm chức năng, món, mã tem…</span><kbd>Ctrl K</kbd></button>
     <button type="button" class="stage-motion-toggle mx-motion" aria-pressed="true" title="Bật hoặc tạm dừng chuyển động">Tạm dừng hiệu ứng</button>
-    <span class="mx-bell" title="{notifications} lệnh kho chờ duyệt">{ui_icon('bell')}{bell}</span><span class="mx-avatar" title="{escape(user_name)}">{escape(_initials(user_name))}</span></div>
+    <span class="mx-bell" title="{notifications} việc chờ duyệt">{ui_icon('bell')}{bell}</span></div>
     <dialog class="mx-command" aria-label="Tìm nhanh chức năng"><div class="mx-command-head"><b>Bạn muốn làm gì?</b><button type="button" data-command-close aria-label="Đóng tìm kiếm">✕</button></div><input type="search" placeholder="Tìm trang, ví dụ: kho, dự báo, công thức…" aria-label="Tìm chức năng"><div class="mx-command-results">{commands}</div><p class="mx-command-empty" hidden>Không tìm thấy chức năng phù hợp.</p><small>Enter để mở · Esc để đóng</small></dialog>''', unsafe_allow_html=True)
 
 
@@ -312,7 +321,10 @@ def _home_state(agent, user_role, user_name):
         state['online'] = bool(getattr(agent, 'is_llm_online', lambda: False)())
     if is_admin_role(user_role):
         from src.engine.daily_stock_service import get_pending_requests
-        state['plans_waiting'] = sum(1 for p in list_plans() if p.get('status') == 'PENDING_APPROVAL')
+        today = business_today().isoformat()
+        # Only plans for today or later still need a decision; older drafts are history.
+        state['plans_waiting'] = sum(1 for p in list_plans()
+                                     if p.get('status') == 'PENDING_APPROVAL' and str(p.get('target_date', ''))[:10] >= today)
         state['stock_waiting'] = len(get_pending_requests())
     latest = latest_shift_report_date()
     summary = get_daily_closing_summary(latest)
@@ -341,16 +353,19 @@ def render_home_greeting(agent, user_role, user_name):
     if can_access_page(user_role, OCR_PAGE):
         tasks.append((OCR_PAGE, 'Chốt ca từ ảnh sổ', 'ghost'))
     count = sum(1 for _, _, tone in tasks if tone == 'light') + state['plans_waiting'] + state['stock_waiting']
-    headline = (f'Chào {part}, {first}! Có {count} việc đang chờ bạn.' if count
-                else f'Chào {part}, {first}! Mọi phê duyệt đã xong.')
+    headline = (f'Chào {part}, {first}! Còn {count} việc cần bạn xử lý trước khi chốt ngày.' if count
+                else f'Chào {part}, {first}! Mọi phê duyệt đã xong, chỉ còn chốt ca.')
     if state['draft']:
         bubble = f"Dự thảo <b>{escape(state['draft']['draft_id'])}</b> còn số chưa rõ đơn vị — mình để trống chờ bạn xác nhận nhé."
     elif state['pending_approval']:
         bubble = 'Luồng đang dừng ở bước phê duyệt. Bạn xem và bấm <b>Phê duyệt</b> giúp mình nhé.'
     else:
         bubble = 'Hết ca thì chụp sổ chốt ca gửi mình. Số nào chưa chắc mình sẽ để trống cho bạn xác nhận.'
+    tasks = tasks[:4]
+    if tasks:  # the most urgent task is the white primary action, as in the design
+        tasks[0] = (tasks[0][0], tasks[0][1], 'light')
     buttons = ''.join(f'<button type="button" class="px-link {tone}" data-command-page="{escape(nav_label(page))}">{escape(label)}</button>'
-                      for page, label, tone in tasks[:4])
+                      for page, label, tone in tasks)
     flakes = ''.join(f'<i class="px-flake" style="left:{left}%;top:{top}%">✦</i>'
                      for left, top in ((8, 18), (22, 72), (47, 12), (58, 78), (71, 30), (90, 64)))
     st.markdown(f'''<section class="px-greet" aria-label="Lời chào và việc cần làm">{flakes}
@@ -368,41 +383,86 @@ def render_pillars(user_role):
     if not visible:
         return
     state = st.session_state.get('_home_state') or {}
-    st.markdown('<div class="section-heading"><div><span class="mx-eyebrow">ĐỒ ÁN TỐT NGHIỆP · 2 TRỤ CỘT KỸ THUẬT</span>'
-                '<h2>AI Agent dựa trên bằng chứng</h2></div><span>Mọi số ghi sổ đều có bằng chứng và người phê duyệt</span></div>',
-                unsafe_allow_html=True)
+    st.markdown('<div class="px-section-head"><h2>2 trụ cột kỹ thuật</h2>'
+                '<span>Mọi số liệu ghi sổ đều qua bằng chứng và người phê duyệt</span></div>', unsafe_allow_html=True)
     summary = state.get('summary') or {}
     latest = state.get('latest')
     columns = st.columns(len(visible), gap='medium')
     for column, (page, key, tag, title, lead, bullets) in zip(columns, visible):
         with column, st.container(border=True, key=f'{key}_card'):
             if key == 'pillar_open_ocr':
-                icon = ui_icon('search')
+                icon, heading = ui_icon('camera'), 'Verifiable Vision OCR'
                 variance = summary.get('variance_pos_vnd')
                 stats = [('Ca đã chốt · ' + (f'{latest:%d/%m}' if latest else '—'), str(state.get('reports', 0)), state.get('reports', 0)),
-                         ('Lệch POS ↔ sổ', f"{variance:+,.0f} đ".replace(',', '.') if variance is not None else '—', None),
+                         ('Đối soát POS ↔ sổ', f"{variance:+,.0f} đ".replace(',', '.').replace('-', '−') if variance is not None else '—', None),
                          ('Số sai lọt vào form', f"{state.get('bench_raw', '—')} → {state.get('bench_verified', '—')}", None)]
-                badge = f'<span class="px-pill warn">{len(state["draft"].get("missing_fields") or [])} trường chờ xác nhận</span>' if state.get('draft') else '<span class="px-pill ok">Không có dự thảo treo</span>'
-                extra = ('<p>Tách vùng POS / sổ tay, kiểm tra ảnh mờ, không tự nhân 1.000, không tự cộng '
-                         '<code>962 + 629</code>, đối soát cộng ngang và chéo POS.</p>')
+                draft = state.get('draft')
+                badge = (f'<span class="px-pill warn">{len(draft.get("missing_fields") or [])} trường chờ xác nhận</span>' if draft
+                         else '<span class="px-pill ok">Không có dự thảo treo</span>')
+                extra = ('<p>Tách vùng 🧾 POS và ✍️ sổ tay, kiểm tra ảnh mờ, không tự nhân 1.000, không tự cộng '
+                         '<code class="px-code">962 + 629</code>, đối soát cộng ngang.</p>')
             else:
-                icon = ui_icon('chat')
-                waiting = (1 if state.get('pending_approval') else 0) + state.get('plans_waiting', 0)
+                icon, heading = ui_icon('chat'), 'Tuyết Vương AI · LangGraph Agent'
+                pending = state.get('pending_approval')
+                waiting = (1 if pending else 0) + state.get('plans_waiting', 0)
                 stats = [('Phê duyệt đang chờ', str(waiting), waiting),
                          ('Công cụ được phép', str(state.get('tools_allowed', '—')), state.get('tools_allowed')),
                          ('Chế độ', 'AI Online' if state.get('online') else 'Offline', None)]
-                badge = '<span class="px-pill solid">⏸ interrupt đang chờ</span>' if state.get('pending_approval') else '<span class="px-pill red">Sẵn sàng</span>'
-                nodes = ['guard', 'model / offline', 'authorize', 'tools', 'approval']
-                chain = '<span class="px-arrow" aria-hidden="true">→</span>'.join(f'<span class="px-node">{n}</span>' for n in nodes)
-                extra = f'<div class="px-chain" aria-label="Đồ thị LangGraph">{chain}</div><p>{escape(lead)}</p>'
+                badge = ('<span class="px-pill red">⏸ 1 interrupt đang chờ</span>' if pending
+                         else '<span class="px-pill slate">Không có interrupt</span>')
+                nodes = ['guard', 'model / offline', 'authorize', 'tools', 'approval ⏸' if pending else 'approval']
+                chain = '<span class="px-arrow" aria-hidden="true">→</span>'.join(
+                    f'<span class="px-node{" stop" if n.endswith("⏸") else ""}">{n}</span>' for n in nodes)
+                extra = (f'<div class="px-chain" aria-label="Đồ thị LangGraph">{chain}</div>'
+                         '<p>Gửi ảnh chốt ca ngay trong chat, sửa số bằng lời, Quản lý bấm Phê duyệt mới ghi sổ. '
+                         'RBAC kiểm tra ở máy chủ, thiếu bằng chứng thì không kết luận.</p>')
             cells = ''.join(
                 f'<div class="px-stat"><small>{escape(label)}</small><b' + (f' data-count="{count}"' if isinstance(count, int) else '') + f'>{escape(value)}</b></div>'
                 for label, value, count in stats)
             st.markdown(f'''<div class="px-pillar"><div class="px-pillar-head"><span class="px-pillar-icon">{icon}</span>
-            <div style="flex:1"><span class="px-eyebrow">{tag}</span><h3>{escape(title)}</h3></div>{badge}</div>
+            <div style="flex:1"><span class="px-eyebrow">{tag}</span><h3>{escape(heading)}</h3></div>{badge}</div>
             <div class="px-stats">{cells}</div>{extra}</div>''', unsafe_allow_html=True)
-            st.button(f'Mở {NAV_LABELS.get(page, page)} →', key=key, type='primary', use_container_width=True,
-                      on_click=navigate_to, args=(page,))
+            label = 'Mở Chốt ca & Đối soát OCR →' if key == 'pillar_open_ocr' else 'Mở Tuyết Vương AI →'
+            with st.container(horizontal=True, key=f'{key}_actions'):
+                st.button(label, key=key, type='primary', width='content', on_click=navigate_to, args=(page,))
+                if key == 'pillar_open_chat':
+                    st.button('Xem phê duyệt đang chờ', key='pillar_view_pending', width='content',
+                              on_click=navigate_to, args=(page,))
+
+
+def render_home_kpis(sales, menu):
+    """Four figures from the latest business day that has data (never 'today' guesses)."""
+    from src.engine.shift_service import get_all_shift_reports
+    number = lambda value: f'{value:,.0f}'.replace(',', '.')
+    state = st.session_state.get('_home_state') or {}
+    cards = []
+    if not sales.empty:
+        frame = sales.copy()
+        frame['business_date'] = frame['business_date'].astype(str).str[:10]
+        day = frame['business_date'].max()
+        today_rows = frame[frame['business_date'] == day]
+        top = today_rows.groupby('sku_name')['quantity_sold'].sum().sort_values(ascending=False)
+        label_day = f'{day[8:10]}/{day[5:7]}'
+        cards += [(f'Doanh thu POS · {label_day}', f"{number(today_rows['revenue_vnd'].sum())} đ", 'Nguồn: sales_daily', ''),
+                  ('Số ly bán ra', f"{number(today_rows['quantity_sold'].sum())} ly",
+                   f'{escape(top.index[0])} dẫn đầu · {int(top.iloc[0])} ly' if len(top) else '', '')]
+    else:
+        cards.append(('Doanh thu POS', 'Chưa có dữ liệu', 'Nhập dữ liệu bán hàng để xem', ''))
+    summary, latest = state.get('summary') or {}, state.get('latest')
+    if latest and summary.get('total_collected'):
+        reports = get_all_shift_reports(latest)
+        signer = next((r.get('signed_by') for r in reversed(reports) if r.get('signed_by')), '')
+        variance = summary.get('variance_pos_vnd') or 0
+        cards += [(f'Tổng thu sổ chốt ca · {latest:%d/%m}', f"{number(summary['total_collected'])} đ",
+                   'Đã duyệt' + (f' · ký: {escape(signer)}' if signer else ''), ''),
+                  ('Lệch so với thực thu POS', f"{number(variance).replace('-', '−')} đ",
+                   f"POS {number(summary.get('pos_collected') or 0)} đ · " + ('trong ngưỡng' if abs(variance) < 50_000 else 'cần kiểm tra'),
+                   'ok' if abs(variance) < 50_000 else 'bad')]
+    else:
+        cards.append(('Thực đơn', f'{len(menu)} món', 'Tra cứu công thức từng món', ''))
+    html = ''.join(f'<div class="px-kpi"><small>{escape(label)}</small><b class="px-num {tone}">{escape(value)}</b><span>{note}</span></div>'
+                   for label, value, note, tone in cards)
+    st.markdown(f'<section class="px-kpis" aria-label="Số liệu ngày gần nhất">{html}</section>', unsafe_allow_html=True)
 
 
 def render_shortcuts(user_role):
@@ -414,7 +474,7 @@ def render_shortcuts(user_role):
     cards = ''.join(f'<button type="button" class="mx-shortcut tone-{i}" data-command-page="{escape(nav_label(page))}"><span class="mx-shortcut-icon">{ui_icon(icon)}</span><span class="mx-shortcut-arrow">↗</span><b>{escape(NAV_LABELS.get(page, page))}</b><small>{desc}</small></button>'
                     for i, (page, icon, desc) in enumerate(features) if page in pages)
     if cards:
-        st.markdown(f'<section class="mx-card mx-shortcuts"><div class="mx-card-heading"><h3>{ui_icon("box")} 🛠️ Dữ liệu & công cụ phụ trợ vận hành</h3><span class="mx-caption">Công cụ tất định cung cấp dữ liệu cho AI Agent và đối soát</span></div><div class="mx-shortcut-grid">{cards}</div></section>', unsafe_allow_html=True)
+        st.markdown(f'<section class="mx-card mx-shortcuts px-card"><div class="px-section-head"><h2>Dữ liệu &amp; công cụ phụ trợ</h2><span>Công cụ tất định cung cấp số liệu cho Agent</span></div><div class="mx-shortcut-grid">{cards}</div></section>', unsafe_allow_html=True)
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -536,22 +596,9 @@ else:
 def render_home(menu, sales, user_role="STAFF"):
     from src.auth import is_admin_role
     is_admin = is_admin_role(user_role)
-    number = lambda value: f'{value:,.0f}'.replace(',', '.')
 
     if is_admin:
-        today = business_today()
-        window = daily_window(sales, today=today, days=2)
-        current, previous = window.iloc[-1], window.iloc[0]
-        has_today = bool(current['available'])
-        comparison = bool(previous['available']) and has_today
-        days_with_data = sales['business_date'].nunique() if not sales.empty else 0
-        note = '<em>Dữ liệu đã nhập hôm nay · chưa phải tổng chốt ngày</em>' if has_today else '<em>Chưa cập nhật dữ liệu hôm nay</em>'
-        render_kpi_cards([
-            ('📊', f'Doanh thu hôm nay · {today:%d/%m}', f"{number(current.revenue)} đ" if has_today else 'Chưa có kết quả', _delta(current.revenue, previous.revenue) if comparison else note),
-            ('🥤', 'Số ly hôm nay', f"{number(current.cups)} ly" if has_today else 'Chưa có kết quả', _delta(current.cups, previous.cups) if comparison else note),
-            ('⭐', 'Số món trong thực đơn', f'{len(menu)} món', '<em>Trong thực đơn</em>'),
-            ('🗓️', 'Số ngày có dữ liệu', f'{days_with_data} ngày', '<em>Lịch sử bán hàng</em>'),
-        ])
+        render_home_kpis(sales, menu)
     else:
         # Nhân viên KHÔNG được phép xem Doanh thu và Sản lượng
         render_kpi_cards([
@@ -560,45 +607,45 @@ def render_home(menu, sales, user_role="STAFF"):
             ('⏰', 'Giờ phục vụ', '08:00 – 23:00', '<em>Hàng ngày</em>'),
         ])
     render_shortcuts(user_role)
-    if is_admin:
-        render_home_overview(menu, sales)
-    st.markdown('<div class="section-heading" id="mixue-menu"><div><span class="mx-eyebrow">THE MIXUE MENU</span><h2>Món ngon, chuẩn vị.</h2></div><span>Một chút ngọt ngào cho mỗi ngày ✦</span></div>', unsafe_allow_html=True)
+    render_menu_card(menu)
 
-    filter_col1, filter_col2 = st.columns([1.2, 1.8], gap="medium")
-    with filter_col1:
-        query = st.text_input('Tìm món theo tên hoặc mã', placeholder='Tìm món yêu thích, ví dụ: trà sữa, TS1…', key='menu_search')
-    with filter_col2:
-        group = st.pills('Nhóm đồ uống', ['Tất cả', 'Kem', 'Trà sữa', 'Trà trái cây', 'Sữa trái cây', 'Cà phê'], default='Tất cả', key='menu_group') or 'Tất cả'
 
-    featured = {'DK1': 0, 'TS1': 1, 'THQ1': 2}
-    ordered = sorted(menu, key=lambda m: (featured.get(m[0], 3), m[0].rstrip('0123456789'), int(''.join(c for c in m[0] if c.isdigit()) or '0')))
-    filtered = [m for m in ordered if (group == 'Tất cả' or menu_group(m[0]) == group) and normalized(query) in normalized(f'{m[0]} {m[1]}')]
+def render_menu_card(menu):
+    """Compact menu: search + group pills + rows with a thumbnail and the recipe action."""
+    with st.container(border=True, key='home_menu_card'):
+        head, search = st.columns([1.4, 1], gap='medium', vertical_alignment='center')
+        head.markdown(f'<div class="px-section-head" id="mixue-menu"><h2>Thực đơn · {len(menu)} món</h2></div>', unsafe_allow_html=True)
+        query = search.text_input('Tìm món theo tên hoặc mã', placeholder='Tìm món: trà sữa, TS1…', key='menu_search',
+                                  label_visibility='collapsed')
+        group = st.pills('Nhóm đồ uống', ['Tất cả', 'Kem', 'Trà sữa', 'Trà trái cây', 'Sữa trái cây', 'Cà phê'], default='Tất cả',
+                         key='menu_group', label_visibility='collapsed') or 'Tất cả'
 
-    meta_col1, meta_col2 = st.columns([2, 1])
-    with meta_col1:
-        st.caption(f'{len(filtered)} món phù hợp')
-    if not filtered:
-        st.info('Không tìm thấy món. Thử tên khác hoặc chọn Tất cả.')
-        return
-    pages = (len(filtered) + 5) // 6
-    page_key = f'menu_page_{group}_{query}'
-    with meta_col2:
-        page = st.selectbox('Trang thực đơn', range(1, pages + 1), format_func=lambda n: f'Trang {n} / {pages}', key=page_key, label_visibility='collapsed') if pages > 1 else 1
-
-    for start in range((page - 1) * 6, min(page * 6, len(filtered)), 3):
-        columns = st.columns(3, gap="medium")
-        for col, (sku, name, variant, price) in zip(columns, filtered[start:min(start + 3, page * 6)]):
-            with col:
-                theme = 'milk' if sku.startswith('TS') else 'tea' if sku.startswith('THQ') else 'coffee' if sku.startswith('CF') else ''
-                price_label = f'{price:,.0f}'.replace(',', '.')
-                image_info = product_images().get(sku, {})
-                image_note = image_info.get('variant_note', '')
-                note_html = f'<span>{escape(image_note)}</span>' if image_note else ''
-                st.markdown(f'''<article class="menu-card {theme}" data-tilt><div class="menu-photo"><img src="{asset(product_photo(sku, name))}" alt="{escape(image_info.get('source_name', name))} · Mixue" loading="lazy">{note_html}<i class="product-halo" aria-hidden="true"></i><i class="product-shine" aria-hidden="true"></i></div><div class="menu-copy"><small>{escape(sku)} · {escape(variant or menu_group(sku))}</small>
-                <h3 title="{escape(name)}">{escape(name)}</h3><b>{price_label} đ</b><span class="menu-arrow" aria-hidden="true">↗</span></div></article>''', unsafe_allow_html=True)
-                if st.button('Xem công thức ↗', key=f'menu_{sku}', use_container_width=True):
-                    st.session_state.chat_input_val = f'Công thức {sku}'
-                    open_recipe_popup(sku, name, variant, price)
+        featured = {'DK1': 0, 'TS1': 1, 'THQ1': 2}
+        ordered = sorted(menu, key=lambda m: (featured.get(m[0], 3), m[0].rstrip('0123456789'), int(''.join(c for c in m[0] if c.isdigit()) or '0')))
+        filtered = [m for m in ordered if (group == 'Tất cả' or menu_group(m[0]) == group) and normalized(query) in normalized(f'{m[0]} {m[1]}')]
+        if not filtered:
+            st.info('Không tìm thấy món. Thử tên khác hoặc chọn Tất cả.')
+            return
+        per_page = 9
+        pages = (len(filtered) + per_page - 1) // per_page
+        page = 1
+        if pages > 1:
+            meta, picker = st.columns([2, 1], vertical_alignment='center')
+            meta.caption(f'{len(filtered)} món phù hợp')
+            page = picker.selectbox('Trang thực đơn', range(1, pages + 1), format_func=lambda n: f'Trang {n} / {pages}',
+                                    key=f'menu_page_{group}_{query}', label_visibility='collapsed')
+        items = filtered[(page - 1) * per_page:page * per_page]
+        for start in range(0, len(items), 3):
+            for col, (sku, name, variant, price) in zip(st.columns(3, gap='small'), items[start:start + 3]):
+                with col, st.container(key=f'menu_row_{sku}'):
+                    price_label = f'{price:,.0f}'.replace(',', '.')
+                    image_info = product_images().get(sku, {})
+                    st.markdown(f'''<div class="px-menu-row"><img src="{asset(product_photo(sku, name))}" alt="{escape(image_info.get('source_name', name))}" loading="lazy">
+                    <div><strong title="{escape(name)}">{escape(name)}</strong><small>{escape(sku)} · {escape(variant or menu_group(sku))} · {price_label} đ</small></div></div>''',
+                                unsafe_allow_html=True)
+                    if st.button('Công thức', key=f'menu_{sku}', type='tertiary'):
+                        st.session_state.chat_input_val = f'Công thức {sku}'
+                        open_recipe_popup(sku, name, variant, price)
 
 
 def _apply_login_session(user):
@@ -1205,7 +1252,9 @@ def render_agent_rail(agent, role, user_name, is_online):
         effects[spec.effect] = effects.get(spec.effect, 0) + 1
     effect_vi = {'read': 'Chỉ đọc', 'draft': 'Tạo dự thảo', 'approval': 'Cần phê duyệt'}
     rbac = ''.join(f'<div class="px-kv"><span>{effect_vi.get(k, k)}</span><b class="px-num">{v}</b></div>' for k, v in sorted(effects.items()))
-    role_line = 'Admin · duyệt được interrupt' if is_admin_role(role) else 'Nhân viên · không tự phê duyệt'
+    account = escape(str(st.session_state.get('username', user_name)))
+    role_note = ('Admin · duyệt được interrupt' if is_admin_role(role)
+                 else 'Nhân viên · bị chặn ở node authorize với công cụ cần phê duyệt')
     evidence = next((m.get('evidence') for m in reversed(saved.get('messages', [])) if m.get('role') == 'assistant' and m.get('evidence')), []) or []
     refs = ''.join(f'<span class="px-ref">{escape(str(ref))}</span>' for ref in evidence[:6]) or '<small>Chưa có bằng chứng trong cuộc trò chuyện này.</small>'
     status = ''
@@ -1213,10 +1262,10 @@ def render_agent_rail(agent, role, user_name, is_online):
         status = (f'<div class="px-kv"><span>Dự thảo OCR</span><b>{escape(draft["draft_id"])}</b></div>'
                   f'<div class="px-kv"><span>Trường chờ xác nhận</span><b class="px-num">{len(draft.get("missing_fields") or [])}</b></div>')
     st.markdown(f'''<div class="px-rail">
-    <div class="px-rail-card"><h4>Luồng LangGraph</h4><ol class="px-trace">{''.join(rows)}</ol>{status}</div>
-    <div class="px-rail-card"><h4>Quyền của bạn</h4><div class="px-kv"><span>Vai trò</span><b>{escape(role_line)}</b></div>
-    <div class="px-kv"><span>Công cụ được phép</span><b class="px-num">{len(allowed)}/{len(rt.tools)}</b></div>{rbac}</div>
-    <div class="px-rail-card"><h4>Bằng chứng gần nhất</h4>{refs}</div></div>''', unsafe_allow_html=True)
+    <div class="px-rail-card"><h4>Luồng LangGraph · lượt này</h4><ol class="px-trace">{''.join(rows)}</ol>{status}</div>
+    <div class="px-rail-card"><h4>Quyền hạn (máy chủ xác thực)</h4><div class="px-kv"><span>Tài khoản</span><b>{account} · {escape(role)}</b></div>
+    <div class="px-kv"><span>Công cụ được phép</span><b class="px-num">{len(allowed)}/{len(rt.tools)}</b></div>{rbac}<p class="px-rail-note">{escape(role_note)}</p></div>
+    <div class="px-rail-card"><h4>Nguồn bằng chứng</h4>{refs}<p class="px-rail-note">Thiếu nguồn cho câu hỏi số liệu → trả MISSING_EVIDENCE, không đoán.</p></div></div>''', unsafe_allow_html=True)
 
 
 def render_chat_context(is_admin):
