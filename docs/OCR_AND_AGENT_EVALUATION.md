@@ -15,8 +15,14 @@ mới lưu. Có thể nhập tay khi không dùng API. Không có thao tác ghi 
 
 Các trạng thái trường: `read`, `uncertain`, `not_present`, `unreadable`. Đây là
 nhận định của mô hình, không phải confidence đã được hiệu chuẩn. Ngày trên ảnh
-khác ngày chọn sẽ cảnh báo. Đọc được chưa có nghĩa đã được phê duyệt. Phần OCR
-hiện chạy trong màn hình chốt ca, chưa nhận ảnh trực tiếp trong chat LangGraph.
+khác ngày chọn sẽ cảnh báo. Đọc được chưa có nghĩa đã được phê duyệt. OCR chạy
+cả trên màn hình chốt ca và trực tiếp trong chat LangGraph; cả hai chỉ ghi sổ sau
+khi Quản lý phê duyệt tại `interrupt()`.
+
+Kiểm định OCR theo 7 nhóm lỗi: `run_ocr_benchmark` (4 ảnh tổng hợp) và
+`run_dataset_benchmark` (ảnh thật có đáp án trong `data/ocr_eval/`, chế độ `live`
+lưu bản đọc thô, chế độ `replay` chấm lại offline). Chạy toàn bộ phần thực nghiệm:
+`python -m scripts.run_live_evaluation` → `reports/evaluation_<thời điểm>.md`.
 
 Ảnh JPG/PNG/WebP giới hạn 10 MB, 20 triệu pixel tại bộ đọc. Tải ảnh lên đặt tên
 theo hash thay vì dùng tên file làm nội dung. Uploads không đưa vào Git. Việc

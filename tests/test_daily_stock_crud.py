@@ -76,3 +76,24 @@ def test_matrix_calculation_reflects_changes():
     row_ocque = df_before[df_before["Mã NL"] == "1"].iloc[0]
     ton_dau = float(row_ocque["Tồn T9"])
     assert ton_dau == 6.0
+
+
+def test_future_stamped_rows_are_not_treated_as_double_clicks():
+    """Rows written in another timezone (naive local time) must not block new requests."""
+    from datetime import datetime, timedelta
+
+    from src.database import SessionLocal
+    from src.engine.daily_stock_service import create_stock_request
+    from src.models import DailyStockMovement
+
+    args = dict(business_date=date(2026, 10, 9), ingredient_id="2", movement_type="OUT",
+                quantity=7.0, recorded_by="quanly", user_role="ADMIN", notes="timezone check")
+    assert create_stock_request(**args)["status"] == "SUCCESS"
+    with SessionLocal() as db:
+        db.query(DailyStockMovement).filter(DailyStockMovement.business_date == date(2026, 10, 9),
+                                            DailyStockMovement.quantity == 7.0).update(
+            {DailyStockMovement.created_at: datetime.now() + timedelta(hours=7)}, synchronize_session=False)
+        db.commit()
+    assert create_stock_request(**args)["status"] == "SUCCESS"
+    # A genuine double click is still rejected.
+    assert create_stock_request(**args)["status"] == "DUPLICATE"

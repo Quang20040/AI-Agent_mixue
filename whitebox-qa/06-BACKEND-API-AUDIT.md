@@ -13,7 +13,7 @@
   Trong toàn bộ codebase của `BeverageOps AI`, **hoàn toàn không có bất kỳ endpoint REST API (FastAPI / Flask / Django) nào**.
   Hệ thống đang hoạt động dưới dạng **Internal In-process Python Calls**: Giao diện Streamlit gọi trực tiếp các hàm Python trong `src/engine/` và `src/auth.py`.
 - **Rủi ro vận hành & Hạn chế tích hợp:**
-  1. **Không thể tích hợp máy POS tự động:** Máy tính tiền POS tại quầy Mixue 39 Tôn Quang Phiệt không thể gửi webhook hoặc REST request đẩy đơn hàng thời gian thực (Real-time Sales Push) vào BeverageOps AI. Hiện tại, dữ liệu POS phải được nạp thông qua script chạy tay (`populate_mixue_operational_data.py`) hoặc import gián tiếp.
+  1. **Không thể tích hợp máy POS tự động:** Máy tính tiền POS tại quầy Mixue 39 Tôn Quang Phiệt không thể gửi webhook hoặc REST request đẩy đơn hàng thời gian thực (Real-time Sales Push) vào BeverageOps AI. Hiện tại, dữ liệu POS phải được nạp thông qua script chạy tay (`scripts/data_build/populate_mixue_operational_data.py`) hoặc import gián tiếp.
   2. **Không thể phát triển ứng dụng di động (Mobile App):** Quản lý hoặc Chủ quán không thể sử dụng ứng dụng di động để duyệt lệnh xuất kho hoặc xem báo cáo doanh thu từ xa vì không có API Gateway cung cấp dữ liệu qua JSON.
   3. **Không thể tích hợp nhà cung cấp:** Đơn đặt hàng nhập kho (PO) được tạo bởi `OptimizerEngine` chỉ có thể xem trên màn hình, không thể tự động bắn API sang hệ thống kho tổng của chuỗi Mixue.
 

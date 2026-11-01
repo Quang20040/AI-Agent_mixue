@@ -16,12 +16,16 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 from src.engine.storage_lock import FileTransactionLock
-from src.runtime_settings import demo_enabled, resolve_store_id
+from src.runtime_settings import demo_enabled, resolve_store_id, setting
 
 ROOT = Path(__file__).resolve().parents[2]
-SHIFT_DATA_FILE = ROOT / "data" / "shift_reports.json"
+# Paths can be redirected by environment (tests use temporary copies of the tracked data).
+SHIFT_DATA_FILE = Path(setting("SHIFT_DATA_FILE") or ROOT / "data" / "shift_reports.json")
+_CONFIGURED_SHIFT_DATA_FILE = SHIFT_DATA_FILE
 SHIFT_PHOTOS_DIR = ROOT / "data" / "shift_photos"
-OCR_EDITS_LOG_FILE = ROOT / "data" / "agent_private" / "ocr_user_edits.jsonl"
+# Uploaded evidence photos must survive redeploys, so production points this at the persistent disk.
+SHIFT_UPLOADS_DIR = Path(setting("SHIFT_UPLOADS_DIR") or SHIFT_PHOTOS_DIR / "uploads")
+OCR_EDITS_LOG_FILE = Path(setting("OCR_EDITS_LOG_FILE") or ROOT / "data" / "agent_private" / "ocr_user_edits.jsonl")
 SHIFT_PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
 
 _SHIFT_LOCK = FileTransactionLock(lambda: SHIFT_DATA_FILE.with_suffix('.lock'))
@@ -87,8 +91,8 @@ def _load_raw_shift_data() -> list[dict[str, Any]]:
 
 def _sync_shift_reports_to_db(data: list[dict[str, Any]]) -> None:
     """Đồng bộ bản ghi báo cáo chốt ca sang bảng quan hệ `shift_reports` trong Database."""
-    default_path = ROOT / "data" / "shift_reports.json"
-    if SHIFT_DATA_FILE != default_path:
+    # A path swapped at runtime (unit tests on a scratch file) must not touch the database.
+    if SHIFT_DATA_FILE != _CONFIGURED_SHIFT_DATA_FILE:
         return
     try:
         from src.database import SessionLocal, engine
@@ -372,6 +376,18 @@ def get_all_shift_reports(business_date: str | date | None = None) -> list[dict[
     return sorted(filtered, key=lambda x: x.get("shift_code", ""))
 
 
+def latest_shift_report_date() -> date:
+    """Most recent business date that has a shift report; today (Vietnam time) if none."""
+    from datetime import timedelta
+    dates = []
+    for row in get_all_shift_reports():
+        try:
+            dates.append(date.fromisoformat(str(row.get("business_date") or row.get("report_date"))[:10]))
+        except ValueError:
+            continue
+    return max(dates) if dates else datetime.now(timezone(timedelta(hours=7))).date()
+
+
 def get_shift_report_by_id(report_id: str) -> dict[str, Any] | None:
     """Tìm một báo cáo ca theo ID."""
     data = _load_raw_shift_data()
@@ -491,7 +507,7 @@ def delete_shift_report(report_id: str, *, delete_uploaded_image: bool = False, 
             return False, "Không tìm thấy báo cáo ca cần xóa."
         ok = _save_raw_shift_data(new_data)
         if ok and delete_uploaded_image:
-            uploads_dir = (SHIFT_PHOTOS_DIR / "uploads").resolve()
+            uploads_dir = SHIFT_UPLOADS_DIR.resolve()
             for r in removed:
                 img_path_str = r.get("image_path")
                 if img_path_str:

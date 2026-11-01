@@ -24,8 +24,11 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 
-def check_database(path: Path) -> dict[str, Any]:
+def check_database(path: Path, created_on_first_use: bool = False) -> dict[str, Any]:
     if not path.exists():
+        if created_on_first_use:
+            # Fresh install / CI checkout: the store is created by the app on first use.
+            return {"status": "NOT_INITIALIZED", "message": f"{path.name} sẽ được tạo khi ứng dụng chạy lần đầu."}
         return {"status": "ERROR", "message": f"Database file missing: {path.name}"}
     try:
         with sqlite3.connect(f"file:{path.resolve()}?mode=ro", uri=True) as conn:
@@ -76,14 +79,14 @@ def check_auth_store() -> dict[str, Any]:
 
 def run_full_healthcheck() -> tuple[bool, dict[str, Any]]:
     db_ops = check_database(REPO_ROOT / "data" / "beverageops.db")
-    db_conv = check_database(REPO_ROOT / "data" / "agent_private" / "conversations.sqlite")
+    db_conv = check_database(REPO_ROOT / "data" / "agent_private" / "conversations.sqlite", created_on_first_use=True)
     disk = check_disk_space()
     rag = check_rag_engine()
     auth = check_auth_store()
 
     all_healthy = (
         db_ops["status"] == "HEALTHY"
-        and db_conv["status"] == "HEALTHY"
+        and db_conv["status"] in ("HEALTHY", "NOT_INITIALIZED")
         and disk["status"] in ("HEALTHY", "WARNING")
         and rag["status"] == "HEALTHY"
         and auth["status"] == "HEALTHY"

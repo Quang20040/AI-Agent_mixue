@@ -1,13 +1,27 @@
-# Render.com Blueprint cho BeverageOps AI — Chi nhánh Mixue 39 Tôn Quang Phiệt (CH 2132)
+# Render Blueprint — bản MIỄN PHÍ (0 đồng, không cần thẻ) để demo / bảo vệ đồ án.
+#
+# Giới hạn của gói Free trên Render (không đổi được):
+# - Ngủ sau 15 phút không ai truy cập; lần mở tiếp theo chờ khoảng 1 phút.
+# - Ổ đĩa tạm: mọi dữ liệu nhập thêm (báo cáo, ảnh, phê duyệt) bị xóa khi dịch vụ ngủ,
+#   khởi động lại hoặc deploy lại; app quay về dữ liệu mẫu ngày 14–15/10/2026.
+# => Dùng để DEMO. Dùng thật cho quán miễn phí: xem docs/DEPLOY_FREE.md (máy ở quán + Tailscale Funnel).
+#    Bản trả phí có ổ đĩa bền vững: deploy/render-paid.yaml.
 services:
   - type: web
-    name: mixue-beverageops-ai
+    name: mixue-beverageops-demo
     runtime: docker
+    plan: free
+    region: singapore
+    branch: fix/quality-improvement
     dockerfilePath: ./Dockerfile
     healthCheckPath: /_stcore/health
+    # Chỉ deploy khi CI (test + Docker smoke) trên nhánh này đã pass.
+    autoDeployTrigger: checksPass
     envVars:
       - key: PORT
         value: "8501"
+      # Bật nút "Đăng nhập nhanh" tài khoản dùng thử để demo. Ai có link cũng vào được,
+      # nhưng dữ liệu tự quay về bản mẫu sau mỗi lần dịch vụ ngủ.
       - key: APP_ENV
         value: development
       - key: APP_DEMO_MODE
@@ -18,6 +32,7 @@ services:
         value: Asia/Ho_Chi_Minh
       - key: POSTGRES_MCP_ENABLED
         value: "false"
+      # Tắt mặc định để người lạ không dùng hết hạn mức Gemini; bật "true" trước buổi demo.
       - key: LLM_ENABLED
         value: "false"
       - key: LLM_PROVIDER

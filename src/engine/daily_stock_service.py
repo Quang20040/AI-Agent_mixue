@@ -32,6 +32,10 @@ _STOCK_LOCK = FileTransactionLock(lambda: (
     else Path(__file__).resolve().parents[2] / 'data' / 'stock-write.lock'))
 
 
+
+# Identical stock requests inside this window are treated as a double click.
+DUPLICATE_WINDOW_SECONDS = 3
+
 def _serialize_stock_write(function):
     @wraps(function)
     def call(*args, **kwargs):
@@ -284,14 +288,18 @@ def create_stock_request(
         if not ing:
             return {'status': 'ERROR', 'message': 'Mã nguyên liệu không tồn tại.'}
         # Idempotency / Double-click check: reject duplicate identical requests within 3 seconds
-        recent_cutoff = datetime.now() - timedelta(seconds=3)
+        now = datetime.now()
+        recent_cutoff = now - timedelta(seconds=DUPLICATE_WINDOW_SECONDS)
         duplicate = db.query(DailyStockMovement).filter(
             DailyStockMovement.business_date == business_date,
             DailyStockMovement.ingredient_id == str(ingredient_id),
             DailyStockMovement.movement_type == clean_type,
             DailyStockMovement.recorded_by == recorded_by,
             DailyStockMovement.quantity == quantity,
-            DailyStockMovement.created_at >= recent_cutoff
+            DailyStockMovement.created_at >= recent_cutoff,
+            # Upper bound: rows stamped in another timezone (naive local time) can look
+            # hours "in the future" and must not be mistaken for a double click.
+            DailyStockMovement.created_at <= now + timedelta(seconds=1),
         ).first()
 
         if duplicate:

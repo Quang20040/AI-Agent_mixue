@@ -333,7 +333,9 @@ def test_real_service_tools_run_inside_model_loop(tmp_path):
     try:
         result = service.process_query('Tra số ly ngày 12/10/2026', 'MANAGER', 'Test', user_id='test')
         assert result['execution_mode'] == 'llm'
-        assert len(model.tool_names[0]) == 23
+        # 23 operations tools + get_shift_ocr_draft + get_governance_overview (OCR/HITL pillar).
+        assert len(model.tool_names[0]) == 25
+        assert {'get_shift_ocr_draft', 'get_governance_overview'} <= set(model.tool_names[0])
         assert result['evidence_refs']
         sales_result = json.loads(model.inputs[-1][-1].content)
         assert sales_result['status'] == 'SUCCESS'

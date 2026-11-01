@@ -26,13 +26,9 @@ def score_response(case, response):
     return {'passed': all(checks.values()), 'checks': checks, 'status': status}
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--live', action='store_true')
-    parser.add_argument('--limit', type=int)
-    parser.add_argument('--dataset', default='experiments/agent_golden_v2.jsonl')
-    parser.add_argument('--output', default='data/agent_private/scorecard.json')
-    args = parser.parse_args()
+def run_scorecard(dataset='experiments/agent_golden_v2.jsonl', live=False, limit=None, output=None, verbose=True):
+    """Run the behavioural scorecard and return the report (also written to ``output`` if given)."""
+    args = argparse.Namespace(dataset=dataset, live=live, limit=limit, output=output)
     source = Path(args.dataset).read_bytes()
     cases = [json.loads(line) for line in source.decode('utf-8').splitlines() if line.strip()]
     settings = AgentSettings.from_env()
@@ -81,12 +77,13 @@ def main():
                    'tools': responses[-1].get('tool_called'), 'execution_mode': responses[-1].get('execution_mode')}
             rows.append(row)
             categories[case['category']].append(result['passed'])
-            print(f"{case['id']}: {'PASS' if result['passed'] else 'FAIL'}", flush=True)
+            if verbose:
+                print(f"{case['id']}: {'PASS' if result['passed'] else 'FAIL'}", flush=True)
     finally:
         agent.close()
     ds_name = Path(args.dataset).stem
     report = {'mode': 'live_api' if args.live else 'offline_rules',
-              'model_name': settings.model_name if args.live else 'offline_rule_engine',
+              'model_name': settings.model if args.live else 'offline_rule_engine',
               'prompt_version': 'v2.0_pilot_phase3',
               'dataset_name': ds_name,
               'dataset_sha256': hashlib.sha256(source).hexdigest(),
@@ -98,10 +95,22 @@ def main():
               'total_output_tokens': sum(r.get('output_tokens', 0) for r in rows),
               'categories': {name: {'passed': sum(values), 'total': len(values)} for name, values in categories.items()},
               'cases': rows}
-    path = Path(args.output)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
-    print(f"{report['passed']}/{report['total']} passed ({report['mode']}). Report: {path}")
+    if args.output:
+        path = Path(args.output)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
+    return report
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--live', action='store_true')
+    parser.add_argument('--limit', type=int)
+    parser.add_argument('--dataset', default='experiments/agent_golden_v2.jsonl')
+    parser.add_argument('--output', default='data/agent_private/scorecard.json')
+    args = parser.parse_args()
+    report = run_scorecard(args.dataset, args.live, args.limit, args.output)
+    print(f"{report['passed']}/{report['total']} passed ({report['mode']}). Report: {args.output}")
 
 
 if __name__ == '__main__':

@@ -130,6 +130,10 @@ class ConversationStore:
                     owner TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL,
                     updated_at TEXT NOT NULL, PRIMARY KEY (owner, key));
             ''')
+            # Migration for stores created before draft metadata existed.
+            columns = {row[1] for row in db.execute('PRAGMA table_info(ocr_shift_drafts)')}
+            if 'meta_json' not in columns:
+                db.execute("ALTER TABLE ocr_shift_drafts ADD COLUMN meta_json TEXT NOT NULL DEFAULT '{}'")
 
     @contextmanager
     def connect(self):
@@ -408,8 +412,8 @@ class ConversationStore:
                    (draft_id, owner, user_id, store_id, conversation_id, file_id, image_sha256,
                     document_type, business_date, shift_code, status, fields_json, field_readings_json,
                     edits_json, warnings_json, consistency_json, signed_by, bank_transfer_formula, notes,
-                    created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?, ?, '[]', ?, ?, ?, ?, ?, ?, ?)''',
+                    created_at, updated_at, meta_json)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?, ?, '[]', ?, ?, ?, ?, ?, ?, ?, ?)''',
                 (
                     draft_id,
                     owner,
@@ -430,6 +434,7 @@ class ConversationStore:
                     str(data.get('notes') or ''),
                     stamp,
                     stamp,
+                    json.dumps(data.get('meta') or {}, ensure_ascii=False),
                 ),
             )
         return self.get_active_ocr_draft(owner, ident, store_id=s_id, user_id=u_id)  # type: ignore[return-value]
@@ -444,6 +449,7 @@ class ConversationStore:
         edits = json.loads(item.pop('edits_json') or '[]')
         warnings = json.loads(item.pop('warnings_json') or '[]')
         consistency = json.loads(item.pop('consistency_json') or '{}')
+        meta = json.loads(item.pop('meta_json', None) or '{}')
         missing = _missing_draft_fields(fields, item.get('business_date'), item.get('shift_code'))
         raw_file_id = item.get('file_id', '')
         file_ids = [f.strip() for f in raw_file_id.split(',') if f.strip()]
@@ -457,6 +463,7 @@ class ConversationStore:
             'edits': edits,
             'warnings': warnings,
             'consistency': consistency,
+            'meta': meta,
             'missing_fields': missing,
             'is_complete': len(missing) == 0,
         }

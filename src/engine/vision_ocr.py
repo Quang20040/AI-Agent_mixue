@@ -613,6 +613,25 @@ def merge_image_extractions(results, *, names, shas, shift_hint, target_date):
     return output
 
 
+def ocr_model_id(cfg: AgentSettings) -> str:
+    variables = {**dotenv_values(ROOT / '.env'), **os.environ}
+    return variables.get('OCR_MODEL') or cfg.model
+
+
+def build_ocr_reader(cfg: AgentSettings):
+    """The configured vision model, bound to the strict JSON extraction schema."""
+    reader = cfg.model_copy(update={'model': ocr_model_id(cfg), 'max_output_tokens': 6000, 'max_retries': 0}).build_model()
+    options: dict[str, Any] = {
+        'response_format': {
+            'type': 'json_schema',
+            'json_schema': {'name': 'shift_ocr', 'strict': True, 'schema': extraction_schema()},
+        }
+    }
+    if cfg.provider == 'openrouter':
+        options['extra_body'] = {'provider': {'require_parameters': True}, 'reasoning': {'effort': 'none'}}
+    return reader.bind(**options)
+
+
 def extract_image(
     *,
     image_bytes: bytes | list[bytes] | None = None,
@@ -693,20 +712,8 @@ def extract_image(
         return merge_image_extractions(results, names=[item[1] for item in valid_images],
                                        shas=[item[3] for item in valid_images], shift_hint=shift_hint, target_date=target_date)
 
-    variables = {**dotenv_values(ROOT / '.env'), **os.environ}
-    model_id = variables.get('OCR_MODEL') or cfg.model
     try:
-        reader = model or cfg.model_copy(update={'model': model_id, 'max_output_tokens': 6000, 'max_retries': 0}).build_model()
-        if model is None:
-            options: dict[str, Any] = {
-                'response_format': {
-                    'type': 'json_schema',
-                    'json_schema': {'name': 'shift_ocr', 'strict': True, 'schema': extraction_schema()},
-                }
-            }
-            if cfg.provider == 'openrouter':
-                options['extra_body'] = {'provider': {'require_parameters': True}, 'reasoning': {'effort': 'none'}}
-            reader = reader.bind(**options)
+        reader = model or build_ocr_reader(cfg)
         prompt = build_ocr_prompt(shift_hint, target_date)
 
         if len(valid_images) == 1:
@@ -834,6 +841,6 @@ def extract_image(
         'image_sha256': image_sha,
         'image_count': len(valid_images),
         'image_names': [item[1] for item in valid_images],
-        'model': str(getattr(answer, 'response_metadata', {}).get('model_name', model_id)),
+        'model': str(getattr(answer, 'response_metadata', {}).get('model_name', ocr_model_id(cfg))),
         'extracted_at': datetime.now(VN).isoformat(timespec='seconds'),
     }

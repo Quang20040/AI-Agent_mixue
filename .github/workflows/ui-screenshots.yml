@@ -1,0 +1,40 @@
+name: UI screenshots
+
+on:
+  push:
+    branches: [ "feat/**" ]
+    paths: [ "src/dashboard/**", "scripts/ui_screenshots.py", ".github/workflows/ui-screenshots.yml" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  screenshots:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt playwright
+          python -m playwright install --with-deps chromium
+      - name: Capture
+        env:
+          PYTHONPATH: .
+        run: python scripts/ui_screenshots.py ui_screenshots
+      - name: Publish to ui-screenshots branch
+        if: always()
+        run: |
+          [ -d ui_screenshots ] || exit 0
+          cd ui_screenshots
+          git init -q -b ui-screenshots
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          echo "Source commit: ${GITHUB_SHA}" > SOURCE.txt
+          git add -A && git commit -q -m "UI screenshots for ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" ui-screenshots

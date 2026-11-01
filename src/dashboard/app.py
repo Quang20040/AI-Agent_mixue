@@ -20,6 +20,8 @@ from src.engine.weather import VN
 from src.engine.stock_matrix import matrix_views
 from src.dashboard.forecast_context_ui import render_forecast_context
 from src.auth import (
+    CHAT_PAGE,
+    OCR_PAGE,
     can_access_page,
     create_employee,
     update_employee,
@@ -32,6 +34,7 @@ from src.auth import (
 )
 from src.dashboard.brand_ui import (
     install_brand,
+    nav_group_css,
     nav_label,
     render_chat,
     render_force_change_password_screen,
@@ -39,6 +42,8 @@ from src.dashboard.brand_ui import (
     render_login_screen,
     render_mobile_navigation,
     render_page_hero,
+    render_pillars,
+    render_home_greeting,
     render_sidebar_bottom,
     render_sidebar_top,
     render_topbar,
@@ -72,7 +77,7 @@ st.set_page_config(
     page_title="Mixue 39 Tôn Quang Phiệt — Trợ lý Vận hành Tuyết Vương AI",
     page_icon="🍦",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="auto"
 )
 
 # ==============================================================================
@@ -184,16 +189,14 @@ def get_cached_daily_revenue():
 
 @st.fragment(run_every="30s")
 def render_live_home():
-    st.button('Làm mới dữ liệu', key='refresh_home_data')
     render_home(get_cached_menu_list(), get_cached_sales(), user_role=user_role)
-    st.caption('Tự làm mới mỗi 30 giây khi đang mở trang · Theo ngày Việt Nam · Chỉ có số liệu khi đã nhập dữ liệu bán hàng.')
 
 
 # ==============================================================================
 # THANH ĐIỀU HƯỚNG BÊN TRÁI (SIDEBAR) — NHẬN DIỆN CHI NHÁNH & PHÂN QUYỀN
 # ==============================================================================
 with st.sidebar:
-    render_sidebar_top(user_name, user_title, user_badge)
+    render_sidebar_top()
 
     allowed_tabs = get_allowed_pages(user_role)
     current_nav = st.session_state.get("main_navigation")
@@ -203,6 +206,7 @@ with st.sidebar:
 
     nav_index = allowed_tabs.index(current_nav) if current_nav in allowed_tabs else 0
 
+    nav_group_css(allowed_tabs)
     section = st.radio(
         "Điều hướng",
         allowed_tabs,
@@ -213,18 +217,17 @@ with st.sidebar:
         width="stretch",
     )
 
-    st.divider()
-    if st.button("🚪 Đăng xuất", key="btn_logout", use_container_width=True):
+    render_sidebar_bottom(user_name, user_title, user_badge)
+    if st.button("Đăng xuất", key="btn_logout", icon=":material/logout:", use_container_width=True):
         agent.reset_conversation(start_new=False)
         st.session_state.pop('agent_pending_approval', None)
         for k in ["authenticated", "user", "username", "user_role", "user_name", "user_title", "user_badge", "must_change_password", "main_navigation", "chat_history_vi", "last_activity"]:
             st.session_state.pop(k, None)
         st.rerun()
-    render_sidebar_bottom()
 
 _pending_notifications = len(get_pending_requests()) if is_admin else 0
-render_topbar(user_name, _pending_notifications)
-if section != "💬 Tuyết Vương AI":
+render_topbar(user_name, _pending_notifications, section)
+if section not in (CHAT_PAGE, OCR_PAGE, "Trang chủ"):
     render_page_hero(section, user_name)
 render_mobile_navigation(allowed_tabs, section)
 
@@ -232,7 +235,13 @@ with st.container(key="workspace"):
     if not can_access_page(user_role, section):
         st.error("🔒 **Truy cập bị từ chối:** Bạn không có quyền truy cập trang này. Chức năng chỉ dành riêng cho Quản lý và Chủ cửa hàng (Admin).")
     elif section == "Trang chủ":
+        # Outside the auto-refresh fragment so the pillar buttons trigger a full rerun (page switch).
+        render_home_greeting(agent, user_role, user_name)
+        render_pillars(user_role)
         render_live_home()
+
+    elif section == OCR_PAGE:
+        render_shift_closing_view(user_role=user_role, user_name=user_name, is_admin=is_admin)
 
     elif section == "Báo cáo & kho":
         stock_period = st.date_input('Tháng xem sổ kho', value=datetime.now(VN).date().replace(day=1), key='stock_period')
@@ -252,14 +261,10 @@ with st.container(key="workspace"):
                 st.info(f_text, icon="ℹ️")
             del st.session_state["stock_flash_msg"]
 
+        st.caption("📸 Chốt ca bằng ảnh & đối soát OCR nằm ở phân hệ riêng **📸 Chốt Ca & Đối Soát OCR** trên thanh điều hướng. "
+                   "Trang này là công cụ phụ trợ: sổ kho, báo cáo doanh thu và đối soát thất thoát.")
         if not is_admin:
-            tab_staff_shift, tab_staff_stock = st.tabs([
-                "📸 Chốt Ca Bằng Ảnh (AI OCR)",
-                "📝 Phiếu Đề Xuất Lệnh Kho Quầy Bar"
-            ])
-
-            with tab_staff_shift:
-                render_shift_closing_view(user_role=user_role, user_name=user_name, is_admin=False)
+            (tab_staff_stock,) = st.tabs(["📝 Phiếu Đề Xuất Lệnh Kho Quầy Bar"])
 
             with tab_staff_stock:
                 # ==============================================================================
@@ -345,10 +350,9 @@ with st.container(key="workspace"):
             pending_count = len(pending_list)
             inbox_tab_label = f"📋 Duyệt Lệnh Kho ({pending_count} chờ)" if pending_count > 0 else "📋 Duyệt Lệnh Kho"
 
-            tab_inbox, tab_matrix, tab_shifts, tab_sales, tab_recon = st.tabs([
+            tab_inbox, tab_matrix, tab_sales, tab_recon = st.tabs([
                 inbox_tab_label,
                 "📦 Sổ Thẻ Kho Ma Trận (31 Ngày Tháng 10/2026)",
-                "📸 Chốt Ca Bằng Ảnh & Đối Soát (AI OCR)",
                 "📊 Báo Cáo Doanh Thu & Bán Hàng POS",
                 "🔍 Đối Soát Thất Thoát Kho Chi Tiết"
             ])
@@ -663,10 +667,6 @@ with st.container(key="workspace"):
                         st.dataframe(show_movs_df, use_container_width=True, hide_index=True)
                     else:
                         st.caption("Chưa có lệnh kho nào.")
-
-            # TAB 3: CHỐT CA BẰNG ẢNH & ĐỐI SOÁT DOANH THU (AI OCR)
-            with tab_shifts:
-                render_shift_closing_view(user_role=user_role, user_name=user_name, is_admin=True)
 
             # TAB 4: BÁO CÁO DOANH THU & BÁN HÀNG POS
             with tab_sales:
