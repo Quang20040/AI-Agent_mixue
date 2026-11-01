@@ -35,7 +35,7 @@ def settle(page, ms=2500):
 def main(out):
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
-    env = {**os.environ, 'PYTHONPATH': str(ROOT)}
+    env = {**os.environ, 'PYTHONPATH': str(ROOT), 'APP_DEMO_MODE': 'true'}
     server = subprocess.Popen([sys.executable, '-m', 'streamlit', 'run', 'src/dashboard/app.py', '--server.headless', 'true',
                                '--server.port', str(PORT), '--browser.gatherUsageStats', 'false'], cwd=ROOT, env=env)
     try:
@@ -48,6 +48,8 @@ def main(out):
                 page.goto(url)
                 settle(page, 4000)
                 page.screenshot(path=str(out / f'login{suffix}.png'), full_page=True)
+                page.get_by_text('Tài khoản dùng thử').first.click()
+                page.wait_for_timeout(800)
                 page.get_by_role('button', name='Quản Lý (Admin)').first.click()
                 settle(page, 5000)
                 for name, nav in PAGES:
