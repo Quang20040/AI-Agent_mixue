@@ -135,9 +135,12 @@ của mô hình, không gộp mất ngày. Nguồn và giới hạn hiển thị
 
 Các câu trả lời đơn giản đã có lớp dựng câu trả lời từ dữ liệu, nhưng chưa có
 bộ kiểm chứng mọi con số/SOP trong các câu trả lời tổng hợp do LLM sinh.
-Chưa tích hợp ảnh/OCR vào graph chat này. Bước tiếp
-theo là node nhận ảnh → OCR có độ tin cậy theo trường → màn hình người dùng sửa
-và xác nhận → kiểm định → tạo dự thảo nghiệp vụ. Không ghi kho trực tiếp từ OCR.
+OCR đã chạy trong graph (`src/agent/ocr_chat.py`). Ảnh đính kèm, lệnh sửa số và
+yêu cầu lưu được máy chủ chuyển thành *forced call* (`inspect_attached_shift_image`,
+`update_shift_ocr_draft`, `request_shift_draft_confirmation`) đi vào thẳng node
+`authorize`, nên vẫn qua RBAC, schema và `interrupt()` ở cả chế độ LLM lẫn
+`offline_rules`. Form trên trang Chốt ca dùng cùng đường này: mọi bản ghi doanh thu
+đều chỉ được ghi khi Quản lý tiếp tục luồng tại `interrupt()`. Không ghi kho từ OCR.
 
 SQLite phù hợp chạy nội bộ một máy. Trước khi phục vụ nhiều cửa hàng, cần đưa
 store ID vào từng truy vấn và kế hoạch, chính sách lưu/xóa checkpoint, mã hóa

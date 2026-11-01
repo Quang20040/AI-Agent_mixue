@@ -25,29 +25,51 @@ from sqlalchemy import case, update
 # Đảm bảo bảng người dùng luôn tồn tại trong DB
 Base.metadata.create_all(bind=engine)
 
+CHAT_PAGE = "💬 Tuyết Vương AI"
+OCR_PAGE = "📸 Chốt ca & OCR"
+
+# Two technical pillars of the thesis, shown first on every navigation surface.
+CORE_PAGES: tuple[str, ...] = (CHAT_PAGE, OCR_PAGE)
+# Deterministic tools that feed the agent and reconciliation with data.
+SUPPORT_PAGES: tuple[str, ...] = ("Báo cáo & kho", "Dự báo", "Sơ chế", "Nhập hàng", "Tem & công thức")
+ADMIN_ONLY_PAGES: tuple[str, ...] = ("👥 Quản lý nhân viên",)
+
 ADMIN_PAGES: list[str] = [
     "Trang chủ",
+    CHAT_PAGE,
+    OCR_PAGE,
     "Báo cáo & kho",
     "Dự báo",
     "Sơ chế",
     "Nhập hàng",
     "Tem & công thức",
     "👥 Quản lý nhân viên",
-    "💬 Tuyết Vương AI"
 ]
 
 STAFF_OFFICIAL_PAGES: list[str] = [
     "Trang chủ",
+    CHAT_PAGE,
+    OCR_PAGE,
     "Báo cáo & kho",
     "Tem & công thức",
-    "💬 Tuyết Vương AI"
 ]
 
 STAFF_PROBATION_PAGES: list[str] = [
     "Trang chủ",
+    CHAT_PAGE,
     "Tem & công thức",
-    "💬 Tuyết Vương AI"
 ]
+
+
+def page_group(page: str) -> str:
+    """Navigation group of a page: 'home', 'core', 'support' or 'admin'."""
+    if page in CORE_PAGES:
+        return "core"
+    if page in SUPPORT_PAGES:
+        return "support"
+    if page in ADMIN_ONLY_PAGES:
+        return "admin"
+    return "home"
 
 STAFF_PAGES: list[str] = STAFF_OFFICIAL_PAGES
 

@@ -1,0 +1,283 @@
+{
+  "dataset": "mixue-2132-real-shift-photos",
+  "version": 1,
+  "label_source": "data/shift_reports.json — báo cáo APPROVED ngày 2026-10-14 do nhân viên nhập tay từ chính các ảnh này",
+  "labelling_rules": [
+    "expected_value: số đúng tính bằng đồng (VND) theo báo cáo đã duyệt; null = trường không xuất hiện/không đọc được trên ảnh này.",
+    "should_be_uncertain: số viết tắt không ghi đơn vị (653 = 653.000 đ), biểu thức cần cộng, hoặc vùng bị che → hệ thống phải để trống và gắn cờ, không tự điền.",
+    "expected_source: vùng chứng từ chứa số đúng (pos_receipt / handwritten_ledger).",
+    "expect_inconsistency: true khi chính số liệu trên sổ không cộng khớp (hệ thống phải cảnh báo, không sửa số)."
+  ],
+  "verified_by": "",
+  "cases": [
+    {
+      "case_id": "REAL_CA_SANG_20261014",
+      "image": "data/shift_photos/20261014_ca_sang_chieu.jpg",
+      "image_type": "handwritten_ledger",
+      "title": "Ảnh thật · sổ ca sáng 14/10",
+      "shift_hint": "CA_SANG",
+      "target_date": "2026-10-14",
+      "expect_inconsistency": true,
+      "note": "Cộng ngang trên sổ: 653+1591+16+0+30 = 2.290k ≠ Tổng thu về 2.328k (lệch có thật trên sổ) → hệ thống phải cảnh báo.",
+      "fields": {
+        "cash_vnd": {
+          "expected_value": 653000,
+          "expected_source": "handwritten_ledger",
+          "should_be_uncertain": true,
+          "uncertain_cause": "unit",
+          "expected_raw_contains": "653"
+        },
+        "bank_transfer_vnd": {
+          "expected_value": 1591000,
+          "expected_source": "handwritten_ledger",
+          "should_be_uncertain": true,
+          "uncertain_cause": "calculation",
+          "expected_raw_contains": "962"
+        },
+        "shopee_food_vnd": {
+          "expected_value": 16000,
+          "expected_source": "handwritten_ledger",
+          "should_be_uncertain": true,
+          "uncertain_cause": "unit",
+          "expected_raw_contains": "16"
+        },
+        "be_food_vnd": {
+          "expected_value": 0,
+          "expected_source": "handwritten_ledger"
+        },
+        "grab_food_vnd": {
+          "expected_value": 30000,
+          "expected_source": "handwritten_ledger",
+          "should_be_uncertain": true,
+          "uncertain_cause": "unit",
+          "expected_raw_contains": "30"
+        },
+        "petty_cash_kept_vnd": {
+          "expected_value": 1000000,
+          "expected_source": "handwritten_ledger"
+        },
+        "total_collected_vnd": {
+          "expected_value": 2328000,
+          "expected_source": "handwritten_ledger",
+          "should_be_uncertain": true,
+          "uncertain_cause": "unit"
+        },
+        "cash_diff_vnd": {
+          "expected_value": null
+        },
+        "expenses_vnd": {
+          "expected_value": null
+        },
+        "pos_revenue_vnd": {
+          "expected_value": null
+        },
+        "pos_collected_vnd": {
+          "expected_value": null
+        }
+      }
+    },
+    {
+      "case_id": "REAL_CA_CHIEU_20261014",
+      "image": "data/shift_photos/20261014_ca_sang_chieu.jpg",
+      "image_type": "handwritten_ledger",
+      "title": "Ảnh thật · sổ ca chiều 14/10",
+      "shift_hint": "CA_CHIEU",
+      "target_date": "2026-10-14",
+      "expect_inconsistency": true,
+      "note": "Cùng trang với ca sáng: mô hình phải lấy đúng bảng ca chiều. Cộng ngang 2014+3861+83+0+95 ≠ 6.090k.",
+      "fields": {
+        "cash_vnd": {
+          "expected_value": 2014000,
+          "expected_source": "handwritten_ledger",
+          "should_be_uncertain": true,
+          "uncertain_cause": "unit",
+          "expected_raw_contains": "2014"
+        },
+        "cash_diff_vnd": {
+          "expected_value": 20000,
+          "expected_source": "handwritten_ledger"
+        },
+        "bank_transfer_vnd": {
+          "expected_value": 3861000,
+          "expected_source": "handwritten_ledger",
+          "should_be_uncertain": true,
+          "uncertain_cause": "calculation",
+          "expected_raw_contains": "1630"
+        },
+        "shopee_food_vnd": {
+          "expected_value": 83000,
+          "expected_source": "handwritten_ledger",
+          "should_be_uncertain": true,
+          "uncertain_cause": "unit",
+          "expected_raw_contains": "83"
+        },
+        "be_food_vnd": {
+          "expected_value": 0,
+          "expected_source": "handwritten_ledger"
+        },
+        "grab_food_vnd": {
+          "expected_value": 95000,
+          "expected_source": "handwritten_ledger",
+          "should_be_uncertain": true,
+          "uncertain_cause": "unit",
+          "expected_raw_contains": "95"
+        },
+        "petty_cash_kept_vnd": {
+          "expected_value": 1000000,
+          "expected_source": "handwritten_ledger"
+        },
+        "total_collected_vnd": {
+          "expected_value": 6090000,
+          "expected_source": "handwritten_ledger",
+          "should_be_uncertain": true,
+          "uncertain_cause": "unit",
+          "expected_raw_contains": "6090"
+        },
+        "expenses_vnd": {
+          "expected_value": null
+        },
+        "pos_revenue_vnd": {
+          "expected_value": null
+        },
+        "pos_collected_vnd": {
+          "expected_value": null
+        }
+      }
+    },
+    {
+      "case_id": "REAL_CA_TOI_20261014",
+      "image": "data/shift_photos/20261014_ca_toi_tong_ket.jpg",
+      "image_type": "handwritten_ledger",
+      "title": "Ảnh thật · sổ ca tối & tổng ngày 14/10",
+      "shift_hint": "CA_TOI",
+      "target_date": "2026-10-14",
+      "expect_inconsistency": true,
+      "note": "Bẫy bố cục: bảng đếm cốc 3.1 (899, 323, 947…) và dòng \"Số dư TK MB cuối ngày 5,466\" không phải khoản thu/chi. Khoản chi 41k + 15k phải cộng → chờ xác nhận.",
+      "fields": {
+        "cash_vnd": {
+          "expected_value": 3260000,
+          "expected_source": "handwritten_ledger",
+          "should_be_uncertain": true,
+          "uncertain_cause": "unit",
+          "expected_raw_contains": "3260"
+        },
+        "cash_diff_vnd": {
+          "expected_value": 35000,
+          "expected_source": "handwritten_ledger"
+        },
+        "bank_transfer_vnd": {
+          "expected_value": 6377000,
+          "expected_source": "handwritten_ledger",
+          "should_be_uncertain": true,
+          "uncertain_cause": "calculation",
+          "expected_raw_contains": "4725"
+        },
+        "shopee_food_vnd": {
+          "expected_value": 115000,
+          "expected_source": "handwritten_ledger",
+          "should_be_uncertain": true,
+          "uncertain_cause": "unit",
+          "expected_raw_contains": "115"
+        },
+        "be_food_vnd": {
+          "expected_value": null
+        },
+        "grab_food_vnd": {
+          "expected_value": 104000,
+          "expected_source": "handwritten_ledger",
+          "should_be_uncertain": true,
+          "uncertain_cause": "unit",
+          "expected_raw_contains": "104"
+        },
+        "petty_cash_kept_vnd": {
+          "expected_value": 1000000,
+          "expected_source": "handwritten_ledger"
+        },
+        "expenses_vnd": {
+          "expected_value": 56000,
+          "expected_source": "handwritten_ledger",
+          "should_be_uncertain": true,
+          "uncertain_cause": "calculation"
+        },
+        "total_collected_vnd": {
+          "expected_value": 9877000,
+          "expected_source": "handwritten_ledger",
+          "should_be_uncertain": true,
+          "uncertain_cause": "unit",
+          "expected_raw_contains": "9877"
+        },
+        "pos_revenue_vnd": {
+          "expected_value": null
+        },
+        "pos_collected_vnd": {
+          "expected_value": null
+        }
+      }
+    },
+    {
+      "case_id": "REAL_POS_COMPOSITE_20261014",
+      "image": "data/shift_photos/20261014_pos_slip.jpg",
+      "image_type": "composite_multi_doc",
+      "title": "Ảnh thật · phiếu POS đè lên sổ ca tối",
+      "shift_hint": "CA_TOI",
+      "target_date": "2026-10-14",
+      "expect_inconsistency": false,
+      "note": "Ảnh ghép: POS (Cash 9,657,300 · Grab 104,000 · Shopee 115,837; có watermark) đè lên sổ ca tối. Ô tiền ca tối phải lấy từ sổ (3260, 4725+1652…), không lấy Cash POS. Dòng Tổng thu về của sổ bị che.",
+      "fields": {
+        "pos_revenue_vnd": {
+          "expected_value": 10119000,
+          "expected_source": "pos_receipt"
+        },
+        "pos_collected_vnd": {
+          "expected_value": 9877137,
+          "expected_source": "pos_receipt"
+        },
+        "cash_vnd": {
+          "expected_value": 3260000,
+          "expected_source": "handwritten_ledger",
+          "should_be_uncertain": true,
+          "uncertain_cause": "unit",
+          "expected_raw_contains": "3260"
+        },
+        "cash_diff_vnd": {
+          "expected_value": 35000,
+          "expected_source": "handwritten_ledger"
+        },
+        "bank_transfer_vnd": {
+          "expected_value": 6377000,
+          "expected_source": "handwritten_ledger",
+          "should_be_uncertain": true,
+          "uncertain_cause": "calculation",
+          "expected_raw_contains": "4725"
+        },
+        "shopee_food_vnd": {
+          "expected_value": 115000,
+          "expected_source": "handwritten_ledger",
+          "should_be_uncertain": true,
+          "uncertain_cause": "unit",
+          "expected_raw_contains": "115"
+        },
+        "grab_food_vnd": {
+          "expected_value": 104000,
+          "expected_source": "handwritten_ledger",
+          "should_be_uncertain": true,
+          "uncertain_cause": "unit",
+          "expected_raw_contains": "104"
+        },
+        "petty_cash_kept_vnd": {
+          "expected_value": 1000000,
+          "expected_source": "handwritten_ledger"
+        },
+        "be_food_vnd": {
+          "expected_value": null
+        },
+        "expenses_vnd": {
+          "expected_value": null
+        },
+        "total_collected_vnd": {
+          "expected_value": null
+        }
+      }
+    }
+  ]
+}

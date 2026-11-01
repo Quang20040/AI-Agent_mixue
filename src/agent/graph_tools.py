@@ -2,7 +2,7 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
-from typing import Any
+from typing import Annotated, Any
 
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -69,13 +69,26 @@ class ApprovalArguments(Arguments):
     draft_plan_id: str = Field(pattern=r'^PLAN_(?:PO|PREP)_[A-Z0-9]{8}$')
 
 
+FileId = Annotated[str, Field(pattern=r'^FILE_[A-F0-9]{16}$')]
+
+
 class OcrAttachmentArguments(Arguments):
-    file_id: str = Field(
-        pattern=r'^FILE_[A-F0-9]{16}$',
+    file_id: FileId | None = Field(
+        default=None,
         description='Mã tệp ảnh do máy chủ cấp cho phiên chat hiện tại; tuyệt đối không nhận đường dẫn tệp tùy ý.',
+    )
+    file_ids: list[FileId] | None = Field(
+        default=None, min_length=1, max_length=6,
+        description='Nhiều mã tệp (FILE_...) khi người dùng gửi cùng lúc hóa đơn POS và sổ viết tay.',
     )
     shift_code: str | None = Field(default=None, pattern=r'^(?:CA_SANG|CA_CHIEU|CA_TOI)$')
     report_date: date | None = None
+
+    @model_validator(mode='after')
+    def one_source(self):
+        if not self.file_id and not self.file_ids:
+            raise ValueError('file_id or file_ids is required')
+        return self
 
 
 class OcrDraftUpdateArguments(Arguments):
@@ -98,6 +111,10 @@ class OcrDraftUpdateArguments(Arguments):
 
 class OcrDraftConfirmArguments(Arguments):
     draft_id: str = Field(pattern=r'^(?:DRAFT_OCR_[A-F0-9]{12}|OCR_DRAFT_[A-F0-9]{10})$')
+
+
+class OcrDraftLookupArguments(Arguments):
+    draft_id: str | None = Field(default=None, pattern=r'^(?:DRAFT_OCR_[A-F0-9]{12}|OCR_DRAFT_[A-F0-9]{10})$')
 
 
 @dataclass(frozen=True)
@@ -154,12 +171,16 @@ def build_tool_registry(service):
     def plan_history():
         return {'status': 'SUCCESS', 'plans': list_plans(), 'source_refs': ['table:operation_plans']}
 
-    def inspect_ocr(file_id, shift_code=None, report_date=None):
+    def inspect_ocr(file_id=None, file_ids=None, shift_code=None, report_date=None):
         return service.tool_inspect_attached_shift_image(
             file_id=file_id,
+            file_ids=file_ids,
             shift_code=shift_code,
             report_date=report_date.isoformat() if report_date else None,
         )
+
+    def view_ocr_draft(draft_id=None):
+        return service.tool_view_shift_ocr_draft(draft_id)
 
     def update_ocr(**kwargs):
         if kwargs.get('report_date') is not None:
@@ -193,7 +214,9 @@ def build_tool_registry(service):
         ToolSpec('get_plan_history', 'Xem các kế hoạch đã lưu và trạng thái phê duyệt.', NoArguments, plan_history, 'admin'),
         ToolSpec('request_plan_approval', 'Đề nghị người quản lý xác nhận phê duyệt một mã dự thảo cụ thể. Luồng sẽ DỪNG chờ bấm xác nhận; không tự duyệt.', ApprovalArguments,
                  lambda draft_plan_id: get_plan(draft_plan_id) or {'status': 'NOT_FOUND'}, 'admin', 'approval'),
-        ToolSpec('inspect_attached_shift_image', 'Đọc ảnh chốt ca/POS bằng mã file_id do máy chủ cấp, tách vùng POS và sổ viết tay, kiểm tra chênh lệch và tạo dự thảo chờ xác nhận.', OcrAttachmentArguments, inspect_ocr, 'public', 'draft'),
+        ToolSpec('inspect_attached_shift_image', 'Đọc ảnh chốt ca/POS bằng mã file_id (hoặc danh sách file_ids) do máy chủ cấp, tách vùng POS và sổ viết tay, kiểm tra chênh lệch và tạo dự thảo chờ xác nhận. Trường mơ hồ được để trống kèm lý do, không tự nhân 1.000.', OcrAttachmentArguments, inspect_ocr, 'public', 'draft'),
+        ToolSpec('get_shift_ocr_draft', 'Xem dự thảo chốt ca OCR đang chờ trong cuộc trò chuyện: giá trị đọc thô, nguồn POS/sổ tay, trường cần xác nhận và cảnh báo đối soát. Chỉ đọc, không sửa.', OcrDraftLookupArguments, view_ocr_draft),
+        ToolSpec('get_governance_overview', 'Xem quyền hạn RBAC của tài khoản đang đăng nhập (do máy chủ xác thực), công cụ được phép, phê duyệt đang chờ (interrupt) và lịch sử phê duyệt kế hoạch.', NoArguments, lambda: service.tool_get_governance_overview()),
         ToolSpec('update_shift_ocr_draft', 'Cập nhật từng trường trong dự thảo chốt ca OCR đang chờ theo yêu cầu người dùng và kiểm tra lại tính nhất quán.', OcrDraftUpdateArguments, update_ocr, 'public', 'draft'),
         ToolSpec('request_shift_draft_confirmation', 'Yêu cầu xác nhận lưu dự thảo chốt ca OCR vào sổ doanh thu sau khi đã kiểm định đầy đủ.', OcrDraftConfirmArguments,
                  lambda draft_id: service.tool_get_shift_ocr_draft(draft_id) or {'status': 'NOT_FOUND'}, 'admin', 'approval'),

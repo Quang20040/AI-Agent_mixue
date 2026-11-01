@@ -11,7 +11,7 @@ APP = Path(__file__).resolve().parents[1] / 'src' / 'dashboard' / 'app.py'
 def test_shift_ocr_does_not_fill_sample_amounts_when_api_disabled():
     app = AppTest.from_file(str(APP), default_timeout=45).run()
     app.button(key='quick_login_manager').click().run()
-    app.radio(key='main_navigation').set_value('Báo cáo & kho').run()
+    app.radio(key='main_navigation').set_value('📸 Chốt ca & OCR').run()
     next(button for button in app.button if button.label == '📷 Sổ Ca Chiều').click().run()
     assert app.session_state['shift_ocr_selection'][0] == 'CA_CHIEU'
     app.button(key='run_shift_ocr').click().run()
@@ -41,8 +41,8 @@ def test_dashboard_admin_full_access():
     assert app.session_state.get('authenticated') is True
     assert app.session_state.get('user_role') == 'ADMIN'
 
-    # Admin phải thấy đủ 8 tab nghiệp vụ (kèm tab Quản lý nhân viên mới)
-    expected_tabs = ['Trang chủ', 'Báo cáo & kho', 'Dự báo', 'Sơ chế', 'Nhập hàng', 'Tem & công thức', '👥 Quản lý nhân viên', '💬 Tuyết Vương AI']
+    # Admin thấy 2 trụ cột (AI Agent, Chốt ca & OCR) ngay sau Trang chủ, rồi tới công cụ phụ trợ và quản trị
+    expected_tabs = ['Trang chủ', '💬 Tuyết Vương AI', '📸 Chốt ca & OCR', 'Báo cáo & kho', 'Dự báo', 'Sơ chế', 'Nhập hàng', 'Tem & công thức', '👥 Quản lý nhân viên']
     assert app.radio(key='main_navigation').options == [nav_label(page) for page in expected_tabs]
 
     # Kiểm tra tra cứu món và gửi công thức sang chat
@@ -56,7 +56,7 @@ def test_dashboard_admin_full_access():
     assert history[-1]['evidence']
 
     # Kiểm tra duyệt các tab quản trị
-    for page in ['Báo cáo & kho', 'Dự báo', 'Sơ chế', 'Nhập hàng', 'Tem & công thức', '👥 Quản lý nhân viên']:
+    for page in ['📸 Chốt ca & OCR', 'Báo cáo & kho', 'Dự báo', 'Sơ chế', 'Nhập hàng', 'Tem & công thức', '👥 Quản lý nhân viên']:
         app.radio(key='main_navigation').set_value(page).run()
         assert not app.exception, page
         assert app.chat_input
@@ -74,8 +74,8 @@ def test_dashboard_staff_restricted_access():
     assert app.session_state.get('authenticated') is True
     assert normalize_role(app.session_state.get('user_role')) == 'STAFF_OFFICIAL'
 
-    # Nhân viên chính thức có 4 tab: Trang chủ, Báo cáo & kho (Sổ kho hàng ngày), Tem & công thức, 💬 Tuyết Vương AI
-    allowed_staff_tabs = ['Trang chủ', 'Báo cáo & kho', 'Tem & công thức', '💬 Tuyết Vương AI']
+    # Nhân viên chính thức: Trang chủ, 2 trụ cột (AI Agent, Chốt ca & OCR), Báo cáo & kho, Tem & công thức
+    allowed_staff_tabs = ['Trang chủ', '💬 Tuyết Vương AI', '📸 Chốt ca & OCR', 'Báo cáo & kho', 'Tem & công thức']
     assert app.radio(key='main_navigation').options == [nav_label(page) for page in allowed_staff_tabs]
     assert len(app.radio(key='mobile_navigation').options) == len(allowed_staff_tabs)
     assert not any('mx-revenue-total' in m.value for m in app.markdown)

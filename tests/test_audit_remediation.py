@@ -21,6 +21,12 @@ from src.engine import daily_stock_service as stock
 from src.engine import shift_service as shift
 from src.engine.bom_engine import BOMEngine
 from src.engine.optimizer import OptimizerEngine
+# Import modules that bind `from src.database import SessionLocal` at import time *before*
+# the `store` fixture swaps the session; otherwise they keep the temporary DB for later tests.
+import src.agent.mixue_agent  # noqa: E402,F401
+import src.engine.backup_bundle  # noqa: E402,F401
+import src.engine.forecasting  # noqa: E402,F401
+import src.engine.stock_matrix  # noqa: E402,F401
 
 
 @pytest.fixture

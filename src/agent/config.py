@@ -24,8 +24,12 @@ class AgentSettings(BaseModel):
     max_retries: int = Field(default=1, ge=0, le=3)
     max_history_messages: int = Field(default=40, ge=6, le=200)
     max_output_tokens: int = Field(default=1400, ge=128, le=4096)
-    checkpoint_path: str = str(ROOT / 'data' / 'agent_private' / 'checkpoints.sqlite')
-    audit_path: str = str(ROOT / 'data' / 'agent_private' / 'audit.jsonl')
+    # Defaults honour the same environment variables as from_env(), so directly built
+    # settings (tests, scripts) never fall back to the shared store by accident.
+    checkpoint_path: str = Field(default_factory=lambda: os.environ.get('AGENT_CHECKPOINT_PATH')
+                                 or str(ROOT / 'data' / 'agent_private' / 'checkpoints.sqlite'))
+    audit_path: str = Field(default_factory=lambda: os.environ.get('AGENT_AUDIT_PATH')
+                            or str(ROOT / 'data' / 'agent_private' / 'audit.jsonl'))
 
     @classmethod
     def from_env(cls, env_file=None):

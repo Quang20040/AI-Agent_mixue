@@ -10,28 +10,29 @@ Hỗ trợ:
 
 import hashlib
 import time
-from datetime import date
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
+from src.dashboard import ocr_components as vocr
 from src.engine.shift_service import (
-    SHIFT_DEFINITIONS,
     SHIFT_PHOTOS_DIR,
     delete_shift_report,
     extract_shift_data_from_image,
     get_all_shift_reports,
     get_daily_closing_summary,
-    record_ocr_user_edits,
-    save_or_update_shift_report,
+    latest_shift_report_date,
 )
 
 
 def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = False):
     """Hiển thị toàn bộ phân hệ Chốt Ca Bằng Ảnh & Đối Soát Doanh Thu."""
-    st.subheader("📸 Quản Lý Chốt Ca Bằng Ảnh & Đối Soát Doanh Thu (AI OCR)")
-    st.caption("Chi nhánh Mixue 39 Tôn Quang Phiệt · Tiếp nhận ảnh sổ chốt ca bàn giao thực tế và tự động đối soát tổng thu cuối ngày.")
+    vocr.install_css()
+    st.subheader("📸 Chốt Ca & Đối Soát OCR — Verifiable Vision OCR (chữ viết tay & hóa đơn POS)")
+    st.caption("Trụ cột 1 của đề tài · Mỗi con số đi qua 6 bước kiểm chứng trước khi được phép vào biểu mẫu; "
+               "trường mơ hồ được để trống kèm lý do để người dùng xác nhận.")
+    vocr.render_pipeline_steps()
 
     st.markdown("""
     <div style="background:#fef2f2; border-left:4px solid #ef4444; padding:12px 16px; border-radius:6px; margin-bottom:18px;">
@@ -48,7 +49,7 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
     # 1. BỘ CHỌN NGÀY LÀM VIỆC
     col_d1, col_d2 = st.columns([1, 2.5])
     with col_d1:
-        default_d = date(2026, 10, 14)
+        default_d = latest_shift_report_date()
         chosen_date = st.date_input(
             "📅 Chọn ngày làm việc cần kiểm tra / chốt ca",
             value=default_d,
@@ -235,69 +236,44 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                     st.session_state.ocr_review_started = time.time()
                 extracted = st.session_state.get('extracted_cache') or {}
                 if extracted.get('status') == 'NEEDS_REVIEW':
-                    doc_type_map = {
-                        'pos_receipt': 'Hóa đơn POS in nhiệt',
-                        'handwritten_ledger': 'Sổ chốt ca viết tay',
-                        'composite': 'Ảnh ghép / Nhiều chứng từ (POS + Sổ viết tay)',
-                        'non_financial': 'Không phải chứng từ tài chính',
-                        'unreadable': 'Ảnh không đọc được',
-                        'unknown': 'Chưa xác định rõ loại chứng từ',
-                    }
-                    doc_label = doc_type_map.get(extracted.get('document_type', 'unknown'), 'Chứng từ')
-                    count_txt = f" từ {extracted.get('image_count')} ảnh chứng từ" if extracted.get('image_count', 1) > 1 else ""
-                    st.info(f'Đã có bản đọc nháp ({doc_label}){count_txt}. Kiểm tra từng ô trước khi lưu; trường trống chưa có nghĩa là 0.')
-                    field_labels = {'cash_vnd': 'Tiền mặt', 'cash_diff_vnd': 'Tiền mặt dư/thiếu',
-                                    'bank_transfer_vnd': 'Chuyển khoản', 'shopee_food_vnd': 'ShopeeFood',
-                                    'grab_food_vnd': 'GrabFood', 'be_food_vnd': 'BeFood / Miniapp',
-                                    'petty_cash_kept_vnd': 'Cố định két', 'expenses_vnd': 'Khoản chi',
-                                    'total_collected_vnd': 'Tổng thu về', 'pos_revenue_vnd': 'Doanh thu trên POS',
-                                    'pos_collected_vnd': 'Thực thu trên POS'}
-                    st.write('**Nội dung đọc được — các số chưa chắc vẫn cần bạn xác nhận**')
-                    st.dataframe([{'Khoản mục': field_labels.get(name, name),
-                                   'Chữ/số trên ảnh': item.get('raw_text') or item.get('evidence') or 'Chưa đọc được',
-                                   'Đã xác định (đ)': item.get('normalized_value') if item.get('status') == 'read' else None,
-                                   'Trạng thái': 'Cần kiểm tra' if item.get('status') == 'uncertain' else 'Đã đọc' if item.get('status') == 'read' else 'Chưa có số',
-                                   'Lý do cần kiểm tra': item.get('review_reason', '')}
-                                  for name, item in extracted.get('field_readings', {}).items()], hide_index=True)
+                    count_txt = f" · {extracted.get('image_count')} ảnh" if extracted.get('image_count', 1) > 1 else ""
+                    st.markdown(f"**Loại chứng từ:** {vocr.document_badge(extracted.get('document_type'))}{count_txt}",
+                                unsafe_allow_html=True)
+                    vocr.render_image_quality(extracted.get('image_quality'))
+                    regions = extracted.get('regions', {})
+                    present = [vocr.badge(*vocr.DOCUMENT_BADGES[key]) for key in ('pos_receipt', 'handwritten_ledger')
+                               if regions.get(key, {}).get('present')]
+                    if present:
+                        st.markdown('**Vùng phát hiện:** ' + ' '.join(present), unsafe_allow_html=True)
+                    st.info('Bản đọc nháp — kiểm tra từng ô trước khi lưu. Ô trống nghĩa là **chưa xác nhận**, không phải 0.')
+                    form_values = {name: extracted.get(name) for name in vocr.FIELD_LABELS}
+                    vocr.render_field_table(extracted.get('field_readings', {}), form_values)
                     consistency = extracted.get('consistency', {})
                     if consistency and not consistency.get('is_consistent', True):
+                        st.markdown('**⚖️ Đối soát số học (giữ nguyên số đọc, không tự sửa):**')
                         for disc in consistency.get('discrepancies', []):
                             st.error(f"⚠️ {disc.get('message')}")
+                    elif consistency:
+                        st.success('⚖️ Đối soát số học: các khoản đã đọc khớp nhau.')
                     for warning in extracted.get('warnings', []):
-                        st.warning(warning)
-                    with st.expander('Xem nội dung đọc được, nguồn chứng từ và lý do cần kiểm tra'):
+                        if not any(warning == d.get('message') for d in consistency.get('discrepancies', [])):
+                            st.warning(warning)
+                    with st.expander('Xem chuỗi đọc thô theo từng ảnh và từng vùng chứng từ'):
                         for index, image_result in enumerate(extracted.get('image_results', []), 1):
                             st.markdown(f'**Ảnh {index}**')
                             if image_result.get('status') != 'NEEDS_REVIEW':
                                 st.caption('Ảnh này chưa đọc được; các ảnh còn lại vẫn được giữ.')
                             else:
-                                st.dataframe([{'Khoản mục': field_labels.get(name, name),
-                                               'Chữ/số đọc riêng trên ảnh': item.get('raw_text', ''),
-                                               'Lý do cần kiểm tra': item.get('review_reason', '')}
-                                              for name, item in image_result.get('field_readings', {}).items()], hide_index=True)
-                        regions = extracted.get('regions', {})
+                                vocr.render_field_table(image_result.get('field_readings', {}))
                         if regions.get('pos_receipt', {}).get('raw_text'):
-                            st.markdown('**Vùng Hóa đơn POS:**')
+                            st.markdown('**🧾 Vùng hóa đơn POS:**')
                             st.text(regions['pos_receipt']['raw_text'])
                         if regions.get('handwritten_ledger', {}).get('raw_text'):
-                            st.markdown('**Vùng Sổ viết tay:**')
+                            st.markdown('**✍️ Vùng sổ viết tay:**')
                             st.text(regions['handwritten_ledger']['raw_text'])
                         if extracted.get('raw_text_extracted'):
                             st.markdown('**Toàn văn trích xuất:**')
                             st.text(extracted.get('raw_text_extracted', ''))
-                        st.dataframe([
-                            {
-                                'Trường': name,
-                                'Nguồn': item.get('source', 'unknown'),
-                                'Đọc thô': item.get('raw_text', ''),
-                                'Giá trị đọc': item.get('value'),
-                                'Giá trị chuẩn hóa': item.get('normalized_value'),
-                                'Trạng thái': item['status'],
-                                'Lý do kiểm tra': item.get('review_reason', ''),
-                                'Nội dung trên ảnh': item.get('evidence', ''),
-                            }
-                            for name, item in extracted.get('field_readings', {}).items()
-                        ], hide_index=True)
                 elif extracted:
                     st.warning(extracted.get('message', 'Chưa đọc được ảnh; hãy nhập số liệu thủ công.'))
 
@@ -389,12 +365,16 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                         value=str(extracted.get("notes", ""))
                     )
 
-                    confirmed = st.checkbox('Tôi đã đối chiếu ảnh, ngày, ca và toàn bộ số liệu trước khi lưu.')
+                    confirmed = st.checkbox('Tôi đã đối chiếu ảnh, ngày, ca và toàn bộ số liệu trước khi gửi.')
                     btn_save_shift = st.form_submit_button(
-                        "💾 Xác Nhận & Lưu Báo Cáo Chốt Ca",
+                        "📨 Gửi phê duyệt lưu báo cáo (LangGraph interrupt)",
                         type="primary",
-                        use_container_width=True
+                        use_container_width=True,
+                        disabled=not is_admin,
+                        help="Tạo dự thảo DRAFT_OCR_… rồi gọi request_shift_draft_confirmation; chỉ ghi sổ khi Quản lý bấm Phê duyệt.",
                     )
+                    if not is_admin:
+                        st.caption("🔒 Nhân viên dùng trang này để đọc và đối chiếu ảnh; chỉ Quản lý/Chủ quán gửi phê duyệt và ghi sổ doanh thu.")
 
                     if btn_save_shift:
                         amounts = [in_cash, in_cash_diff, in_bank, in_shopee, in_grab, in_be, in_petty, in_expenses, in_total]
@@ -412,53 +392,36 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                         if in_pos_coll is not None:
                             reviewed_values['pos_collected_vnd'] = in_pos_coll
 
-                        report_id = f"SHIFT_{chosen_d_str.replace('-', '')}_{curr_shift_code}"
                         review_secs = (
                             round(time.time() - st.session_state.ocr_review_started, 1)
                             if st.session_state.get('ocr_review_started') else None
                         )
-                        ocr_review_record = record_ocr_user_edits(
-                            report_id=report_id,
-                            business_date=chosen_d_str,
-                            shift_code=curr_shift_code,
-                            confirmed_by=st.session_state.get('username', user_name),
+                        agent = st.session_state.get('operations_agent')
+                        if agent is None:
+                            st.error('Chưa khởi tạo được Agent để gửi phê duyệt.')
+                            return
+                        # One governed write path: same draft -> request_shift_draft_confirmation -> interrupt()
+                        # as the chat; nothing is written to shift_reports before a manager approves.
+                        result = agent.submit_shift_review_for_approval(
                             extracted={**extracted, 'image_sha256': image_digest},
-                            confirmed_values=reviewed_values,
+                            reviewed_values=reviewed_values,
+                            report_date=chosen_d_str,
+                            shift_code=curr_shift_code,
+                            signed_by=in_signer,
+                            notes=in_notes,
+                            bank_transfer_formula=in_bank_formula,
+                            image_paths=cur_paths,
                             review_seconds=review_secs,
+                            user_role=user_role,
+                            user_name=user_name,
+                            user_id=st.session_state.get('username', user_name),
                         )
-                        payload = {
-                            "id": report_id,
-                            "business_date": chosen_d_str,
-                            "shift_code": curr_shift_code,
-                            "shift_name": SHIFT_DEFINITIONS.get(curr_shift_code, {}).get("title", curr_shift_code),
-                            "cash_vnd": in_cash,
-                            "cash_diff_vnd": in_cash_diff,
-                            "bank_transfer_vnd": in_bank,
-                            "bank_transfer_formula": in_bank_formula,
-                            "shopee_food_vnd": in_shopee,
-                            "grab_food_vnd": in_grab,
-                            "be_food_vnd": in_be,
-                            "petty_cash_kept_vnd": in_petty,
-                            "expenses_vnd": in_expenses,
-                            "total_collected_vnd": in_total,
-                            "signed_by": in_signer,
-                            "notes": in_notes,
-                            "image_path": st.session_state.get("preview_image_path", ""),
-                            "status": "APPROVED",
-                            "created_by": user_name,
-                            "ocr_review": ocr_review_record,
-                        }
-                        if in_pos_rev is not None:
-                            payload["pos_revenue_vnd"] = in_pos_rev
-                        if in_pos_coll is not None:
-                            payload["pos_collected_vnd"] = in_pos_coll
-                            payload["variance_pos_vnd"] = in_total - in_pos_coll
-                        ok, msg, _ = save_or_update_shift_report(payload, actor_role=user_role, actor_username=st.session_state.get('username'))
-                        if ok:
-                            st.success(f"🎉 {msg}")
-                            st.rerun()
-                        else:
-                            st.error(f"⚠️ {msg}")
+                        st.session_state['agent_pending_approval'] = result.get('pending_approval')
+                        st.session_state['approval_notice'] = result['text']
+                        st.rerun()
+
+    render_page_approval(user_role, user_name, is_admin)
+    render_ocr_benchmark_panel()
 
     st.write("")
     st.write("### 📋 Danh Sách Các Ca Đã Chốt Trong Ngày " + chosen_date.strftime("%d/%m/%Y"))
@@ -509,3 +472,70 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                                 st.rerun()
                             else:
                                 st.error(d_msg)
+
+
+def render_ocr_benchmark_panel():
+    """Error-taxonomy benchmark: 4 synthetic images or the labelled real store photos."""
+    from src.agent.config import AgentSettings
+    from src.engine.ocr_evaluation import (
+        dataset_image_path,
+        load_ocr_dataset,
+        make_synthetic_test_images,
+        run_dataset_benchmark,
+        run_ocr_benchmark,
+    )
+
+    with st.expander("🧪 Kiểm định & Phân loại lỗi OCR (Error Taxonomy Benchmark)", expanded=False):
+        dataset = st.radio(
+            "Bộ dữ liệu kiểm định",
+            ["synthetic", "real"],
+            format_func=lambda k: {"synthetic": "4 ảnh tổng hợp có đáp án (bản đọc mô phỏng)",
+                                   "real": "Ảnh thật của cửa hàng có đáp án (data/ocr_eval)"}[k],
+            horizontal=True, key="ocr_benchmark_dataset",
+        )
+        st.caption("So sánh bản đọc thô (tin thẳng số mô hình trả về) với pipeline có kiểm chứng theo 7 nhóm lỗi. "
+                   + ("Ảnh tổng hợp: `printed_pos`, `handwritten_ledger`, `blurry_image`, `composite_multi_doc`."
+                      if dataset == "synthetic" else
+                      "Ảnh thật: đáp án lấy từ báo cáo chốt ca đã duyệt. *Phát lại* chấm lại bản đọc đã lưu bằng pipeline hiện tại, không cần mạng."))
+        settings = AgentSettings.from_env()
+        live_ready = bool(settings.llm_enabled and settings.allow_external_transfer)
+        c1, c2 = st.columns(2)
+        offline_label = "▶️ Chạy kiểm định (bản đọc mô phỏng)" if dataset == "synthetic" else "▶️ Phát lại bản đọc đã lưu (offline)"
+        if c1.button(offline_label, key="run_ocr_benchmark", use_container_width=True):
+            st.session_state["ocr_benchmark_report"] = (run_ocr_benchmark("scripted") if dataset == "synthetic"
+                                                        else run_dataset_benchmark(mode="replay"))
+        if c2.button("🌐 Chạy với mô hình Vision thật", key="run_ocr_benchmark_live", use_container_width=True,
+                     disabled=not live_ready,
+                     help=None if live_ready else "Cần bật LLM_ENABLED và ALLOW_EXTERNAL_DATA_TRANSFER."):
+            with st.spinner("Đang gửi ảnh kiểm định tới mô hình Vision…"):
+                st.session_state["ocr_benchmark_report"] = (run_ocr_benchmark("live", settings=settings) if dataset == "synthetic"
+                                                            else run_dataset_benchmark(mode="live", settings=settings))
+        report = st.session_state.get("ocr_benchmark_report")
+        if report:
+            st.markdown(f"**Chế độ:** `{report['mode']}`")
+            runtime = report.get("runtime") or {}
+            if runtime.get("calls"):
+                st.caption(f"Mô hình được gọi {runtime['calls']} lần · độ trễ TB {runtime['avg_latency_s']} s · "
+                           f"token vào/ra {runtime['input_tokens']:,}/{runtime['output_tokens']:,}")
+            if str(report["mode"]).startswith("real"):
+                images = {c["case_id"]: dataset_image_path(c["image"]).read_bytes()
+                          for c in load_ocr_dataset()["cases"] if dataset_image_path(c["image"]).is_file()}
+            else:
+                images = make_synthetic_test_images()
+            vocr.render_benchmark(report, images=images)
+
+
+def render_page_approval(user_role: str, user_name: str, is_admin: bool):
+    """Show the pending LangGraph interrupt for a shift draft right on the OCR page."""
+    from src.dashboard.brand_ui import render_approval_card
+
+    if notice := st.session_state.pop('approval_notice', None):
+        st.info(notice)
+    agent = st.session_state.get('operations_agent')
+    if agent is None:
+        return
+    history = agent.conversation_history(user_role, user_name, user_id=st.session_state.get('username', user_name))
+    pending = history.get('pending_approval')
+    st.session_state['agent_pending_approval'] = pending
+    if pending and pending.get('plan_type') == 'SHIFT_OCR_DRAFT':
+        render_approval_card(agent, pending, (user_role or '').strip().upper(), user_name, is_admin, key_suffix='_page')
