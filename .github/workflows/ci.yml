@@ -76,3 +76,7 @@ jobs:
           sleep 15
           for i in $(seq 1 30); do curl -fsS http://localhost:8501/_stcore/health && break; sleep 2; done
           docker logs app 2>&1 | grep "Owner bootstrap: EXISTS"
+
+      - name: Container logs
+        if: always()
+        run: docker logs app 2>&1 | tail -60 || true
