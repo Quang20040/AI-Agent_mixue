@@ -1434,16 +1434,20 @@ Bạn được trang bị 8 công cụ vận hành:
             self.memory = {key: ([] if key == 'turns' else None) for key in self.memory}
             self._start_fresh_conversation = False
         changed = self._actor_identity != identity
-        self._actor_identity = identity
         actor = Actor(identity[0], user_name, role, store_id=self.forecast_engine.store_id,
                       deadline=time.monotonic() + self._runtime().settings.run_timeout)
         self._current_actor = actor
-        if changed:
-            store = self._ensure_store()
-            recent = store.list(self._conversation_owner(actor))
+        store = self._ensure_store()
+        owner = self._conversation_owner(actor)
+        # Re-check ownership every call: if an earlier call failed half-way (or the store was
+        # replaced), the current id may not belong to this account; pick or create a valid one.
+        if changed or not store.owns(owner, self._conversation_id):
+            recent = store.list(owner)
             self._conversation_id = (recent[0]['id'] if recent and not self._start_fresh_conversation
-                                     else store.create(self._conversation_owner(actor)))
+                                     else store.create(owner))
             self._start_fresh_conversation = False
+        # Commit the identity only once a valid conversation is in place.
+        self._actor_identity = identity
         return actor
 
     @staticmethod

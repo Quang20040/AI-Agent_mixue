@@ -167,6 +167,10 @@ class ConversationStore:
                 )
             ]
 
+    def owns(self, owner: str, ident: str) -> bool:
+        with self.connect() as db:
+            return db.execute('SELECT 1 FROM conversations WHERE id=? AND owner=?', (ident, owner)).fetchone() is not None
+
     def require_owned(self, owner: str, ident: str) -> None:
         with self.connect() as db:
             if not db.execute('SELECT 1 FROM conversations WHERE id=? AND owner=?', (ident, owner)).fetchone():

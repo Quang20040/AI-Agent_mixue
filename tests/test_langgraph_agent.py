@@ -347,3 +347,14 @@ def test_real_service_tools_run_inside_model_loop(tmp_path):
     finally:
         service.close()
         database.dispose()
+
+
+def test_stale_conversation_id_is_repaired_instead_of_crashing(tmp_path):
+    """A half-finished earlier call must not leave the agent pointing at a conversation the account does not own."""
+    from src.agent.mixue_agent import MixueOperationsAgent
+    agent = MixueOperationsAgent()
+    agent.conversation_history('ADMIN', 'Quản lý', user_id='quanly')
+    agent._conversation_id = 'not-a-conversation-of-this-account'
+    history = agent.conversation_history('ADMIN', 'Quản lý', user_id='quanly')
+    assert history['conversation_id'] != 'not-a-conversation-of-this-account'
+    assert agent._ensure_store().owns(agent._conversation_owner(agent._current_actor), history['conversation_id'])
