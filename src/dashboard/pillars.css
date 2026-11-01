@@ -230,6 +230,15 @@
 .st-key-chat_main_card [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) p { color: #fff !important; }
 .px-topbar .px-top-title:not(:has(h1)) small { font-size: 13px; }
 
+/* OCR pre-fill suggestions: yellow = filled by suggestion, must be checked */
+.px-suggest-note { background: var(--px-warn-bg); border: 1px solid #fde68a; color: #78350f; border-radius: 12px; padding: 10px 14px; font-size: 13px; margin: 6px 0 10px; }
+[class*="st-key-ocr_sugg_"] input { background: #fffbeb !important; border-color: #f59e0b !important; }
+[class*="st-key-ocr_sugg_"] [data-baseweb="input"], [class*="st-key-ocr_sugg_"] [data-baseweb="base-input"] { background: #fffbeb !important; border-color: #f59e0b !important; }
+[class*="st-key-ocr_sugg_"] label p::after { content: " · gợi ý"; color: #b45309; font-weight: 700; }
+.vocr-suggest { background: #fffbeb; color: #92400e; }
+.vocr-suggest small { color: #b45309; }
+.st-key-ocr_staff_inbox { background: #fff; border: 1px solid #fde68a !important; border-radius: 20px !important; padding: 18px !important; margin-top: 16px; }
+
 /* ---------- CSS-only motion ---------- */
 @keyframes px-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 @keyframes px-msg-in { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }

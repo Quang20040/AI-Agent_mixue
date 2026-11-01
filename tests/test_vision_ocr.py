@@ -462,3 +462,22 @@ def test_other_shift_reading_is_kept_as_text_but_never_fills_selected_shift():
     assert result['cash_vnd'] is None
     assert result['field_readings']['cash_vnd']['raw_text'] == '100000 VND'
 
+
+
+def test_suggestions_convert_ledger_shorthand_but_keep_the_verified_value_empty():
+    from src.engine.vision_ocr import MoneyReading, suggest_value
+    hw = dict(status='uncertain', source='handwritten_ledger', unit_explicit=False,
+              review_reason='Chữ viết tay chưa ghi rõ đơn vị')
+    assert suggest_value('cash_vnd', MoneyReading(value=653, raw_text='653', **hw))['value'] == 653000
+    assert suggest_value('bank_transfer_vnd', MoneyReading(value=1591, raw_text='962 + 629', **hw))['value'] == 1591000
+    assert suggest_value('petty_cash_kept_vnd', MoneyReading(value=1000000, raw_text='1.000.000đ', **hw))['value'] == 1000000
+    assert suggest_value('shopee_food_vnd', MoneyReading(value=16, raw_text='16k', **hw))['value'] == 16000
+    # POS digits are never rescaled.
+    pos = MoneyReading(value=9057300, raw_text='9,057,300', status='uncertain', source='pos_receipt', review_reason='Ảnh mờ')
+    assert suggest_value('cash_vnd', pos)['value'] == 9057300
+    # Evidence that points elsewhere gets no suggestion.
+    wrong_source = MoneyReading(value=5837, raw_text='5,837', status='uncertain', source='pos_receipt',
+                                review_reason='Giá trị lấy từ hóa đơn POS trong ảnh ghép; không tự điền')
+    assert suggest_value('shopee_food_vnd', wrong_source) is None
+    assert suggest_value('cash_vnd', MoneyReading(value=653000, raw_text='653.000', status='read', evidence='x',
+                                                  source='handwritten_ledger')) is None

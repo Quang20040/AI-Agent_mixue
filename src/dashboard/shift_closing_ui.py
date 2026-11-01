@@ -15,6 +15,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from src.auth import normalize_role
 from src.dashboard import ocr_components as vocr
 from src.engine.shift_service import (
     SHIFT_PHOTOS_DIR,
@@ -191,9 +192,9 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                                if regions.get(key, {}).get('present')]
                     if present:
                         st.markdown('**Vùng phát hiện:** ' + ' '.join(present), unsafe_allow_html=True)
-                    st.info('Bản đọc nháp — kiểm tra từng ô trước khi lưu. Ô trống nghĩa là **chưa xác nhận**, không phải 0.')
+                    st.info('Bản đọc nháp đã điền sẵn vào biểu mẫu. Ô **tô vàng** là số gợi ý cần kiểm tra; ô trống là chưa đọc được, không phải 0.')
                     form_values = {name: extracted.get(name) for name in vocr.FIELD_LABELS}
-                    vocr.render_field_table(extracted.get('field_readings', {}), form_values)
+                    vocr.render_field_table(extracted.get('field_readings', {}), form_values, extracted.get('suggestions'))
                     consistency = extracted.get('consistency', {})
                     if consistency and not consistency.get('is_consistent', True):
                         st.markdown('**⚖️ Đối soát số học (giữ nguyên số đọc, không tự sửa):**')
@@ -226,25 +227,46 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                         with st.expander('Chi tiết kỹ thuật (nội dung lỗi đầy đủ nằm trong log máy chủ)'):
                             st.code('\n'.join(extracted['attempts']), language=None)
 
+                suggestions = extracted.get('suggestions') or {}
+                # New reading -> new widget keys, so the form shows the new values instead of stale widget state.
+                form_tag = hashlib.sha256(f"{cache_key}|{extracted.get('extracted_at')}|{extracted.get('status')}".encode()).hexdigest()[:10]
+
+                def prefill(name):
+                    """Verified value if read; otherwise the highlighted suggestion (checked by staff, approved by a manager)."""
+                    value = extracted.get(name)
+                    return value if value is not None else (suggestions.get(name) or {}).get('value')
+
+                def field_key(name):
+                    return f"ocr_{'sugg' if name in suggestions and extracted.get(name) is None else 'in'}_{name}_{form_tag}"
+
+                if suggestions:
+                    st.markdown(
+                        '<div class="px-suggest-note"><b>Ô tô vàng là số điền sẵn theo gợi ý</b> (quy đổi số viết tắt ×1.000, '
+                        'cộng biểu thức). Đối chiếu với ảnh và sửa nếu sai trước khi gửi.</div>', unsafe_allow_html=True)
                 with st.form('confirm_shift_report_' + hashlib.sha256(str(cache_key).encode()).hexdigest()[:16]):
                     f_col1, f_col2 = st.columns(2)
                     with f_col1:
                         in_cash = st.number_input(
                             "Tiền mặt thu tại quầy (đ)",
-                            value=extracted.get("cash_vnd"),
+                            value=prefill("cash_vnd"),
+                            key=field_key("cash_vnd"),
+                            help=(suggestions.get("cash_vnd") or {}).get("basis") or None,
                             step=10000,
                             format="%d"
                         )
                         in_cash_diff = st.number_input(
                             "Chênh lệch tiền mặt dư/thiếu (đ)",
-                            value=extracted.get("cash_diff_vnd"),
+                            value=prefill("cash_diff_vnd"),
+                            key=field_key("cash_diff_vnd"),
+                            help=(suggestions.get("cash_diff_vnd") or {}).get("basis") or "Nhập dương nếu dư (VD 20000), nhập âm nếu thiếu",
                             step=5000,
-                            format="%d",
-                            help="Nhập dương nếu dư (VD 20000), nhập âm nếu thiếu"
+                            format="%d"
                         )
                         in_bank = st.number_input(
                             "Chuyển khoản ngân hàng (đ)",
-                            value=extracted.get("bank_transfer_vnd"),
+                            value=prefill("bank_transfer_vnd"),
+                            key=field_key("bank_transfer_vnd"),
+                            help=(suggestions.get("bank_transfer_vnd") or {}).get("basis") or None,
                             step=10000,
                             format="%d"
                         )
@@ -254,13 +276,17 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                         )
                         in_petty = st.number_input(
                             "Tiền cố định két (đ)",
-                            value=extracted.get("petty_cash_kept_vnd"),
+                            value=prefill("petty_cash_kept_vnd"),
+                            key=field_key("petty_cash_kept_vnd"),
+                            help=(suggestions.get("petty_cash_kept_vnd") or {}).get("basis") or None,
                             step=100000,
                             format="%d"
                         )
                         in_pos_rev = st.number_input(
                             "Tổng doanh thu POS (đ, nếu có)",
-                            value=extracted.get("pos_revenue_vnd"),
+                            value=prefill("pos_revenue_vnd"),
+                            key=field_key("pos_revenue_vnd"),
+                            help=(suggestions.get("pos_revenue_vnd") or {}).get("basis") or None,
                             step=10000,
                             format="%d"
                         )
@@ -268,28 +294,35 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                     with f_col2:
                         in_shopee = st.number_input(
                             "ShopeeFood (đ)",
-                            value=extracted.get("shopee_food_vnd"),
+                            value=prefill("shopee_food_vnd"),
+                            key=field_key("shopee_food_vnd"),
+                            help=(suggestions.get("shopee_food_vnd") or {}).get("basis") or None,
                             step=5000,
                             format="%d"
                         )
                         in_grab = st.number_input(
                             "GrabFood (đ)",
-                            value=extracted.get("grab_food_vnd"),
+                            value=prefill("grab_food_vnd"),
+                            key=field_key("grab_food_vnd"),
+                            help=(suggestions.get("grab_food_vnd") or {}).get("basis") or None,
                             step=5000,
                             format="%d"
                         )
                         in_be = st.number_input(
                             "BeFood (đ)",
-                            value=extracted.get("be_food_vnd"),
+                            value=prefill("be_food_vnd"),
+                            key=field_key("be_food_vnd"),
+                            help=(suggestions.get("be_food_vnd") or {}).get("basis") or None,
                             step=5000,
                             format="%d"
                         )
                         in_expenses = st.number_input(
                             "Khoản chi trong ca (đ)",
-                            value=extracted.get("expenses_vnd"),
+                            value=prefill("expenses_vnd"),
+                            key=field_key("expenses_vnd"),
+                            help=(suggestions.get("expenses_vnd") or {}).get("basis") or "Tiền ship sạc pin, ship đơn hoặc mua đá ngoài",
                             step=5000,
-                            format="%d",
-                            help="Tiền ship sạc pin, ship đơn hoặc mua đá ngoài"
+                            format="%d"
                         )
                         in_signer = st.text_input(
                             "Người ký xác nhận / Giao ca",
@@ -297,14 +330,18 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                         )
                         in_pos_coll = st.number_input(
                             "Thực thu POS (đ, nếu có)",
-                            value=extracted.get("pos_collected_vnd"),
+                            value=prefill("pos_collected_vnd"),
+                            key=field_key("pos_collected_vnd"),
+                            help=(suggestions.get("pos_collected_vnd") or {}).get("basis") or None,
                             step=10000,
                             format="%d"
                         )
 
                     in_total = st.number_input(
                         "Tổng thu về thực tế (đ)",
-                        value=extracted.get("total_collected_vnd"),
+                        value=prefill("total_collected_vnd"),
+                        key=field_key("total_collected_vnd"),
+                        help=(suggestions.get("total_collected_vnd") or {}).get("basis") or None,
                         step=10000,
                         format="%d"
                     )
@@ -315,20 +352,26 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                     )
 
                     confirmed = st.checkbox('Tôi đã đối chiếu ảnh, ngày, ca và toàn bộ số liệu trước khi gửi.')
+                    suggested_open = [n for n in suggestions if extracted.get(n) is None]
+                    checked_suggestions = (st.checkbox(f'Tôi đã kiểm tra {len(suggested_open)} ô tô vàng (số điền sẵn theo gợi ý).',
+                                                       key=f'ocr_checksugg_{form_tag}')
+                                           if suggested_open else True)
+                    can_submit = is_admin or normalize_role(user_role) == 'STAFF_OFFICIAL'
                     btn_save_shift = st.form_submit_button(
-                        "📨 Gửi phê duyệt lưu báo cáo (LangGraph interrupt)",
+                        "📨 Gửi phê duyệt lưu báo cáo (LangGraph interrupt)" if is_admin else "📨 Gửi Quản lý duyệt",
                         type="primary",
                         use_container_width=True,
-                        disabled=not is_admin,
-                        help="Tạo dự thảo DRAFT_OCR_… rồi gọi request_shift_draft_confirmation; chỉ ghi sổ khi Quản lý bấm Phê duyệt.",
+                        disabled=not can_submit,
+                        help=("Tạo dự thảo DRAFT_OCR_… rồi gọi request_shift_draft_confirmation; chỉ ghi sổ khi Quản lý bấm Phê duyệt."
+                              if is_admin else "Gửi bản đã kiểm tra cho Quản lý; chỉ ghi sổ khi Quản lý phê duyệt."),
                     )
                     if not is_admin:
-                        st.caption("🔒 Nhân viên dùng trang này để đọc và đối chiếu ảnh; chỉ Quản lý/Chủ quán gửi phê duyệt và ghi sổ doanh thu.")
+                        st.caption("Nhân viên kiểm tra số điền sẵn rồi gửi; Quản lý/Chủ quán xem lại và phê duyệt mới ghi sổ doanh thu.")
 
                     if btn_save_shift:
                         amounts = [in_cash, in_cash_diff, in_bank, in_shopee, in_grab, in_be, in_petty, in_expenses, in_total]
-                        if not confirmed or any(value is None for value in amounts):
-                            st.error('Cần điền đầy đủ các ô tiền và xác nhận đã kiểm tra. Nếu thực tế không phát sinh, nhập 0.')
+                        if not confirmed or not checked_suggestions or any(value is None for value in amounts):
+                            st.error('Cần điền đầy đủ các ô tiền, kiểm tra các ô tô vàng và tick xác nhận. Nếu thực tế không phát sinh, nhập 0.')
                             return
                         if any(value < 0 for value in [in_cash, in_bank, in_shopee, in_grab, in_be, in_petty, in_expenses, in_total]):
                             st.error('Số tiền phải không âm, ngoại trừ chênh lệch tiền mặt.')
@@ -361,6 +404,11 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                             bank_transfer_formula=in_bank_formula,
                             image_paths=cur_paths,
                             review_seconds=review_secs,
+                            review_meta={
+                                'suggested_fields': suggested_open,
+                                'suggestions_edited': [n for n in suggested_open
+                                                       if reviewed_values.get(n) != suggestions[n]['value']],
+                            },
                             user_role=user_role,
                             user_name=user_name,
                             user_id=st.session_state.get('username', user_name),
@@ -369,6 +417,8 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                         st.session_state['approval_notice'] = result['text']
                         st.rerun()
 
+    if is_admin:
+        render_staff_submissions(user_role, user_name)
     render_page_approval(user_role, user_name, is_admin)
     render_ocr_benchmark_panel()
 
@@ -381,6 +431,37 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
             "- **Ca sáng (8h–13h):** bàn giao tiền mặt quầy, chuyển khoản, app Shopee/Grab/Be và két cố định 1.000.000 đ.\n"
             "- **Ca chiều (13h–18h):** như ca sáng, ghi rõ tiền mặt dư/thiếu nếu có.\n"
             "- **Ca tối (18h–23h):** tổng hợp doanh thu cả ngày, trừ khoản chi phát sinh và chốt số cầm tiền mặt.")
+
+
+def render_staff_submissions(user_role: str, user_name: str):
+    """Manager inbox: reports staff checked and sent. Opening one starts the LangGraph approval."""
+    agent = st.session_state.get('operations_agent')
+    if agent is None:
+        return
+    user_id = st.session_state.get('username', user_name)
+    submissions = agent.list_staff_submissions(user_role, user_name, user_id=user_id)
+    if not submissions:
+        return
+    with st.container(border=True, key='ocr_staff_inbox'):
+        st.markdown(f'<div class="px-card-title">📥 Nhân viên gửi chờ duyệt · {len(submissions)}</div>', unsafe_allow_html=True)
+        for sub in submissions:
+            meta = sub.get('meta') or {}
+            fields = sub.get('fields') or {}
+            total = fields.get('total_collected_vnd')
+            edited = meta.get('suggestions_edited') or []
+            suggested = meta.get('suggested_fields') or []
+            info, action = st.columns([4, 1.2], vertical_alignment='center')
+            info.markdown(
+                f"**{sub.get('shift_code') or '—'} · {sub.get('business_date') or '—'}** — gửi bởi "
+                f"{meta.get('submitted_by_name') or sub.get('user_id')} · tổng thu "
+                f"{'{:,.0f} đ'.format(total).replace(',', '.') if total is not None else '—'}  \n"
+                f"<small>{sub['draft_id']} · {len(suggested)} ô điền theo gợi ý"
+                f"{f', nhân viên đã sửa {len(edited)} ô' if edited else ''}</small>", unsafe_allow_html=True)
+            if action.button('Mở & duyệt', key=f"open_sub_{sub['draft_id']}", type='primary', use_container_width=True):
+                result = agent.open_staff_submission(sub['draft_id'], user_role, user_name, user_id=user_id)
+                st.session_state['agent_pending_approval'] = result.get('pending_approval')
+                st.session_state['approval_notice'] = result.get('text')
+                st.rerun()
 
 
 def render_day_reports(day_reports, chosen_date, is_admin):

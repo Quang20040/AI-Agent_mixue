@@ -32,7 +32,7 @@ flowchart TB
         Q3["③ Đọc thô bằng Vision LLM<br/>raw_text · source · evidence"]
         Q4["④ Quy tắc kiểm chứng<br/>enforce_reading_uncertainty<br/>unit_explicit · is_calculated · layout 3.1"]
         Q5["⑤ Đối soát số học<br/>check_ocr_consistency<br/>sổ ca · POS · chéo POS↔sổ tay"]
-        Q6["⑥ Dự thảo DRAFT_OCR_…<br/>trường uncertain để trống + review_reason"]
+        Q6["⑥ Dự thảo DRAFT_OCR_…<br/>trường uncertain điền gợi ý, tô vàng + review_reason"]
         Q1 --> Q2 --> Q3 --> Q4 --> Q5 --> Q6
         BENCH["ocr_evaluation.run_ocr_benchmark<br/>4 ảnh · 7 nhóm lỗi · thô vs kiểm chứng"]
     end
@@ -81,11 +81,11 @@ Mô hình Vision chỉ là **bộ đọc**; quyết định một con số có �
 |---|---|---|
 | Chất lượng ảnh | `analyze_image_layout_and_quality` đo độ tương phản/cạnh; ảnh mờ → mọi trường `uncertain` | Phiếu POS mờ: không tin `9,057,300` |
 | Nguồn chứng từ | Mỗi trường mang `source` (`pos_receipt`, `handwritten_ledger`, `both_conflicting`); ảnh ghép không cho số POS lọt vào ô sổ ca | `1.Cash 9,657,300` không điền vào *Tiền mặt ca sáng* |
-| Đơn vị viết tay | `unit_explicit=False` với số trần như `653`, `2328`, `5,466` → để trống, **không tự nhân 1.000** | `653` → ⚠️ chờ xác nhận |
+| Đơn vị viết tay | `unit_explicit=False` với số trần như `653`, `2328`, `5,466` → số đọc giữ nguyên, không công nhận là đã đọc; biểu mẫu điền **gợi ý ×1.000 tô vàng** | `653` → ⚠️ gợi ý 653.000, chờ xác nhận |
 | Biểu thức | `is_calculated=True` với `962 + 629` → giữ nguyên chuỗi, **không tự cộng** | `bank_transfer_formula = "962 + 629"` |
 | Bố cục | Số trong bảng đếm cốc/quà tặng (mục `3.1`) hoặc dòng ví dụ in sẵn bị chặn | `còn lại 899` không thành khoản chi |
 | Đối soát số học | Cộng ngang sổ ca, tổng thành phần POS, chéo sổ tay ↔ POS; **giữ nguyên số đọc**, chỉ cảnh báo | Lệch `-110,000 đ` trên POS do `5,837` thay vì `115,837` |
-| Người xác nhận | Trường `uncertain` để trống kèm `review_reason`; chỉ Quản lý phê duyệt mới ghi `shift_reports` — **một đường ghi duy nhất** cho cả chat lẫn form trang OCR: dự thảo → `request_shift_draft_confirmation` → `interrupt()` | — |
+| Người xác nhận | Trường `uncertain` được điền gợi ý, tô vàng kèm `review_reason`; nhân viên tick đã kiểm tra rồi gửi, Quản lý mở từ hộp chờ duyệt; chỉ Quản lý phê duyệt mới ghi `shift_reports` — **một đường ghi duy nhất** cho cả chat lẫn form trang OCR: dự thảo → `request_shift_draft_confirmation` → `interrupt()` | — |
 
 **Benchmark phân loại lỗi** (`run_ocr_benchmark`, nút *🧪 Kiểm định & Phân loại lỗi OCR* trên trang OCR): 4 ảnh có đáp án (`printed_pos`, `handwritten_ledger`, `blurry_image`, `composite_multi_doc`), 7 nhóm kết quả (`correct_read`, `correctly_flagged_uncertain`, `digit_error`, `unit_error`, `layout_error`, `wrong_document_source`, `unflagged_inconsistency`). Mỗi ca được chấm hai lần: **bản đọc thô** (tin thẳng số mô hình trả) và **pipeline có kiểm chứng**. Chế độ mặc định dùng bản đọc mô phỏng tái hiện các lỗi đã gặp trên ảnh thật của cửa hàng; kết quả hiện tại:
 

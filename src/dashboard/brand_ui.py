@@ -428,7 +428,7 @@ def render_pillars(user_role):
                 variance = summary.get('variance_pos_vnd')
                 stats = [('Ca đã chốt · ' + (f'{latest:%d/%m}' if latest else '—'), str(state.get('reports', 0)), state.get('reports', 0)),
                          ('Đối soát POS ↔ sổ', f"{variance:+,.0f} đ".replace(',', '.').replace('-', '−') if variance is not None else '—', None),
-                         ('Số sai lọt vào form', f"{state.get('bench_raw', '—')} → {state.get('bench_verified', '—')}", None)]
+                         ('Số sai không bị gắn cờ', f"{state.get('bench_raw', '—')} → {state.get('bench_verified', '—')}", None)]
                 draft = state.get('draft')
                 badge = (f'<span class="px-pill warn">{len(draft.get("missing_fields") or [])} trường chờ xác nhận</span>' if draft
                          else '<span class="px-pill ok">Không có dự thảo treo</span>')

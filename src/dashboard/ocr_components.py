@@ -143,11 +143,22 @@ def field_rows(field_readings: dict[str, dict[str, Any]], form_values: dict[str,
     return rows
 
 
-def render_field_table(field_readings: dict[str, dict[str, Any]], form_values: dict[str, Any] | None = None) -> None:
+def render_field_table(field_readings: dict[str, dict[str, Any]], form_values: dict[str, Any] | None = None,
+                       suggestions: dict[str, dict[str, Any]] | None = None) -> None:
+    suggestions = suggestions or {}
     rows = field_rows(field_readings, form_values)
     if not rows:
         st.caption('Chưa có trường tiền nào được đọc từ ảnh.')
         return
+    def value_cell(row):
+        if row['normalized_value'] is not None:
+            return f"<td class='vocr-num'>{money(row['normalized_value'])}</td>"
+        hint = suggestions.get(row['field'])
+        if hint:
+            return (f"<td class='vocr-num vocr-suggest' title='{escape(hint['basis'])}'>{money(hint['value'])}"
+                    "<br><small>gợi ý · ô vàng</small></td>")
+        return "<td class='vocr-num'>—</td>"
+
     body = []
     for row in rows:
         flags = []
@@ -160,13 +171,15 @@ def render_field_table(field_readings: dict[str, dict[str, Any]], form_values: d
             f"<td>{badge(*SOURCE_BADGES.get(row['source'], SOURCE_BADGES['unknown']))}</td>"
             f"<td>{badge(*STATUS_BADGES.get(row['status'], STATUS_BADGES['not_present']))}<br>{' '.join(flags)}</td>"
             f"<td><code>{escape(str(row['raw_text'])[:80]) or '—'}</code></td>"
-            f"<td class='vocr-num'>{money(row['normalized_value'])}</td>"
-            f"<td>{escape(row['review_reason'][:260]) or '—'}</td></tr>")
+            + value_cell(row)
+            + f"<td>{escape(row['review_reason'][:260]) or '—'}</td></tr>")
     st.markdown(
         '<table class="vocr-table"><thead><tr><th>Khoản mục</th><th>Nguồn</th><th>Trạng thái</th>'
-        '<th>Đọc thô (raw_text)</th><th>Chuẩn hóa (normalized_value)</th><th>Lý do cần xác nhận (review_reason)</th>'
+        '<th>Đọc thô (raw_text)</th><th>Giá trị điền vào form</th><th>Lý do cần xác nhận (review_reason)</th>'
         '</tr></thead><tbody>' + ''.join(body) + '</tbody></table>', unsafe_allow_html=True)
-    st.caption('Trường ⚠️ được để trống trong biểu mẫu: hệ thống không tự điền, không tự nhân 1.000 và không tự cộng biểu thức.')
+    st.caption('Trường ⚠️ được điền sẵn theo gợi ý và tô vàng: số đọc thô luôn được giữ nguyên để đối chiếu; '
+               'nhân viên phải kiểm tra, Quản lý phê duyệt mới ghi sổ.' if suggestions else
+               'Trường ⚠️ chưa có gợi ý đáng tin (sai nguồn chứng từ, bảng đếm cốc, hai nguồn mâu thuẫn) nên để trống.')
 
 
 def render_image_quality(quality: dict[str, Any] | None) -> None:
@@ -184,11 +197,14 @@ def render_image_quality(quality: dict[str, Any] | None) -> None:
 def render_benchmark(report: dict[str, Any], images: dict[str, bytes] | None = None) -> None:
     """Show the raw-vs-verified error taxonomy produced by ``run_ocr_benchmark``."""
     verified, raw = report['verified_summary'], report['raw_summary']
-    m1, m2, m3 = st.columns(3)
+    suggestions = report.get('suggestion_summary') or {}
+    m1, m2, m3, m4 = st.columns(4)
     m1.metric('Trường được chấm', verified.get('fields_evaluated', 0))
-    m2.metric('Lỗi lọt vào biểu mẫu · bản đọc thô', raw.get('errors_reaching_form', 0))
-    m3.metric('Lỗi lọt vào biểu mẫu · có kiểm chứng', verified.get('errors_reaching_form', 0),
+    m2.metric('Số sai không bị gắn cờ · bản đọc thô', raw.get('errors_reaching_form', 0))
+    m3.metric('Số sai không bị gắn cờ · có kiểm chứng', verified.get('errors_reaching_form', 0),
               delta=verified.get('errors_reaching_form', 0) - raw.get('errors_reaching_form', 0), delta_color='inverse')
+    m4.metric('Gợi ý điền sẵn (ô vàng) đúng', f"{suggestions.get('correct', 0)}/{suggestions.get('total', 0)}",
+              help='Ô chưa chắc vẫn được điền gợi ý nhưng tô vàng; nhân viên phải kiểm tra, Quản lý duyệt mới ghi sổ.')
     labels = report['taxonomy_labels']
     top = max([1, *raw['taxonomy_7'].values(), *verified['taxonomy_7'].values()])
     bars = ''.join(

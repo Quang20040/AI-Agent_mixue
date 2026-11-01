@@ -75,7 +75,12 @@ def test_ocr_page_renders_verifiable_table_after_a_read(monkeypatch):
     html = ' '.join(m.value for m in app.markdown)
     assert 'vocr-table' in html and '962 + 629' in html and 'Cần kiểm tra' in html
     cash = next(item for item in app.number_input if item.label == 'Tiền mặt thu tại quầy (đ)')
-    assert cash.value is None  # uncertain handwritten number is never pre-filled
+    # Uncertain handwritten shorthand is pre-filled as a highlighted suggestion (653 -> 653.000 đ),
+    # never as a verified reading: the evidence table still marks it 'Cần kiểm tra'.
+    assert cash.value == 653000 and cash.key.startswith('ocr_sugg_cash_vnd')
+    bank = next(item for item in app.number_input if item.label == 'Chuyển khoản ngân hàng (đ)')
+    assert bank.value == 1591000 and bank.key.startswith('ocr_sugg_')
+    assert app.session_state['extracted_cache']['cash_vnd'] is None  # verified value stays empty
 
 
 def test_chat_draft_and_interrupt_cards_render(monkeypatch):
@@ -123,7 +128,8 @@ def test_ocr_page_submission_goes_through_interrupt_before_any_write(monkeypatch
     for item in app.number_input:
         if item.label in values:
             item.set_value(values[item.label])
-    app.checkbox[0].check()
+    for box in app.checkbox:
+        box.check()
     next(b for b in app.button if b.label.startswith('📨 Gửi phê duyệt')).click().run()
     assert not app.exception
     assert writes == []  # paused at interrupt(): nothing written yet
@@ -137,12 +143,48 @@ def test_ocr_page_submission_goes_through_interrupt_before_any_write(monkeypatch
     assert saved.get('image_path')
 
 
-def test_staff_cannot_submit_from_ocr_page():
+def test_staff_checks_prefilled_form_and_manager_approves_it(monkeypatch):
+    writes = []
+    monkeypatch.setattr('src.dashboard.shift_closing_ui.extract_shift_data_from_image', _scripted_extract(1))
+    monkeypatch.setattr('src.engine.shift_service.upsert_shift_report',
+                        lambda payload, actor_role=None, actor_username=None: (writes.append(payload) or True, '', payload))
+    monkeypatch.setattr('src.engine.shift_service.record_ocr_user_edits',
+                        lambda **kwargs: {'corrected_fields': [], 'manual_fields': [], 'field_edits': {},
+                                          'review_seconds': kwargs.get('review_seconds')})
     app = _login('quick_login_staff')
     app.radio(key='main_navigation').set_value('📸 Chốt ca & OCR').run()
-    assert not app.exception
-    submit = next(b for b in app.button if b.label.startswith('📨 Gửi phê duyệt'))
-    assert submit.disabled
+    next(b for b in app.button if b.label == '📷 Sổ Ca Sáng').click().run()
+    app.button(key='run_shift_ocr').click().run()
+    submit = next(b for b in app.button if b.label == '📨 Gửi Quản lý duyệt')
+    assert not submit.disabled
+    # Without ticking the yellow-field check the form refuses to send.
+    app.checkbox[0].check()
+    submit.click().run()
+    assert any('ô tô vàng' in e.value for e in app.error)
+    values = {'Chênh lệch tiền mặt dư/thiếu (đ)': 0, 'Khoản chi trong ca (đ)': 0, 'Tổng thu về thực tế (đ)': 2290000}
+    for item in app.number_input:
+        if item.label in values:
+            item.set_value(values[item.label])
+    for box in app.checkbox:
+        box.check()
+    next(b for b in app.button if b.label == '📨 Gửi Quản lý duyệt').click().run()
+    assert not app.exception and writes == []
+    assert not app.session_state['agent_pending_approval']
+    assert any('Đã gửi' in str(m.value) for m in [*app.info, *app.success, *app.markdown]), [e.value for e in app.error]
+
+    app.button(key='btn_logout').click().run()
+    app.button(key='quick_login_manager').click().run()
+    app.radio(key='main_navigation').set_value('📸 Chốt ca & OCR').run()
+    opener = next(b for b in app.button if (b.key or '').startswith('open_sub_'))
+    opener.click().run()
+    assert not app.exception and writes == []  # manager now sees interrupt(); nothing written yet
+    assert app.session_state['agent_pending_approval']['plan_type'] == 'SHIFT_OCR_DRAFT'
+    app.button(key='approve_agent_page').click().run()
+    assert not app.exception and len(writes) == 1
+    saved = writes[0]
+    assert saved['cash_vnd'] == 653000 and saved['bank_transfer_vnd'] == 1591000 and saved['total_collected_vnd'] == 2290000
+    assert 'gửi' in saved.get('notes', '')
+    assert not any((b.key or '').startswith('open_sub_') for b in app.button)
 
 
 def test_real_photo_benchmark_tab_renders_without_saved_readings():

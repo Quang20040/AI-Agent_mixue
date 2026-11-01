@@ -8,6 +8,8 @@ Relies on the host agent for ``_actor``, ``_conversation_owner``, ``_ensure_stor
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import re
 from typing import Any
 
@@ -884,6 +886,7 @@ class OcrChatMixin:
         user_role: str = "MANAGER",
         user_name: str = "Quản lý",
         user_id=None,
+        review_meta: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """OCR page -> the same governed write path as the chat.
 
@@ -923,9 +926,24 @@ class OcrChatMixin:
                 "warnings": list(extracted.get("warnings", [])),
                 "file_ids": file_ids,
                 "filenames": filenames,
-                "meta": {"origin": "ocr_page", "review_seconds": review_seconds},
+                "meta": {"origin": "ocr_page", "review_seconds": review_seconds, **(review_meta or {})},
             },
         )
+        from src.auth import is_admin_role
+        if not is_admin_role(actor.role):
+            # Staff hand the checked form to a manager; only a manager's request reaches interrupt().
+            store.mark_ocr_draft(draft["draft_id"], "SUBMITTED", {
+                "submitted_by": actor.user_id, "submitted_by_name": user_name,
+                "submitted_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            })
+            text = (f"📨 Đã gửi báo cáo {shift_code} ngày {report_date} ({draft['draft_id']}) cho Quản lý. "
+                    "Chưa có số nào được ghi sổ; Quản lý sẽ kiểm tra và phê duyệt.")
+            store.append(owner, self._conversation_id, "user",
+                         f"[Trang Chốt ca & OCR] Gửi Quản lý duyệt báo cáo {shift_code} ngày {report_date} ({draft['draft_id']})",
+                         [f"ocr_draft:{draft['draft_id']}"])
+            store.append(owner, self._conversation_id, "assistant", text, [f"ocr_draft:{draft['draft_id']}"])
+            return {"text": text, "raw_result": {"status": "SUBMITTED_TO_MANAGER"}, "pending_approval": None,
+                    "draft": {**draft, "status": "SUBMITTED"}}
         store.append(owner, self._conversation_id, "user",
                      f"[Trang Chốt ca & OCR] Gửi phê duyệt báo cáo {shift_code} ngày {report_date} ({draft['draft_id']})",
                      [f"ocr_draft:{draft['draft_id']}"])
@@ -938,6 +956,45 @@ class OcrChatMixin:
                               "Dự thảo đã được giữ lại để Quản lý/Chủ quán xử lý.")
         store.append(owner, self._conversation_id, "assistant", result["text"], result.get("evidence_refs"))
         result["draft"] = draft
+        return result
+
+    def list_staff_submissions(self, user_role, user_name, *, user_id=None) -> list[dict[str, Any]]:
+        """Reports staff sent for approval (managers of the same store only)."""
+        from src.auth import is_admin_role
+        actor = self._actor(user_role, user_name, user_id)
+        if not is_admin_role(actor.role):
+            return []
+        return self._ensure_store().list_submitted_ocr_drafts(actor.store_id)
+
+    def open_staff_submission(self, draft_id, user_role, user_name, *, user_id=None) -> dict[str, Any]:
+        """A manager takes a staff submission into the governed path: draft -> request -> interrupt()."""
+        from src.auth import is_admin_role
+        actor = self._actor(user_role, user_name, user_id)
+        if not is_admin_role(actor.role):
+            return {"text": "🔒 Chỉ Quản lý/Chủ quán được mở báo cáo nhân viên gửi.", "raw_result": {"status": "UNAUTHORIZED"}}
+        store = self._ensure_store()
+        sub = store.get_ocr_draft_by_id(draft_id)
+        if not sub or sub.get("status") != "SUBMITTED" or sub.get("store_id") != actor.store_id:
+            return {"text": "Báo cáo này không còn chờ duyệt.", "raw_result": {"status": "NOT_FOUND"}}
+        meta = sub.get("meta") or {}
+        fields = sub["fields"]
+        submitter = meta.get("submitted_by_name") or sub.get("user_id")
+        notes = (sub.get("notes") or "").strip()
+        result = self.submit_shift_review_for_approval(
+            extracted={"field_readings": sub.get("field_readings", {}), "consistency": sub.get("consistency") or {},
+                       "warnings": sub.get("warnings", []), "document_type": sub.get("document_type", "unknown")},
+            reviewed_values={k: fields.get(k) for k in fields if k.endswith("_vnd")},
+            report_date=sub.get("business_date"), shift_code=sub.get("shift_code"),
+            signed_by=sub.get("signed_by", ""), notes=(notes + f" [Nhân viên {submitter} gửi]").strip(),
+            bank_transfer_formula=sub.get("bank_transfer_formula", ""),
+            image_paths=store.attachment_paths(sub.get("file_ids") or []),
+            review_seconds=meta.get("review_seconds"), user_role=user_role, user_name=user_name, user_id=user_id,
+            review_meta={"from_staff_draft": draft_id, "submitted_by": meta.get("submitted_by"),
+                         "suggested_fields": meta.get("suggested_fields", []),
+                         "suggestions_edited": meta.get("suggestions_edited", [])},
+        )
+        store.mark_ocr_draft(draft_id, "FORWARDED", {"forwarded_to": (result.get("draft") or {}).get("draft_id"),
+                                                     "forwarded_by": actor.user_id})
         return result
 
     _OCR_CONFIRM_PHRASES = (

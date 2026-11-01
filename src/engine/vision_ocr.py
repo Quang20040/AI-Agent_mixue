@@ -348,6 +348,69 @@ def enforce_reading_uncertainty(result: ShiftReading, shift_hint: str | None = N
     return result
 
 
+_NO_SUGGESTION_REASONS = (
+    'hóa đơn POS trong ảnh ghép',   # wrong document source: the ledger value is elsewhere
+    'bảng kiểm đếm cốc',            # printed cup/souvenir table, not money
+    'trộn hoặc mâu thuẫn',          # POS and ledger disagree: a person must pick
+)
+
+
+def _vnd_term(term: str, handwritten: bool) -> tuple[int, bool] | None:
+    """One written number -> (VND, scaled ×1000?). '653' in the ledger is shorthand for 653.000 đ."""
+    text = term.strip().lower()
+    negative = text.startswith('-')
+    explicit_k = bool(re.search(r'(k|nghìn|nghin|ngàn|ngan)\b', text))
+    grouped = bool(re.search(r'\d[.,]\d{3}\b', text))
+    digits = re.sub(r'\D', '', text)
+    if not digits:
+        return None
+    amount = int(digits)
+    scaled = explicit_k or (handwritten and not grouped and 0 < amount < 100_000)
+    amount = amount * 1000 if scaled else amount
+    return (-amount if negative else amount), scaled
+
+
+def suggest_value(name: str, reading: MoneyReading) -> dict[str, Any] | None:
+    """Pre-fill suggestion for a field the verification layer did NOT accept as read.
+
+    The suggestion is shown highlighted and must be confirmed by the staff member, then approved
+    by a manager; it never changes the verified reading itself. Returns None when the evidence
+    points elsewhere (POS value in a ledger field, cup-count table, conflicting sources).
+    """
+    if reading.status == 'read' or reading.status in {'not_present', 'unreadable'}:
+        return None
+    if reading.source == 'both_conflicting' or any(marker in reading.review_reason for marker in _NO_SUGGESTION_REASONS):
+        return None
+    handwritten = reading.source == 'handwritten_ledger'
+    raw = (reading.raw_text or '').strip()
+    terms = [t for t in re.split(r'\s*\+\s*', raw) if re.search(r'\d', t)] if raw else []
+    if terms:
+        parsed = [_vnd_term(t, handwritten) for t in terms]
+        if any(p is None for p in parsed):
+            return None
+        value = sum(p[0] for p in parsed)
+        scaled = any(p[1] for p in parsed)
+        steps = []
+        if len(terms) > 1:
+            steps.append('cộng các số hạng')
+        if scaled:
+            steps.append('quy đổi số viết tắt ×1.000')
+        basis = f'Sổ ghi "{raw}"' if handwritten else f'Đọc được "{raw}"'
+        basis += (' → ' + ', '.join(steps) if steps else '') + f' = {value:,.0f} đ'.replace(',', '.')
+    elif reading.value is not None:
+        value = reading.value * 1000 if handwritten and 0 < abs(reading.value) < 100_000 else reading.value
+        basis = f'Mô hình đọc {reading.value:,} → {value:,.0f} đ'.replace(',', '.')
+    else:
+        return None
+    if name != 'cash_diff_vnd' and value < 0:
+        return None
+    return {'value': value, 'basis': basis, 'reason': reading.review_reason}
+
+
+def suggest_values(fields: dict[str, MoneyReading]) -> dict[str, dict[str, Any]]:
+    return {name: hint for name, reading in fields.items() if (hint := suggest_value(name, reading))}
+
+
 def check_ocr_consistency(result: ShiftReading) -> dict[str, Any]:
     """Verify arithmetic consistency between line items and totals without modifying read numbers."""
     discrepancies: list[dict[str, Any]] = []
@@ -597,6 +660,7 @@ def merge_image_extractions(results, *, names, shas, shift_hint, target_date):
     output = dict(good[0][1])
     output.update({key: reading.value if reading.status == 'read' else None for key, reading in merged.fields.items()})
     output.update(field_readings={key: reading.model_dump() for key, reading in merged.fields.items()},
+                  suggestions=suggest_values(merged.fields),
                   field_candidates=provenance, document_date=merged.document_date, document_type=merged.document_type,
                   warnings=merged.warnings, consistency=consistency,
                   raw_text_extracted=merged.raw_text, bank_transfer_formula=merged.bank_transfer_formula,
@@ -899,6 +963,7 @@ def _finish_extraction(result, valid_images, shift_hint, target_date, attempts, 
         'shift_code': shift_hint,
         **{key: value.value if value.status == 'read' else None for key, value in result.fields.items()},
         'field_readings': {key: value.model_dump() for key, value in result.fields.items()},
+        'suggestions': suggest_values(result.fields),
         'regions': regions,
         'consistency': consistency,
         'image_quality': image_quality,

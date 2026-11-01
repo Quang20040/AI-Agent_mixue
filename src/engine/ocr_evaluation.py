@@ -526,6 +526,20 @@ def _summarize(case_reports: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def suggestion_score(extracted: dict[str, Any], ground_truth: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """How good are the highlighted pre-fill suggestions? Every one stays flagged for a person to check."""
+    rows = []
+    for field, hint in (extracted.get('suggestions') or {}).items():
+        expected = (ground_truth.get(field) or {}).get('expected_value')
+        rows.append({'field': field, 'suggested': hint['value'], 'expected': expected,
+                     'correct': expected is not None and hint['value'] == expected})
+    return {'total': len(rows), 'correct': sum(r['correct'] for r in rows), 'rows': rows}
+
+
+def _summarize_suggestions(scores: list[dict[str, Any]]) -> dict[str, int]:
+    return {'total': sum(x['total'] for x in scores), 'correct': sum(x['correct'] for x in scores)}
+
+
 def run_ocr_benchmark(mode: str = 'scripted', settings=None) -> dict[str, Any]:
     """Run the four-image error-taxonomy benchmark.
 
@@ -545,7 +559,7 @@ def run_ocr_benchmark(mode: str = 'scripted', settings=None) -> dict[str, Any]:
     if mode not in {'scripted', 'live'}:
         raise ValueError("mode must be 'scripted' or 'live'")
     images = make_synthetic_test_images()
-    verified_reports, raw_reports, cases = [], [], []
+    verified_reports, raw_reports, cases, suggestion_scores = [], [], [], []
     for case in benchmark_cases():
         model = _ScriptedReader(case['reading']) if mode == 'scripted' else None
         extracted = extract_image(image_bytes=images[case['image_key']], model=model,
@@ -562,7 +576,9 @@ def run_ocr_benchmark(mode: str = 'scripted', settings=None) -> dict[str, Any]:
                                            case['ground_truth'], case['expect_inconsistency'])
         verified_reports.append(verified)
         raw_reports.append(raw)
+        suggestion_scores.append(suggestion_score(extracted, case['ground_truth']))
         entry.update(
+            suggestions=suggestion_scores[-1],
             document_type=extracted.get('document_type'),
             image_quality=extracted.get('image_quality', {}),
             verified=verified,
@@ -576,6 +592,7 @@ def run_ocr_benchmark(mode: str = 'scripted', settings=None) -> dict[str, Any]:
         'cases': cases,
         'verified_summary': _summarize(verified_reports),
         'raw_summary': _summarize(raw_reports),
+        'suggestion_summary': _summarize_suggestions(suggestion_scores),
         'taxonomy_order': list(TAXONOMY_7),
         'taxonomy_labels': TAXONOMY_LABELS_VI,
         'note': ('Kiểm thử trên 4 ảnh tổng hợp có đáp án; bản đọc thô mô phỏng các lỗi đã gặp trên ảnh thật của cửa hàng. '
@@ -651,7 +668,7 @@ def run_dataset_benchmark(
     dataset = load_ocr_dataset(path)
     folder = Path(readings_dir) if readings_dir else Path(path).parent / 'readings'
     cfg = settings or AgentSettings.from_env()
-    verified_reports, raw_reports, cases, runtime = [], [], [], []
+    verified_reports, raw_reports, cases, runtime, suggestion_scores = [], [], [], [], []
     for case in dataset['cases']:
         image_path = dataset_image_path(case['image'])
         entry = {'case_id': case['case_id'], 'image_key': case['case_id'], 'image_path': str(image_path),
@@ -696,7 +713,9 @@ def run_dataset_benchmark(
                                            case.get('expect_inconsistency', False))
         verified_reports.append(verified)
         raw_reports.append(raw)
-        entry.update(document_type=extracted.get('document_type'), image_quality=extracted.get('image_quality', {}),
+        suggestion_scores.append(suggestion_score(extracted, gt))
+        entry.update(suggestions=suggestion_scores[-1],
+                     document_type=extracted.get('document_type'), image_quality=extracted.get('image_quality', {}),
                      verified=verified, raw=raw, field_readings=extracted.get('field_readings', {}),
                      discrepancies=extracted.get('consistency', {}).get('discrepancies', []))
         cases.append(entry)
@@ -706,6 +725,7 @@ def run_dataset_benchmark(
         'dataset': dataset.get('dataset'),
         'label_source': dataset.get('label_source'),
         'cases': cases,
+        'suggestion_summary': _summarize_suggestions(suggestion_scores),
         'verified_summary': _summarize(verified_reports),
         'raw_summary': _summarize(raw_reports),
         'taxonomy_order': list(TAXONOMY_7),

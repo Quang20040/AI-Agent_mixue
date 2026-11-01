@@ -637,6 +637,43 @@ class ConversationStore:
             consistency=consistency,
         )
 
+    # --- Staff submissions: a staff member checks the pre-filled form and hands it to a manager ---
+    # These read across owners on purpose; the agent only calls them for ADMIN actors of the same store.
+
+    def list_submitted_ocr_drafts(self, store_id: str) -> list[dict[str, Any]]:
+        with self.connect() as db:
+            db.row_factory = sqlite3.Row
+            rows = db.execute(
+                "SELECT * FROM ocr_shift_drafts WHERE status='SUBMITTED' AND store_id=? ORDER BY updated_at DESC LIMIT 50",
+                (store_id,),
+            ).fetchall()
+        return [self._deserialize_draft(row) for row in rows]
+
+    def get_ocr_draft_by_id(self, draft_id: str) -> dict[str, Any] | None:
+        with self.connect() as db:
+            db.row_factory = sqlite3.Row
+            row = db.execute('SELECT * FROM ocr_shift_drafts WHERE draft_id=?', (draft_id,)).fetchone()
+        return self._deserialize_draft(row) if row else None
+
+    def mark_ocr_draft(self, draft_id: str, status: str, meta_update: dict[str, Any] | None = None) -> None:
+        stamp = datetime.now(timezone.utc).isoformat()
+        with self.connect() as db:
+            row = db.execute('SELECT meta_json FROM ocr_shift_drafts WHERE draft_id=?', (draft_id,)).fetchone()
+            meta = {**json.loads((row[0] if row else None) or '{}'), **(meta_update or {})}
+            db.execute('UPDATE ocr_shift_drafts SET status=?, meta_json=?, updated_at=? WHERE draft_id=?',
+                       (status, json.dumps(meta, ensure_ascii=False), stamp, draft_id))
+
+    def attachment_paths(self, file_ids: list[str]) -> list[str]:
+        if not file_ids:
+            return []
+        with self.connect() as db:
+            rows = db.execute(
+                f"SELECT file_id, storage_path FROM chat_attachments WHERE file_id IN ({','.join('?' * len(file_ids))})",
+                tuple(file_ids),
+            ).fetchall()
+        paths = dict(rows)
+        return [paths[f] for f in file_ids if f in paths and Path(paths[f]).is_file()]
+
     def set_ocr_draft_status(self, owner: str, ident: str, status: str) -> dict[str, Any] | None:
         self.require_owned(owner, ident)
         current = self.get_active_ocr_draft(owner, ident)

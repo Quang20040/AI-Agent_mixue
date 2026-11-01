@@ -41,8 +41,8 @@ Chỉ vào dải ①→⑥ ở đầu trang: chất lượng ảnh → tách vù
 2. Trình bày kết quả:
    - Badge loại chứng từ **✍️ Sổ tay viết tay**, badge độ nét ảnh.
    - Bảng từng trường: **Nguồn** (🧾 POS / ✍️ sổ tay), **Trạng thái** (✅ Đọc rõ · ⚠️ Cần kiểm tra · ❌ Không có/Mờ), **Đọc thô** (`653`, `962 + 629`), **Chuẩn hóa** và **Lý do cần xác nhận**.
-   - Nhấn mạnh: `653` không có đơn vị → để trống, *không tự nhân 1.000*; `962 + 629` gắn **Σ biểu thức** → *không tự cộng*.
-   - Biểu mẫu bên dưới: ô **Tiền mặt thu tại quầy** đang trống — "trống nghĩa là chưa xác nhận, không phải 0".
+   - Nhấn mạnh: `653` không có đơn vị và `962 + 629` là **Σ biểu thức** → tầng kiểm chứng **không công nhận** là số đã đọc (vẫn `uncertain`), nhưng biểu mẫu được **điền sẵn gợi ý** 653.000 / 1.591.000 và **tô vàng**, kèm lý do quy đổi.
+   - Nhân viên phải tick *"đã kiểm tra các ô tô vàng"* mới gửi được; Quản lý mở báo cáo trong hộp **📥 Nhân viên gửi chờ duyệt** → `interrupt()` → Phê duyệt mới ghi sổ. Câu cần nói: *"Máy điền giúp cho nhanh, nhưng số chưa chắc luôn bị đánh dấu và luôn qua hai người."*
    - Nút lưu là **📨 Gửi phê duyệt lưu báo cáo (LangGraph interrupt)**: form trên trang cũng đi qua đúng luồng dự thảo → `interrupt()` như trong chat; thẻ phê duyệt hiện ngay trên trang. Tài khoản nhân viên thấy nút này bị khóa.
 3. Bấm **🧾 Hóa đơn POS** → đọc → chỉ cảnh báo **⚖️ Đối soát số học** nếu tổng thành phần lệch *Thực thu POS* (hệ thống giữ nguyên số đọc, không sửa cho khớp).
 
@@ -93,7 +93,7 @@ Lướt nhanh nhóm **🛠️**: *Báo cáo & sổ kho* (doanh thu POS để đ�
 
 | Câu hỏi | Trả lời ngắn | Chứng minh |
 |---|---|---|
-| Nếu mô hình đọc `653` mà quán ghi theo nghìn đồng? | Không tự nhân; để trống, ghi `unit_explicit=False` và lý do; người dùng xác nhận `653000` | Bước 2.2, `test_distinguishes_literal_reading_from_calculation_and_ambiguous_unit` |
+| Nếu mô hình đọc `653` mà quán ghi theo nghìn đồng? | Số đọc giữ nguyên `653`, `unit_explicit=False`; biểu mẫu điền **gợi ý** 653.000 tô vàng; nhân viên kiểm tra, Quản lý duyệt. Benchmark: gợi ý đúng 9/10, ô sai duy nhất (ảnh mờ) vẫn nằm trong ô vàng | Bước 2.2, `test_distinguishes_literal_reading_from_calculation_and_ambiguous_unit` |
 | LLM có thể tự gọi công cụ lưu doanh thu không? | Không có công cụ lưu trực tiếp; chỉ có `request_shift_draft_confirmation` (effect `approval`) dừng ở `interrupt()` | `tests/test_chat_ocr_hitl_flow.py` |
 | Nhân viên giả danh quản lý? | Vai trò lấy từ `Actor` do máy chủ cấp; `authorize` kiểm tra mọi lệnh gọi | `test_rbac_rechecks_even_unadvertised_tools` |
 | Dự thảo bị sửa trong lúc chờ duyệt? | Dự thảo được băm khi yêu cầu và kiểm lại khi tiếp tục; khác băm → không duyệt | `test_approval_changed_during_pause_is_not_approved` |
