@@ -118,7 +118,8 @@
 .px-ref { display: inline-block; margin: 0 6px 6px 0; font: 500 12px ui-monospace, 'JetBrains Mono', monospace; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 2px 6px; overflow-wrap: anywhere; }
 
 /* ---------- Layout pass 2: match the approved canvas ---------- */
-.stApp, [data-testid="stAppViewContainer"], .stMain { background: var(--px-ground) !important; }
+/* Not on the login screen: it keeps its illustrated snow scene. */
+.stApp:not(:has(.login-welcome)), .stApp:not(:has(.login-welcome)) [data-testid="stAppViewContainer"], .stApp:not(:has(.login-welcome)) .stMain { background: var(--px-ground) !important; }
 .stApp, .stApp button, .stApp input, .stApp textarea { font-family: 'Be Vietnam Pro', 'Inter', system-ui, sans-serif; }
 [data-testid="stSidebar"] { min-width: 264px !important; max-width: 280px !important; }
 [data-testid="stSidebar"] > div:first-child { padding-top: 6px; }
