@@ -1,11 +1,13 @@
-# Deploy lên Render (dùng thật cho quán)
+# Deploy lên Render — bản trả phí (dùng thật cho quán)
 
-Cấu hình nằm trong `render.yaml`: dịch vụ Docker, gói **Starter**, vùng Singapore, ổ đĩa bền vững 1 GB gắn ở `/var/data`.
+> Muốn **0 đồng**: xem `docs/DEPLOY_FREE.md`. `render.yaml` ở gốc repo giờ là bản Free để demo; bản trả phí dưới đây nằm ở `deploy/render-paid.yaml`.
+
+Cấu hình nằm trong `deploy/render-paid.yaml`: dịch vụ Docker, gói **Starter**, vùng Singapore, ổ đĩa bền vững 1 GB gắn ở `/var/data`.
 Mọi dữ liệu quán ghi ra (CSDL, báo cáo chốt ca, ảnh chứng từ, checkpoint LangGraph, nhật ký audit) nằm trên ổ đĩa này nên không mất khi deploy lại.
 
 ## Lần đầu
 
-1. Render → **New → Blueprint** → chọn repo `Quang20040/AI-Agent_mixue`, nhánh `fix/quality-improvement`.
+1. Render → **New → Blueprint** → chọn repo `Quang20040/AI-Agent_mixue`, nhánh `fix/quality-improvement`, ô **Blueprint Path** nhập `deploy/render-paid.yaml`.
 2. Nhập các biến bí mật Render hỏi:
    - `OWNER_USERNAME`: tên đăng nhập chủ quán (3–30 ký tự chữ thường/số/gạch dưới), ví dụ `chuquan`.
    - `OWNER_FULL_NAME`: tên hiển thị.

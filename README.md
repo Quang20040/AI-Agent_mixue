@@ -140,6 +140,7 @@ streamlit run src/dashboard/app.py            # http://localhost:8501
 - Bản cài mới không tạo tài khoản mật khẩu mặc định: `python scripts/provision_admin.py quanly --name "Quản lý"` (mật khẩu 12–128 ký tự; thêm `--reset-existing` để đặt lại). Chỉ bật `APP_DEMO_MODE=true` khi trình diễn — chế độ này hiện các nút đăng nhập nhanh.
 - Đọc ảnh bằng Vision LLM cần `LLM_ENABLED=true`, nhà cung cấp/mô hình và `ALLOW_EXTERNAL_DATA_TRANSFER=true` trong `.env` (xem `.env.example`). Khi tắt, hệ thống trả `OCR_DISABLED` và **không** điền số mẫu; Agent vẫn chạy ở chế độ `offline_rules`.
 - `DATABASE_URL` lấy từ môi trường hoặc `.env`; mặc định SQLite trong `data/`. PostgreSQL/MCP: [docs/POSTGRES_MCP.md](docs/POSTGRES_MCP.md).
+- Deploy: **miễn phí** (máy ở quán + Tailscale Funnel, hoặc Render Free để demo) — [docs/DEPLOY_FREE.md](docs/DEPLOY_FREE.md); trả phí có ổ đĩa bền vững — [docs/DEPLOY_RENDER.md](docs/DEPLOY_RENDER.md).
 
 Thanh điều hướng: **Trang chủ** → **⭐ 2 trụ cột AI** (💬 Tuyết Vương AI · 📸 Chốt ca & Đối soát OCR) → **🛠️ Dữ liệu & công cụ phụ trợ vận hành** → **⚙️ Quản trị**. Nhân viên thử việc chỉ thấy Trang chủ, AI Agent và Tem & công thức.
 

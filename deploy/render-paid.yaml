@@ -1,0 +1,55 @@
+# Render Blueprint TRẢ PHÍ (~7,25 USD/tháng) — bản dùng thật cho quán, có ổ đĩa bền vững.
+# Dùng: Render → New → Blueprint → mục "Blueprint Path" nhập deploy/render-paid.yaml.
+#
+# - Gói "starter" vì chỉ gói trả phí mới gắn được ổ đĩa bền vững (persistent disk).
+# - Mọi dữ liệu quán ghi ra (CSDL SQLite, báo cáo chốt ca, ảnh chứng từ, checkpoint LangGraph,
+#   nhật ký audit) nằm trên ổ /var/data nên KHÔNG mất khi deploy lại.
+# - Tài khoản demo (mật khẩu 123/123456) bị khóa ở production; tài khoản chủ quán được tạo
+#   ở lần khởi động đầu từ OWNER_USERNAME / OWNER_INITIAL_PASSWORD và buộc đổi mật khẩu khi đăng nhập.
+# Các biến "sync: false" được nhập tay trên Render lúc tạo Blueprint, không nằm trong Git.
+services:
+  - type: web
+    name: mixue-beverageops-ai
+    runtime: docker
+    plan: starter
+    region: singapore
+    branch: fix/quality-improvement
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /_stcore/health
+    # Chỉ deploy khi CI (test + Docker smoke) trên nhánh này đã pass.
+    autoDeployTrigger: checksPass
+    disk:
+      name: mixue-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: PORT
+        value: "8501"
+      - key: APP_ENV
+        value: production
+      - key: APP_DEMO_MODE
+        value: "false"
+      - key: PERSIST_DIR
+        value: /var/data
+      - key: STORE_ID
+        value: "2132"
+      - key: TZ
+        value: Asia/Ho_Chi_Minh
+      - key: POSTGRES_MCP_ENABLED
+        value: "false"
+      - key: LLM_ENABLED
+        value: "true"
+      - key: LLM_PROVIDER
+        value: gemini
+      - key: LLM_MODEL
+        value: gemini-2.5-flash
+      - key: ALLOW_EXTERNAL_DATA_TRANSFER
+        value: "true"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OWNER_USERNAME
+        sync: false
+      - key: OWNER_FULL_NAME
+        sync: false
+      - key: OWNER_INITIAL_PASSWORD
+        sync: false
