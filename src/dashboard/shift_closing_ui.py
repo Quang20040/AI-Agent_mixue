@@ -29,22 +29,19 @@ from src.engine.shift_service import (
 def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = False):
     """Hiển thị toàn bộ phân hệ Chốt Ca Bằng Ảnh & Đối Soát Doanh Thu."""
     vocr.install_css()
-    st.subheader("📸 Chốt Ca & Đối Soát OCR — Verifiable Vision OCR (chữ viết tay & hóa đơn POS)")
-    st.caption("Trụ cột 1 của đề tài · Mỗi con số đi qua 6 bước kiểm chứng trước khi được phép vào biểu mẫu; "
-               "trường mơ hồ được để trống kèm lý do để người dùng xác nhận.")
-    vocr.render_pipeline_steps()
+    st.markdown(
+        '<div class="px-page-head" style="margin:2px 0 6px"><span class="px-eyebrow">Trụ cột 1 · Verifiable Vision OCR</span>'
+        '<h2 style="margin:2px 0 4px;padding:0;font-size:26px;font-weight:800;color:#1f2430">Chốt ca &amp; Đối soát OCR</h2>'
+        '<p style="margin:0;font-size:14px;color:#4b5563">Mô hình chỉ đọc; quy tắc kiểm chứng quyết định số nào được vào biểu mẫu. '
+        'Số chưa chắc để trống chờ bạn xác nhận, và chỉ ghi sổ khi Quản lý phê duyệt.</p></div>',
+        unsafe_allow_html=True)
+    steps_slot = st.empty()
 
-    st.markdown("""
-    <div style="background:#fef2f2; border-left:4px solid #ef4444; padding:12px 16px; border-radius:6px; margin-bottom:18px;">
-        <div style="font-weight:600; color:#991b1b; margin-bottom:4px;">📋 Quy chế Chốt ca & Bàn giao doanh thu Mixue 39 Tôn Quang Phiệt</div>
-        <div style="font-size:13px; color:#7f1d1d; line-height:1.5;">
-            • <b>Ca sáng (8h - 13h):</b> Bàn giao tiền mặt quầy, doanh thu chuyển khoản, app Shopee/Grab/Be và két cố định 1,000,000 đ.<br>
-            • <b>Ca chiều (13h - 18h):</b> Bàn giao tương tự ca sáng, ghi rõ số tiền mặt chênh lệch (dư/thiếu) nếu có.<br>
-            • <b>Ca tối (18h - 23h):</b> Tổng hợp toàn bộ doanh thu trong ngày, trừ các khoản chi phát sinh (ship hàng, sạc hotline) và chốt số cầm tiền mặt.<br>
-            • <b>Agent AI:</b> Tự động đọc ảnh sổ chốt ca viết tay hoặc hóa đơn máy POS, tách rõ nguồn chứng từ, kiểm tra chênh lệch và chờ xác nhận.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    with st.expander("📋 Quy chế chốt ca & bàn giao doanh thu", expanded=False):
+        st.markdown(
+            "- **Ca sáng (8h–13h):** bàn giao tiền mặt quầy, chuyển khoản, app Shopee/Grab/Be và két cố định 1.000.000 đ.\n"
+            "- **Ca chiều (13h–18h):** như ca sáng, ghi rõ tiền mặt dư/thiếu nếu có.\n"
+            "- **Ca tối (18h–23h):** tổng hợp doanh thu cả ngày, trừ khoản chi phát sinh và chốt số cầm tiền mặt.")
 
     # 1. BỘ CHỌN NGÀY LÀM VIỆC
     col_d1, col_d2 = st.columns([1, 2.5])
@@ -235,6 +232,7 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                         )
                     st.session_state.ocr_review_started = time.time()
                 extracted = st.session_state.get('extracted_cache') or {}
+                vocr.render_pipeline_steps(extracted, slot=steps_slot)
                 if extracted.get('status') == 'NEEDS_REVIEW':
                     count_txt = f" · {extracted.get('image_count')} ảnh" if extracted.get('image_count', 1) > 1 else ""
                     st.markdown(f"**Loại chứng từ:** {vocr.document_badge(extracted.get('document_type'))}{count_txt}",

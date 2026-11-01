@@ -86,6 +86,8 @@ def install_brand():
     if mockup_path.is_file():
         st.html('<style>' + mockup_path.read_text(encoding='utf-8') + '</style>')
     st.html('<style>' + (HERE / 'dashboard.css').read_text(encoding='utf-8') + '</style>')
+    # Redesign layer (two thesis pillars first); loaded last so it wins over older rules.
+    st.html('<style>' + (HERE / 'pillars.css').read_text(encoding='utf-8') + '</style>')
     _motion_component()(key='mixue_motion_controller')
 
 
@@ -281,24 +283,125 @@ PILLARS = (
 )
 
 
+@st.cache_data(ttl=600, show_spinner=False)
+def _benchmark_headline():
+    """Raw vs verified errors on the labelled synthetic set (deterministic, cached)."""
+    from src.engine.ocr_evaluation import run_ocr_benchmark
+    report = run_ocr_benchmark('scripted')
+    return report['raw_summary']['errors_reaching_form'], report['verified_summary']['errors_reaching_form']
+
+
+def _vnd(value):
+    return f'{value:,.0f}'.replace(',', '.')
+
+
+def _home_state(agent, user_role, user_name):
+    """Live numbers for the greeting band and the pillar cards (never invented)."""
+    from src.auth import is_admin_role
+    from src.engine.plan_service import list_plans
+    from src.engine.shift_service import get_all_shift_reports, get_daily_closing_summary, latest_shift_report_date
+    state = {'pending_approval': None, 'draft': None, 'plans_waiting': 0, 'stock_waiting': 0}
+    if agent is not None:
+        try:
+            history = agent.conversation_history(user_role, user_name, user_id=st.session_state.get('username', user_name))
+            state.update(pending_approval=history.get('pending_approval'), draft=history.get('pending_ocr_draft'))
+        except Exception:  # noqa: BLE001 - the home page must render even if the agent store is unavailable
+            pass
+        rt = agent._runtime()
+        state['tools_allowed'] = sum(1 for spec in rt.tools.values() if spec.allowed(user_role))
+        state['online'] = bool(getattr(agent, 'is_llm_online', lambda: False)())
+    if is_admin_role(user_role):
+        from src.engine.daily_stock_service import get_pending_requests
+        state['plans_waiting'] = sum(1 for p in list_plans() if p.get('status') == 'PENDING_APPROVAL')
+        state['stock_waiting'] = len(get_pending_requests())
+    latest = latest_shift_report_date()
+    summary = get_daily_closing_summary(latest)
+    state.update(latest=latest, reports=len(get_all_shift_reports(latest)), summary=summary)
+    state['bench_raw'], state['bench_verified'] = _benchmark_headline()
+    return state
+
+
+def render_home_greeting(agent, user_role, user_name):
+    """Compact red band: greeting, what needs the user now, and Tuyết Vương."""
+    from src.auth import OCR_PAGE, CHAT_PAGE, can_access_page
+    state = _home_state(agent, user_role, user_name)
+    st.session_state['_home_state'] = state
+    now = datetime.now(timezone(timedelta(hours=7)))
+    part = 'buổi sáng' if now.hour < 11 else 'buổi trưa' if now.hour < 14 else 'buổi chiều' if now.hour < 18 else 'buổi tối'
+    first = (user_name or 'bạn').split()[-1]
+    tasks = []
+    if state['pending_approval']:
+        tasks.append((CHAT_PAGE, f"Duyệt {state['pending_approval'].get('plan_id', 'yêu cầu')}", 'light'))
+    if state['draft']:
+        tasks.append((CHAT_PAGE, f"Dự thảo OCR còn {len(state['draft'].get('missing_fields') or [])} trường chờ xác nhận", 'light'))
+    if state['plans_waiting']:
+        tasks.append((CHAT_PAGE, f"{state['plans_waiting']} kế hoạch sơ chế/nhập hàng chờ duyệt", 'ghost'))
+    if state['stock_waiting']:
+        tasks.append(('Báo cáo & kho', f"{state['stock_waiting']} lệnh kho chờ duyệt", 'ghost'))
+    if can_access_page(user_role, OCR_PAGE):
+        tasks.append((OCR_PAGE, 'Chốt ca từ ảnh sổ', 'ghost'))
+    count = sum(1 for _, _, tone in tasks if tone == 'light') + state['plans_waiting'] + state['stock_waiting']
+    headline = (f'Chào {part}, {first}! Có {count} việc đang chờ bạn.' if count
+                else f'Chào {part}, {first}! Mọi phê duyệt đã xong.')
+    if state['draft']:
+        bubble = f"Dự thảo <b>{escape(state['draft']['draft_id'])}</b> còn số chưa rõ đơn vị — mình để trống chờ bạn xác nhận nhé."
+    elif state['pending_approval']:
+        bubble = 'Luồng đang dừng ở bước phê duyệt. Bạn xem và bấm <b>Phê duyệt</b> giúp mình nhé.'
+    else:
+        bubble = 'Hết ca thì chụp sổ chốt ca gửi mình. Số nào chưa chắc mình sẽ để trống cho bạn xác nhận.'
+    buttons = ''.join(f'<button type="button" class="px-link {tone}" data-command-page="{escape(nav_label(page))}">{escape(label)}</button>'
+                      for page, label, tone in tasks[:4])
+    flakes = ''.join(f'<i class="px-flake" style="left:{left}%;top:{top}%">✦</i>'
+                     for left, top in ((8, 18), (22, 72), (47, 12), (58, 78), (71, 30), (90, 64)))
+    st.markdown(f'''<section class="px-greet" aria-label="Lời chào và việc cần làm">{flakes}
+    <div class="px-greet-copy"><span class="px-eyebrow">MIXUE ICE CREAM &amp; TEA · CỬA HÀNG 2132 · {now:%d/%m/%Y}</span>
+    <h2>{escape(headline)}</h2><div class="px-greet-tasks">{buttons}</div></div>
+    <div class="px-greet-art"><div class="px-bubble">{bubble}</div>
+    <img class="px-mascot" src="{asset('snow-king-cutout.png')}" alt="Linh vật Tuyết Vương"></div></section>''', unsafe_allow_html=True)
+
+
 def render_pillars(user_role):
-    """The two technical pillars of the thesis, first on the home page."""
+    """The two technical pillars of the thesis, with live status, first on the home page."""
     from src.auth import get_allowed_pages
     pages = get_allowed_pages(user_role)
     visible = [p for p in PILLARS if p[0] in pages]
     if not visible:
         return
+    state = st.session_state.get('_home_state') or {}
     st.markdown('<div class="section-heading"><div><span class="mx-eyebrow">ĐỒ ÁN TỐT NGHIỆP · 2 TRỤ CỘT KỸ THUẬT</span>'
-                '<h2>AI Agent dựa trên bằng chứng cho vận hành cửa hàng</h2></div><span>Nhận dạng chứng từ có kiểm chứng ✦ Agent có người phê duyệt</span></div>',
+                '<h2>AI Agent dựa trên bằng chứng</h2></div><span>Mọi số ghi sổ đều có bằng chứng và người phê duyệt</span></div>',
                 unsafe_allow_html=True)
+    summary = state.get('summary') or {}
+    latest = state.get('latest')
     columns = st.columns(len(visible), gap='medium')
     for column, (page, key, tag, title, lead, bullets) in zip(columns, visible):
         with column, st.container(border=True, key=f'{key}_card'):
-            items = ''.join(f'<li>{escape(b)}</li>' for b in bullets)
-            st.markdown(f'<div class="mx-pillar"><span class="mx-tag">{tag}</span><h3 style="margin:.35rem 0 .2rem">{escape(title)}</h3>'
-                        f'<p style="margin:0 0 .4rem;color:#475569">{escape(lead)}</p><ul style="margin:0 0 .3rem 1.1rem;font-size:13.5px;line-height:1.55">{items}</ul></div>',
-                        unsafe_allow_html=True)
-            st.button(f'Mở {NAV_LABELS.get(page, page)} ↗', key=key, type='primary', use_container_width=True,
+            if key == 'pillar_open_ocr':
+                icon = ui_icon('search')
+                variance = summary.get('variance_pos_vnd')
+                stats = [('Ca đã chốt · ' + (f'{latest:%d/%m}' if latest else '—'), str(state.get('reports', 0)), state.get('reports', 0)),
+                         ('Lệch POS ↔ sổ', f"{variance:+,.0f} đ".replace(',', '.') if variance is not None else '—', None),
+                         ('Số sai lọt vào form', f"{state.get('bench_raw', '—')} → {state.get('bench_verified', '—')}", None)]
+                badge = f'<span class="px-pill warn">{len(state["draft"].get("missing_fields") or [])} trường chờ xác nhận</span>' if state.get('draft') else '<span class="px-pill ok">Không có dự thảo treo</span>'
+                extra = ('<p>Tách vùng POS / sổ tay, kiểm tra ảnh mờ, không tự nhân 1.000, không tự cộng '
+                         '<code>962 + 629</code>, đối soát cộng ngang và chéo POS.</p>')
+            else:
+                icon = ui_icon('chat')
+                waiting = (1 if state.get('pending_approval') else 0) + state.get('plans_waiting', 0)
+                stats = [('Phê duyệt đang chờ', str(waiting), waiting),
+                         ('Công cụ được phép', str(state.get('tools_allowed', '—')), state.get('tools_allowed')),
+                         ('Chế độ', 'AI Online' if state.get('online') else 'Offline', None)]
+                badge = '<span class="px-pill solid">⏸ interrupt đang chờ</span>' if state.get('pending_approval') else '<span class="px-pill red">Sẵn sàng</span>'
+                nodes = ['guard', 'model / offline', 'authorize', 'tools', 'approval']
+                chain = '<span class="px-arrow" aria-hidden="true">→</span>'.join(f'<span class="px-node">{n}</span>' for n in nodes)
+                extra = f'<div class="px-chain" aria-label="Đồ thị LangGraph">{chain}</div><p>{escape(lead)}</p>'
+            cells = ''.join(
+                f'<div class="px-stat"><small>{escape(label)}</small><b' + (f' data-count="{count}"' if isinstance(count, int) else '') + f'>{escape(value)}</b></div>'
+                for label, value, count in stats)
+            st.markdown(f'''<div class="px-pillar"><div class="px-pillar-head"><span class="px-pillar-icon">{icon}</span>
+            <div style="flex:1"><span class="px-eyebrow">{tag}</span><h3>{escape(title)}</h3></div>{badge}</div>
+            <div class="px-stats">{cells}</div>{extra}</div>''', unsafe_allow_html=True)
+            st.button(f'Mở {NAV_LABELS.get(page, page)} →', key=key, type='primary', use_container_width=True,
                       on_click=navigate_to, args=(page,))
 
 
@@ -808,6 +911,7 @@ def _render_chat_conversation(agent, role, user_name, history_height=250, key_su
             reply_msg = {'role': 'assistant', 'content': response['text'], 'evidence': response.get('evidence_refs', [])}
             st.session_state.agent_pending_approval = response.get('pending_approval')
             st.session_state.agent_execution_mode = response.get('execution_mode')
+            st.session_state.agent_last_tool = response.get('tool_called')
         except Exception:
             reply_msg = {'role': 'assistant', 'content': 'Mình chưa truy xuất được dữ liệu. Bạn hãy thử lại hoặc kiểm tra kết nối dữ liệu cửa hàng.'}
         st.session_state.chat_history_vi.append(reply_msg)
@@ -1038,7 +1142,11 @@ def render_chat(agent, role, user_name, mode="auto"):
 
     with st.container(key="chat_panel_box"):
         title, mode_col, action = st.columns([3.2, 1.3, 1.1])
-        title.markdown('### Tuyết Vương AI')
+        title.markdown(
+            f'<div class="px-chat-head"><img src="{asset("snow-king-cutout.png")}" alt="">'
+            '<div><span class="px-eyebrow">TRỤ CỘT 2 · LANGGRAPH AGENT</span><h3>Tuyết Vương AI</h3></div></div>',
+            unsafe_allow_html=True,
+        )
         mode_label = '🟢 AI Online (Gemini)' if is_online_now else '⚡ Chế độ Nhanh (Offline)'
         mode_col.button(
             mode_label,
@@ -1051,15 +1159,64 @@ def render_chat(agent, role, user_name, mode="auto"):
         if llm_notice := st.session_state.pop("llm_mode_notice", None):
             st.info(llm_notice)
         render_action_chips()
-        _render_chat_conversation(
-            agent,
-            clean_role,
-            user_name,
-            history_height=None if effective_mode == "fullscreen" else 280,
-        )
+        if effective_mode == "fullscreen":
+            main_col, rail_col = st.columns([2.6, 1], gap="medium")
+            with main_col:
+                _render_chat_conversation(agent, clean_role, user_name, history_height=None)
+            with rail_col:
+                render_agent_rail(agent, clean_role, user_name, is_online_now)
+        else:
+            _render_chat_conversation(agent, clean_role, user_name, history_height=280)
         render_quick_questions()
         with st.expander('Dữ liệu và chức năng có thể tra cứu'):
             render_chat_context(is_admin)
+
+
+TRACE_NODES = (('guard', 'Chặn injection / dữ liệu nhạy cảm'), ('model', 'Gemini chọn công cụ hoặc offline router'),
+               ('authorize', 'Kiểm tra RBAC theo vai trò'), ('tools', 'Gọi công cụ, gắn bằng chứng'),
+               ('approval', 'interrupt() chờ Admin'))
+
+
+def render_agent_rail(agent, role, user_name, is_online):
+    """Right rail: where the LangGraph run stopped, what this role may do, and the last evidence."""
+    from src.auth import is_admin_role
+    try:
+        saved = agent.conversation_history(role, user_name, user_id=st.session_state.get('username', user_name))
+    except Exception:  # noqa: BLE001 - the rail is informative only
+        saved = {}
+    pending = saved.get('pending_approval')
+    draft = saved.get('pending_ocr_draft')
+    last_tool = st.session_state.get('agent_last_tool')
+    asked = any(m.get('role') == 'user' for m in saved.get('messages', []))
+    rows = []
+    for node, hint in TRACE_NODES:
+        if node == 'approval':
+            state, mark, note = ('pause', '⏸', 'đang chờ') if pending else ('idle', '', 'khi ghi sổ')
+        elif not asked:
+            state, mark, note = 'idle', '', ''
+        else:
+            state, mark = '', '✓'
+            note = escape(last_tool) if node == 'tools' and last_tool else ('online' if node == 'model' and is_online else 'offline' if node == 'model' else '')
+        rows.append(f'<li title="{escape(hint)}"><span class="dot {state}">{mark}</span>{node}<small>{note}</small></li>')
+    rt = agent._runtime()
+    allowed = [spec for spec in rt.tools.values() if spec.allowed(role)]
+    effects = {}
+    for spec in allowed:
+        effects[spec.effect] = effects.get(spec.effect, 0) + 1
+    effect_vi = {'read': 'Chỉ đọc', 'draft': 'Tạo dự thảo', 'approval': 'Cần phê duyệt'}
+    rbac = ''.join(f'<div class="px-kv"><span>{effect_vi.get(k, k)}</span><b class="px-num">{v}</b></div>' for k, v in sorted(effects.items()))
+    role_line = 'Admin · duyệt được interrupt' if is_admin_role(role) else 'Nhân viên · không tự phê duyệt'
+    evidence = next((m.get('evidence') for m in reversed(saved.get('messages', [])) if m.get('role') == 'assistant' and m.get('evidence')), []) or []
+    refs = ''.join(f'<span class="px-ref">{escape(str(ref))}</span>' for ref in evidence[:6]) or '<small>Chưa có bằng chứng trong cuộc trò chuyện này.</small>'
+    status = ''
+    if draft:
+        status = (f'<div class="px-kv"><span>Dự thảo OCR</span><b>{escape(draft["draft_id"])}</b></div>'
+                  f'<div class="px-kv"><span>Trường chờ xác nhận</span><b class="px-num">{len(draft.get("missing_fields") or [])}</b></div>')
+    st.markdown(f'''<div class="px-rail">
+    <div class="px-rail-card"><h4>Luồng LangGraph</h4><ol class="px-trace">{''.join(rows)}</ol>{status}</div>
+    <div class="px-rail-card"><h4>Quyền của bạn</h4><div class="px-kv"><span>Vai trò</span><b>{escape(role_line)}</b></div>
+    <div class="px-kv"><span>Công cụ được phép</span><b class="px-num">{len(allowed)}/{len(rt.tools)}</b></div>{rbac}</div>
+    <div class="px-rail-card"><h4>Bằng chứng gần nhất</h4>{refs}</div></div>''', unsafe_allow_html=True)
 
 
 def render_chat_context(is_admin):

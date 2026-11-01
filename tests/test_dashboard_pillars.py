@@ -153,3 +153,24 @@ def test_real_photo_benchmark_tab_renders_without_saved_readings():
     assert not app.exception
     report = app.session_state['ocr_benchmark_report']
     assert report['mode'] == 'real_replay' and len(report['cases']) == 4
+
+
+def test_home_greeting_and_pillars_show_live_numbers_not_invented_ones():
+    app = _login()
+    html = ' '.join(m.value for m in app.markdown)
+    assert 'px-greet' in html and 'Tuyết Vương' in html
+    assert 'mx-hero' not in html  # the old hero is replaced on the home page
+    assert 'px-pillar' in html and 'data-count' in html
+    state = app.session_state['_home_state']
+    assert f"{state['bench_raw']} → {state['bench_verified']}" in html
+    assert state['bench_verified'] == 0 and state['bench_raw'] > 0
+    assert all(node in html for node in ('guard', 'authorize', 'approval'))
+
+
+def test_chat_page_has_langgraph_rail_with_rbac_counts():
+    for key, admin in (('quick_login_manager', True), ('quick_login_staff', False)):
+        app = _login(key)
+        app.radio(key='main_navigation').set_value('💬 Tuyết Vương AI').run()
+        html = ' '.join(m.value for m in app.markdown)
+        assert 'px-chat-head' in html and 'px-rail' in html and 'Luồng LangGraph' in html
+        assert ('duyệt được interrupt' in html) is admin

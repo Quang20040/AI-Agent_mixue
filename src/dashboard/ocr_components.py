@@ -60,9 +60,6 @@ _CSS = '''<style>
 .vocr-table td{padding:6px 8px;border-bottom:1px solid #f1f5f9;vertical-align:top}
 .vocr-table code{background:#f8fafc;padding:1px 5px;border-radius:4px}
 .vocr-num{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
-.vocr-steps{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 12px}
-.vocr-step{flex:1 1 150px;background:#fff;border:1px solid #fecdd3;border-radius:10px;padding:8px 10px;font-size:12px;color:#475569}
-.vocr-step b{display:block;color:#be123c;font-size:13px;margin-bottom:2px}
 </style>'''
 
 
@@ -78,19 +75,44 @@ def money(value: Any) -> str:
     return f'{int(value):,} đ'.replace(',', '.') if isinstance(value, (int, float)) else '—'
 
 
-def render_pipeline_steps() -> None:
-    """The six verification stages, in the order the engine applies them."""
-    steps = [
-        ('① Chất lượng ảnh', 'Đo độ nét, tương phản; ảnh mờ → mọi trường chờ xác nhận.'),
-        ('② Tách vùng chứng từ', '🧾 POS · ✍️ sổ tay · ảnh ghép; gắn nguồn cho từng trường.'),
-        ('③ Đọc thô', 'Giữ nguyên chuỗi trên ảnh (raw_text), kể cả biểu thức 962 + 629.'),
-        ('④ Quy tắc kiểm chứng', 'Không tự nhân 1.000, không tự cộng, chặn số lấy từ bảng cốc 3.1.'),
-        ('⑤ Đối soát số học', 'Cộng ngang sổ ca, tổng POS và chéo POS ↔ sổ tay; không sửa số.'),
-        ('⑥ Người xác nhận', 'Trường ⚠️ để trống; chỉ Quản lý phê duyệt mới ghi sổ.'),
+def pipeline_states(extracted: dict[str, Any] | None) -> list[tuple[str, str, str]]:
+    """(title, detail, state) for the six verification stages; state is pending|done|warn|active."""
+    titles = ['Chất lượng ảnh', 'Tách vùng chứng từ', 'Đọc thô', 'Quy tắc kiểm chứng', 'Đối soát số học', 'Người xác nhận']
+    idle = ['Độ nét, tương phản', 'POS · sổ tay · ảnh ghép', 'Giữ nguyên chuỗi trên ảnh', 'Không nhân 1.000, không tự cộng',
+            'Cộng ngang & chéo POS', 'Quản lý phê duyệt']
+    extracted = extracted or {}
+    if extracted.get('status') != 'NEEDS_REVIEW':
+        states = ['pending'] * 6
+        if extracted:
+            idle = [extracted.get('message') or str(extracted.get('status')), *idle[1:]]
+            states[0] = 'warn'
+        return list(zip(titles, idle, states))
+    quality = extracted.get('image_quality') or {}
+    readings = extracted.get('field_readings') or {}
+    with_text = sum(1 for r in readings.values() if r.get('raw_text'))
+    flagged = sum(1 for r in readings.values() if r.get('status') in {'uncertain', 'unreadable'})
+    discrepancies = (extracted.get('consistency') or {}).get('discrepancies') or []
+    doc_label = DOCUMENT_BADGES.get(extracted.get('document_type') or 'unknown', DOCUMENT_BADGES['unknown'])[0]
+    return [
+        (titles[0], 'Ảnh mờ: mọi trường chờ xác nhận' if quality.get('is_blurry') else f"Đủ nét · tương phản {quality.get('contrast', '—')}",
+         'warn' if quality.get('is_blurry') else 'done'),
+        (titles[1], doc_label, 'done'),
+        (titles[2], f'{with_text} trường có chữ', 'done'),
+        (titles[3], f'{flagged} trường gắn cờ' if flagged else 'Không có trường mơ hồ', 'warn' if flagged else 'done'),
+        (titles[4], f'{len(discrepancies)} chênh lệch' if discrepancies else 'Các khoản khớp nhau', 'warn' if discrepancies else 'done'),
+        (titles[5], 'Đang chờ bạn xác nhận', 'active'),
     ]
-    st.markdown('<div class="vocr-steps">' + ''.join(
-        f'<div class="vocr-step"><b>{escape(t)}</b>{escape(d)}</div>' for t, d in steps) + '</div>',
-        unsafe_allow_html=True)
+
+
+def render_pipeline_steps(extracted: dict[str, Any] | None = None, slot=None) -> None:
+    """The six verification stages in the order the engine applies them, with live state."""
+    marks = {'done': '✓', 'warn': '!', 'active': '6', 'pending': ''}
+    items = ''.join(
+        f'<li class="vocr-step {state}"><span class="dot" aria-hidden="true">{marks[state] or index}</span>'
+        f'<div><b>{escape(title)}</b>{escape(detail)}</div><i class="fill" aria-hidden="true"></i></li>'
+        for index, (title, detail, state) in enumerate(pipeline_states(extracted), 1))
+    html = f'<ol class="vocr-steps" aria-label="Quy trình kiểm chứng" style="list-style:none;padding:0">{items}</ol>'
+    (slot or st).markdown(html, unsafe_allow_html=True)
 
 
 def document_badge(document_type: str | None) -> str:
@@ -168,6 +190,15 @@ def render_benchmark(report: dict[str, Any], images: dict[str, bytes] | None = N
     m3.metric('Lỗi lọt vào biểu mẫu · có kiểm chứng', verified.get('errors_reaching_form', 0),
               delta=verified.get('errors_reaching_form', 0) - raw.get('errors_reaching_form', 0), delta_color='inverse')
     labels = report['taxonomy_labels']
+    top = max([1, *raw['taxonomy_7'].values(), *verified['taxonomy_7'].values()])
+    bars = ''.join(
+        f"<div class='vocr-bar-row'><span>{escape(labels[key])}</span><div class='vocr-bar-pair'>"
+        f"<div class='vocr-bar-line'><span class='vocr-bar raw' style='--w:{raw['taxonomy_7'].get(key, 0) / top * 100:.0f}%'></span>{raw['taxonomy_7'].get(key, 0)}</div>"
+        f"<div class='vocr-bar-line'><span class='vocr-bar ver' style='--w:{verified['taxonomy_7'].get(key, 0) / top * 100:.0f}%'></span>{verified['taxonomy_7'].get(key, 0)}</div>"
+        "</div></div>" for key in report['taxonomy_order'])
+    st.markdown("<div class='vocr-legend'><span><i style='background:#f4a3ab'></i>Bản đọc thô</span>"
+                "<span><i style='background:#c4000f'></i>Có kiểm chứng</span></div>"
+                f"<div class='vocr-bars'>{bars}</div>", unsafe_allow_html=True)
     rows = ''.join(
         f"<tr><td><code>{key}</code></td><td>{escape(labels[key])}</td>"
         f"<td class='vocr-num'>{raw['taxonomy_7'].get(key, 0)}</td><td class='vocr-num'>{verified['taxonomy_7'].get(key, 0)}</td></tr>"
@@ -175,8 +206,9 @@ def render_benchmark(report: dict[str, Any], images: dict[str, bytes] | None = N
     other_raw = ', '.join(f'{k}: {v}' for k, v in raw.get('other_counts', {}).items()) or '—'
     other_ver = ', '.join(f'{k}: {v}' for k, v in verified.get('other_counts', {}).items()) or '—'
     rows += f"<tr><td colspan='2'><i>Khác (không có trên ảnh, ảnh mờ không cảnh báo…)</i></td><td>{escape(other_raw)}</td><td>{escape(other_ver)}</td></tr>"
-    st.markdown('<table class="vocr-table"><thead><tr><th>Nhóm lỗi</th><th>Ý nghĩa</th><th>Bản đọc thô (tin số mô hình)</th>'
-                '<th>Pipeline có kiểm chứng</th></tr></thead><tbody>' + rows + '</tbody></table>', unsafe_allow_html=True)
+    with st.expander('Bảng số liệu 7 nhóm lỗi', expanded=False):
+        st.markdown('<table class="vocr-table"><thead><tr><th>Nhóm lỗi</th><th>Ý nghĩa</th><th>Bản đọc thô (tin số mô hình)</th>'
+                    '<th>Pipeline có kiểm chứng</th></tr></thead><tbody>' + rows + '</tbody></table>', unsafe_allow_html=True)
     st.caption(report.get('note', ''))
 
     cases = report.get('cases', [])

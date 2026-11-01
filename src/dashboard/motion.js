@@ -1,7 +1,7 @@
 /* Continuous Mixue motion, scoped to branded elements. */
 (() => {
   if (!window.gsap) return;
-  if (window.mixueMotion?.version === 4) { window.mixueMotion.scan(); return; }
+  if (window.mixueMotion?.version === 5) { window.mixueMotion.scan(); return; }
   window.mixueMotion?.destroy?.();
   const gsap = window.gsap;
   gsap.registerPlugin(window.ScrollTrigger);
@@ -91,6 +91,45 @@
       } else if (node.matches('.snowking-authentic, .brand-logo')) {
         const image = node.matches('img') ? node : node.querySelector('img');
         loop(image, {y: -5, rotationZ: 7, rotationY: 15, duration: 1.3, transformPerspective: 500});
+      } else if (node.matches('.px-greet')) {
+        // Greeting band: copy cascades in, Tuyết Vương pops up, then floats and snow drifts.
+        gsap.timeline({defaults: {ease: 'power3.out'}})
+          .from(node.querySelectorAll('.px-greet-copy > *, .px-greet-tasks .px-link'), {y: 16, opacity: 0, stagger: .06, duration: .6, clearProps: 'opacity,transform'})
+          .from(node.querySelector('.px-mascot'), {y: 40, scale: .7, rotationZ: -8, opacity: 0, duration: .8, ease: 'back.out(1.8)'}, .15)
+          .from(node.querySelector('.px-bubble'), {scale: .6, opacity: 0, transformOrigin: '90% 100%', duration: .5, ease: 'back.out(2)'}, .55);
+        loop(node.querySelector('.px-mascot'), {y: -10, rotationZ: 4, duration: 2.2, delay: 1});
+        loop(node.querySelector('.px-bubble'), {y: -4, duration: 2.8, delay: 1.2});
+        node.querySelectorAll('.px-flake').forEach((flake, i) => loop(flake, {y: 14 + i * 3, x: i % 2 ? 8 : -8, rotation: 120, opacity: .9, duration: 2.4 + i * .35, delay: i * .2}));
+      } else if (node.matches('.px-pillar')) {
+        const reveal = new IntersectionObserver(entries => entries.forEach(entry => {
+          if (!entry.isIntersecting) return;
+          context.add(() => {
+            gsap.from(node.querySelectorAll('.px-pillar-head, .px-stat, .px-chain, p'), {y: 14, opacity: 0, stagger: .06, duration: .55, ease: 'power3.out', clearProps: 'opacity,transform'});
+            node.querySelectorAll('[data-count]').forEach(el => {
+              const end = Number(el.dataset.count);
+              if (!Number.isFinite(end) || end <= 0) return;
+              const box = {v: 0};
+              gsap.to(box, {v: end, duration: 1.1, ease: 'power2.out', onUpdate: () => {el.textContent = Math.round(box.v).toLocaleString('vi-VN');}});
+            });
+          });
+          reveal.disconnect();
+        }), {threshold: .1});
+        reveal.observe(node);
+        cleanups.push(() => reveal.disconnect());
+        loop(node.querySelector('.px-pillar-icon'), {y: -4, rotationZ: -6, duration: 1.8});
+        const nodes = node.querySelectorAll('.px-chain .px-node');
+        if (nodes.length) {
+          // A request "travels" through guard → model → authorize → tools → approval.
+          const travel = gsap.timeline({repeat: -1, repeatDelay: .8});
+          nodes.forEach(item => travel.to(item, {backgroundColor: '#e60012', color: '#fff', scale: 1.08, duration: .28, ease: 'power2.out'})
+            .to(item, {backgroundColor: '', color: '', scale: 1, duration: .4, ease: 'power2.in', clearProps: 'backgroundColor,color,transform'}, '+=.15'));
+          loops.push(travel);
+        }
+      } else if (node.matches('.vocr-steps')) {
+        gsap.from(node.querySelectorAll('.vocr-step'), {x: -14, opacity: 0, stagger: .08, duration: .5, ease: 'power3.out', clearProps: 'opacity,transform'});
+      } else if (node.matches('.px-rail')) {
+        gsap.from(node.querySelectorAll('.px-rail-card'), {x: 18, opacity: 0, stagger: .1, duration: .55, ease: 'power3.out', clearProps: 'opacity,transform'});
+        gsap.from(node.querySelectorAll('.px-trace li'), {x: 10, opacity: 0, stagger: .07, duration: .4, delay: .2, clearProps: 'opacity,transform'});
       } else if (node.matches('.mixue-ribbon')) {
         loops.push(gsap.to(node.querySelector('div'), {xPercent: -50, duration: 24, repeat: -1, ease: 'none'}));
       }
@@ -120,7 +159,7 @@
   function scan() {
     syncControls();
     active.forEach((cleanup, node) => {if (!node.isConnected || !enabled) {cleanup(); active.delete(node);}});
-    document.querySelectorAll('.mx-hero, .mx-card, .mx-kpi, .mixue-stage, .menu-card, .snowking-authentic, .brand-logo, .mixue-ribbon, .st-key-login_shell').forEach(bind);
+    document.querySelectorAll('.mx-hero, .mx-card, .mx-kpi, .mixue-stage, .menu-card, .snowking-authentic, .brand-logo, .mixue-ribbon, .st-key-login_shell, .px-greet, .px-pillar, .vocr-steps, .px-rail').forEach(bind);
   }
   // Native dialog provides focus trapping, Escape and an accessible search.
   const normalize = value => value.toLocaleLowerCase('vi').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
@@ -174,7 +213,7 @@
     if (!scheduled) {scheduled = true; requestAnimationFrame(() => {scheduled = false; scan();});}
   });
   observer.observe(document.body, {childList: true, subtree: true});
-  window.mixueMotion = {version: 4, scan, destroy() {
+  window.mixueMotion = {version: 5, scan, destroy() {
     observer.disconnect(); active.forEach(cleanup => cleanup()); active.clear();
     controls.forEach((fn, button) => button.removeEventListener('click', fn)); controls.clear();
     document.removeEventListener('click', click); document.removeEventListener('input', search); document.removeEventListener('keydown', keydown);

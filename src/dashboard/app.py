@@ -43,6 +43,7 @@ from src.dashboard.brand_ui import (
     render_mobile_navigation,
     render_page_hero,
     render_pillars,
+    render_home_greeting,
     render_sidebar_bottom,
     render_sidebar_top,
     render_topbar,
@@ -229,7 +230,7 @@ with st.sidebar:
 
 _pending_notifications = len(get_pending_requests()) if is_admin else 0
 render_topbar(user_name, _pending_notifications)
-if section != CHAT_PAGE:
+if section not in (CHAT_PAGE, "Trang chủ"):
     render_page_hero(section, user_name)
 render_mobile_navigation(allowed_tabs, section)
 
@@ -238,6 +239,7 @@ with st.container(key="workspace"):
         st.error("🔒 **Truy cập bị từ chối:** Bạn không có quyền truy cập trang này. Chức năng chỉ dành riêng cho Quản lý và Chủ cửa hàng (Admin).")
     elif section == "Trang chủ":
         # Outside the auto-refresh fragment so the pillar buttons trigger a full rerun (page switch).
+        render_home_greeting(agent, user_role, user_name)
         render_pillars(user_role)
         render_live_home()
 
