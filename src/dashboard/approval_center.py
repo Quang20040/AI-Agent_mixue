@@ -48,8 +48,11 @@ def pending_items(agent, user_role: str, user_name: str, user_id: str) -> list[d
             'detail': (f"Số lượng {req['quantity']:g} · ngày {_date(req['business_date'])} · đề xuất bởi {escape(str(req['recorded_by']))}"
                        + (f" · {escape(str(req['notes']))}" if req.get('notes') and req['notes'] != '—' else '')),
         })
+    from src.dashboard.sales_view import business_today
+    today = business_today().isoformat()
     for plan in list_plans():
-        if plan.get('status') != 'PENDING_APPROVAL':
+        # A plan for a day that has passed can no longer be carried out; it is history, not work.
+        if plan.get('status') != 'PENDING_APPROVAL' or str(plan.get('target_date', ''))[:10] < today:
             continue
         kind_label = 'Đơn đặt hàng nguyên liệu' if plan.get('plan_type') == 'REPLENISHMENT_PO' else 'Kế hoạch nấu topping'
         items.append({
@@ -124,7 +127,9 @@ def render_approval_center(agent, user_role: str, user_name: str, *, kinds=('shi
                       use_container_width=True, disabled=not selected, on_click=run, args=(selected, True))
         bar[2].button(f'❌ Từ chối các khoản đã chọn ({len(selected)})', key=f'apv_no_{key}',
                       use_container_width=True, disabled=not selected, on_click=run, args=(selected, False))
-        for item in shown:
+        limit_key = f'apv_show_all_{key}'
+        visible = shown if st.session_state.get(limit_key) or len(shown) <= 10 else shown[:10]
+        for item in visible:
             with st.container(border=True, key=f"apv_row_{key}_{item['kind']}_{item['id']}"):
                 tick, body, yes, no = st.columns([0.35, 5, 1, 1], vertical_alignment='center')
                 tick.checkbox('Chọn', key=box_key(item), label_visibility='collapsed')
@@ -134,6 +139,9 @@ def render_approval_center(agent, user_role: str, user_name: str, *, kinds=('shi
                            on_click=run, args=([item], True))
                 no.button('❌ Từ chối', key=f"apv_n_{key}_{item['kind']}_{item['id']}", use_container_width=True,
                           on_click=run, args=([item], False))
+        if len(visible) < len(shown):
+            st.button(f'Xem thêm {len(shown) - len(visible)} khoản', key=f'apv_more_{key}',
+                      on_click=lambda: st.session_state.update({limit_key: True}))
 
 
 def render_my_submissions(agent, user_role: str, user_name: str) -> None:

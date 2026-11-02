@@ -28,6 +28,10 @@ services:
         value: "true"
       - key: TZ
         value: Asia/Ho_Chi_Minh
+      # Lần đầu khởi động chỉ giữ dữ liệu nền (tài khoản, thực đơn, nguyên liệu, công thức); không có
+      # doanh thu / kho / chốt ca mẫu. Đặt "true" nếu muốn giữ dữ liệu mẫu tháng 10/2026 để trình diễn.
+      - key: KEEP_SAMPLE_DATA
+        value: "false"
       - key: POSTGRES_MCP_ENABLED
         value: "false"
       # Tắt mặc định để người lạ không dùng hết hạn mức Gemini; bật "true" trước buổi demo.

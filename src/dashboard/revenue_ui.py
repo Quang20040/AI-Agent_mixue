@@ -19,11 +19,13 @@ def money(value) -> str:
 
 
 def _chart(frame: pd.DataFrame, x: str, y: str, kind: str = 'bar', color: str = '#E60012', height: int = 230) -> None:
-    data = pd.DataFrame({x: pd.to_datetime(frame[x]).dt.strftime('%Y-%m-%d'), y: frame[y]})
+    # One bar per day with a dd/mm label (a time axis drew hour ticks and hair-thin bars).
+    data = pd.DataFrame({x: pd.to_datetime(frame[x]).dt.strftime('%d/%m'), y: frame[y]})
     st.vega_lite_chart(data, {
-        'mark': {'type': kind, 'color': color, 'tooltip': True},
-        'encoding': {'x': {'field': x, 'type': 'temporal', 'title': None, 'axis': {'format': '%d/%m'}},
-                     'y': {'field': y, 'type': 'quantitative', 'title': None}},
+        'mark': {'type': kind, 'color': color, 'tooltip': True, 'cornerRadiusEnd': 4} if kind == 'bar'
+        else {'type': kind, 'color': color, 'tooltip': True, 'point': True},
+        'encoding': {'x': {'field': x, 'type': 'ordinal', 'sort': None, 'title': None, 'axis': {'labelAngle': 0}},
+                     'y': {'field': y, 'type': 'quantitative', 'title': None, 'axis': {'format': '~s'}}},
         'height': height,
     }, use_container_width=True)
 
