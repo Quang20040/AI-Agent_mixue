@@ -201,6 +201,13 @@ def get_cached_daily_revenue():
     return df
 
 
+@st.cache_data(ttl=900, show_spinner=False)
+def cached_backtest(_engine, as_of_iso):
+    """The model comparison only changes once a day; it took most of the Dự báo page's run time."""
+    from datetime import date as _date
+    return _engine.run_backtest(as_of=_date.fromisoformat(as_of_iso))
+
+
 def quick_chart(df, x, y, kind, color):
     """A plain Vega-Lite spec: st.line_chart/bar_chart build and validate an Altair chart on every run (~0.1 s each)."""
     data = pd.DataFrame({x: pd.to_datetime(df[x]).dt.strftime("%Y-%m-%d"), y: df[y]})
@@ -848,7 +855,7 @@ with st.container(key="workspace"):
         with col_bt1:
             with st.container(border=True):
                 st.write("#### 🎯 So sánh Độ chính xác Các Mô hình Dự báo")
-                benchmark = agent.forecast_engine.run_backtest(as_of=datetime.now(VN).date() - pd.Timedelta(days=1))
+                benchmark = cached_backtest(agent.forecast_engine, (datetime.now(VN).date() - pd.Timedelta(days=1)).isoformat())
                 st.info(f"**Giai đoạn kiểm chứng mô hình nền:** {benchmark.get('evaluation_period', 'Chưa đủ lịch sử')}\n\n**Mô hình nền được chọn:** `{benchmark.get('best_model', 'Chưa xác định')}`")
 
                 bt_table = []
