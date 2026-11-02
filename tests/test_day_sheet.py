@@ -93,7 +93,7 @@ def test_one_photo_with_two_shifts_and_a_missing_shift_is_reported():
 def test_live_reading_is_cached_so_switching_shift_costs_no_model_call(monkeypatch):
     # Live calls see a re-encoded image (upright, upscaled), so answer for the morning/afternoon page.
     reader = DayReader(fixed=hashlib.sha256(PHOTOS[0].read_bytes()).hexdigest())
-    monkeypatch.setattr(vision_ocr, 'build_ocr_reader', lambda cfg, mode='json_schema_strict': reader)
+    monkeypatch.setattr(vision_ocr, 'build_ocr_reader', lambda cfg, mode='json_schema_strict', model_id=None: reader)
     monkeypatch.setattr(vision_ocr, '_DAY_SHEETS', {})
     cfg = AgentSettings(llm_enabled=True, provider='gemini', model='gemini-3.5-flash', api_key='x', allow_external_transfer=True)
     first = extract_image(image_path=PHOTOS[0], shift_hint='CA_SANG', target_date='2026-10-14', settings=cfg)

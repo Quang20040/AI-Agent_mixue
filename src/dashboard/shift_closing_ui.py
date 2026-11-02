@@ -339,8 +339,9 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                 elif extracted:
                     st.warning(extracted.get('message', 'Chưa đọc được ảnh; hãy nhập số liệu thủ công.'))
                     if extracted.get('attempts'):
-                        with st.expander('Chi tiết kỹ thuật (nội dung lỗi đầy đủ nằm trong log máy chủ)'):
+                        with st.expander('Chi tiết kỹ thuật', expanded=is_admin):
                             st.code('\n'.join(extracted['attempts']), language=None)
+                            st.caption('Nội dung lỗi đầy đủ của nhà cung cấp nằm trong log máy chủ (Render → Logs).')
 
                 suggestions = extracted.get('suggestions') or {}
                 # New reading -> new widget keys, so the form shows the new values instead of stale widget state.

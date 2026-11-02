@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
@@ -732,9 +733,30 @@ def _inline_refs(schema: dict[str, Any]) -> dict[str, Any]:
     return resolve(schema)
 
 
-def build_ocr_reader(cfg: AgentSettings, mode: str = 'json_schema_strict'):
+OCR_TIMEOUT_SECONDS = float(os.environ.get('OCR_TIMEOUT_SECONDS') or 110)
+# Tried in order when the configured model fails (retired, overloaded, out of quota, rejects the request).
+DEFAULT_GEMINI_FALLBACKS = ('gemini-3.8-flash', 'gemini-3.5-flash-lite')
+
+
+def ocr_model_chain(cfg: AgentSettings) -> list[str]:
+    variables = {**dotenv_values(ROOT / '.env'), **os.environ}
+    chain = [ocr_model_id(cfg)]
+    extra = variables.get('OCR_FALLBACK_MODELS')
+    if extra is not None:
+        chain += [m.strip() for m in extra.split(',') if m.strip()]
+    elif is_gemini(cfg):
+        chain += list(DEFAULT_GEMINI_FALLBACKS)
+    return list(dict.fromkeys(m for m in chain if m))
+
+
+def is_gemini(cfg: AgentSettings) -> bool:
+    return cfg.provider in {'gemini', 'google', 'google_genai'}
+
+
+def build_ocr_reader(cfg: AgentSettings, mode: str = 'json_schema_strict', model_id: str | None = None):
     """The configured vision model, bound to the JSON extraction format for `mode`."""
-    reader = cfg.model_copy(update={'model': ocr_model_id(cfg), 'max_output_tokens': 12000, 'max_retries': 0}).build_model()
+    reader = cfg.model_copy(update={'model': model_id or ocr_model_id(cfg), 'max_output_tokens': 12000, 'max_retries': 0,
+                                    'model_timeout': OCR_TIMEOUT_SECONDS, 'run_timeout': OCR_TIMEOUT_SECONDS}).build_model()
     if mode == 'json_object':
         response_format: dict[str, Any] = {'type': 'json_object'}
     else:
@@ -845,25 +867,42 @@ def extract_image(
         return merge_image_extractions(results, names=[item[1] for item in valid_images],
                                        shas=[item[3] for item in valid_images], shift_hint=shift_hint, target_date=target_date)
 
-    modes = [None] if model is not None else list(OCR_OUTPUT_MODES)
     attempts: list[str] = []
     # One reading covers every shift on the page: switching the shift on screen re-uses it.
     sheet_key = (valid_images[0][3], ocr_model_id(cfg)) if model is None else None
     if sheet_key and sheet_key in _DAY_SHEETS:
         sheet, model_name = _DAY_SHEETS[sheet_key]
         return _from_day_sheet(sheet, valid_images, shift_hint, target_date, ['cache'], model_name)
-    while True:
-        mode = modes.pop(0)
-        outcome = _read_with_mode(valid_images, mode, model, cfg, shift_hint, target_date)
+    if model is not None:
+        plan = [(None, None)]
+    else:
+        plan = []
+        for model_id in ocr_model_chain(cfg):
+            plan += [(model_id, mode) for mode in OCR_OUTPUT_MODES]
+            if is_gemini(cfg):
+                plan.append((model_id, 'gemini_native'))
+    started = time.monotonic()
+    outcome: Any = None
+    skip_model: str | None = None
+    for model_id, mode in plan:
+        if model_id is not None and model_id == skip_model and mode != 'gemini_native':
+            continue
+        if attempts and time.monotonic() - started > OCR_TIMEOUT_SECONDS * 1.6:
+            break  # keep the whole wait bounded; report the last error
+        outcome = _read_with_mode(valid_images, mode, model, cfg, shift_hint, target_date, model_id)
         if not isinstance(outcome, Exception):
             break
-        # The provider's own text goes to the server log only (Render → Logs); the result shown in
-        # the UI carries the status code and error class, never SDK text that could hold secrets.
         status = getattr(outcome, 'status_code', None)
-        attempts.append(f'{mode}: ' + (f'HTTP {status} ' if status else '') + type(outcome).__name__)
-        logger.warning('OCR provider call failed (mode=%s, model=%s): %s', mode, ocr_model_id(cfg), _provider_detail(outcome))
-        if not (modes and getattr(outcome, 'status_code', None) == 400):
-            return _ocr_error(outcome, attempts)
+        reason = re.search(r'"status":\s*"([A-Z_]{3,40})"', str(outcome)) if isinstance(outcome, ProviderHTTPError) else None
+        attempts.append(f'{model_id or "model"} / {mode}: ' + (f'HTTP {status} ' if status else '') + type(outcome).__name__
+                        + (f' {reason.group(1)}' if reason else ''))
+        logger.warning('OCR provider call failed (mode=%s, model=%s): %s', mode, model_id, _provider_detail(outcome))
+        if model is not None or status in {401, 403}:
+            break  # injected reader, or a key problem no other model or path will fix
+        if status != 400:
+            skip_model = model_id  # not a format problem: other JSON modes of this model will fail the same way
+    if isinstance(outcome, Exception) or outcome is None:
+        return _ocr_error(outcome or RuntimeError('no attempt'), attempts)
     if isinstance(outcome, dict):
         return outcome
     result, model_name = outcome
@@ -939,14 +978,74 @@ def _prepare_model_image(data: bytes, mime: str) -> tuple[bytes, str]:
         return data, mime
 
 
-def _read_with_mode(valid_images, mode, model, cfg, shift_hint, target_date):
+class ProviderHTTPError(Exception):
+    """Error answer from a provider called without an SDK (carries status_code like SDK errors)."""
+
+    def __init__(self, status_code: int | None, text: str):
+        super().__init__(text)
+        self.status_code = status_code
+
+
+class _NativeAnswer:
+    def __init__(self, content: str, model_name: str, finish_reason: str):
+        self.content = content
+        self.response_metadata = {'model_name': model_name, 'finish_reason': finish_reason}
+
+
+class GeminiNativeReader:
+    """Gemini's own generateContent endpoint (no OpenAI-compatibility layer), asked for plain JSON."""
+
+    def __init__(self, cfg: AgentSettings, model_id: str):
+        self.cfg, self.model_id = cfg, model_id
+
+    def invoke(self, messages):
+        import httpx
+        system, human = messages
+        parts: list[dict[str, Any]] = []
+        for item in human.content:
+            if item.get('type') == 'text':
+                parts.append({'text': item['text']})
+            else:
+                header, data = item['image_url']['url'].split(',', 1)
+                parts.append({'inline_data': {'mime_type': header[5:].split(';')[0], 'data': data}})
+        body = {
+            'systemInstruction': {'parts': [{'text': system.content}]},
+            'contents': [{'role': 'user', 'parts': parts}],
+            'generationConfig': {'responseMimeType': 'application/json', 'temperature': 0, 'maxOutputTokens': 16000},
+        }
+        url = f'https://generativelanguage.googleapis.com/v1beta/models/{self.model_id}:generateContent'
+        try:
+            response = httpx.post(url, json=body, timeout=OCR_TIMEOUT_SECONDS,
+                                  headers={'x-goog-api-key': self.cfg.api_key.get_secret_value()})
+        except httpx.TimeoutException as exc:
+            raise TimeoutError('Gemini timeout') from exc
+        except httpx.HTTPError as exc:
+            raise ProviderHTTPError(None, f'{type(exc).__name__}: {exc}') from exc
+        if response.status_code != 200:
+            raise ProviderHTTPError(response.status_code, response.text[:400])
+        data = response.json()
+        candidate = (data.get('candidates') or [{}])[0]
+        text = ''.join(p.get('text', '') for p in (candidate.get('content') or {}).get('parts', []) if not p.get('thought'))
+        finish = str(candidate.get('finishReason') or '').lower()
+        if not text:
+            raise ProviderHTTPError(None, f'empty answer (finishReason={finish or "?"}, '
+                                          f'block={(data.get("promptFeedback") or {}).get("blockReason")})')
+        return _NativeAnswer(text, self.model_id, 'length' if finish == 'max_tokens' else finish)
+
+
+def _read_with_mode(valid_images, mode, model, cfg, shift_hint, target_date, model_id=None):
     """One model call. Returns a ShiftReading, an early-exit dict, or the exception raised."""
     try:
         from src.engine.day_sheet import DaySheet, build_day_sheet_prompt, day_sheet_schema
-        reader = model or build_ocr_reader(cfg, mode)
+        if model is not None:
+            reader = model
+        elif mode == 'gemini_native':
+            reader = GeminiNativeReader(cfg, model_id or ocr_model_id(cfg))
+        else:
+            reader = build_ocr_reader(cfg, mode, model_id)
         # Live models transcribe the whole day sheet; injected readers (tests, replay) may answer either shape.
         prompt = build_day_sheet_prompt(target_date) if model is None else build_ocr_prompt(shift_hint, target_date)
-        if mode == 'json_object':
+        if mode in {'json_object', 'gemini_native'}:
             prompt += ('\n\nChỉ trả về MỘT đối tượng JSON hợp lệ (không markdown) đúng JSON Schema sau:\n'
                        + json.dumps(day_sheet_schema(), ensure_ascii=False))
 
@@ -983,7 +1082,7 @@ def _read_with_mode(valid_images, mode, model, cfg, shift_hint, target_date):
         if isinstance(content, list):
             content = ''.join(part['text'] for part in content if isinstance(part, dict) and isinstance(part.get('text'), str))
         content = re.sub(r'^```(?:json)?\s*|\s*```$', '', str(content).strip())
-        model_name = str(getattr(answer, 'response_metadata', {}).get('model_name') or ocr_model_id(cfg))
+        model_name = str(getattr(answer, 'response_metadata', {}).get('model_name') or model_id or ocr_model_id(cfg))
         payload = json.loads(content)
         if isinstance(payload, dict) and 'sections' in payload:
             return DaySheet.model_validate(payload), model_name
@@ -1000,7 +1099,7 @@ def _ocr_error(exc: Exception, attempts: list[str]) -> dict[str, Any]:
         code, message = 'INVALID_EXTRACTION', 'Mô hình đã phản hồi nhưng dữ liệu chưa đúng cấu trúc. Thử lại ảnh này hoặc nhập tay; chưa có số liệu để lưu.'
     elif status_code == 429:
         code, message = 'RATE_LIMITED', 'Dịch vụ đọc ảnh đang giới hạn lượt gọi. Chờ một chút rồi thử lại; chưa có số liệu để lưu.'
-    elif 'timeout' in type(exc).__name__.lower():
+    elif 'timeout' in type(exc).__name__.lower() or isinstance(exc, TimeoutError):
         code, message = 'TIMEOUT', 'Dịch vụ đọc ảnh phản hồi quá chậm. Thử lại hoặc đọc từng ảnh; chưa có số liệu để lưu.'
     elif status_code in {401, 403}:
         code, message = 'AUTH_ERROR', 'Dịch vụ đọc ảnh từ chối quyền truy cập. Cần kiểm tra khóa API và quyền mô hình; chưa có số liệu để lưu.'
