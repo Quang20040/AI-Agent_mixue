@@ -30,12 +30,14 @@ def wait_server(timeout=120):
     raise RuntimeError('Streamlit did not start')
 
 
-def idle(page, extra=1200):
-    page.wait_for_timeout(500)
-    try:
-        page.wait_for_function("""() => { const a = document.querySelector('[data-testid="stApp"]');
-            return a && a.getAttribute('data-test-script-state') !== 'running'; }""", timeout=90000)
-    except Exception:
+def idle(page, extra=800):
+    """Wait until the script has been idle for 1.5 s in a row (a st.rerun briefly looks idle)."""
+    state = "() => document.querySelector('[data-testid=\"stApp\"]')?.getAttribute('data-test-script-state')"
+    end, quiet = time.time() + 90, 0.0
+    while time.time() < end and quiet < 1.5:
+        page.wait_for_timeout(250)
+        quiet = quiet + 0.25 if page.evaluate(state) not in ('running', 'rerunRequested') else 0.0
+    if quiet < 1.5:
         problems.append('script still running after 90 s')
     page.wait_for_timeout(extra)
 
@@ -86,6 +88,10 @@ def nav(page, text):
 
 
 def main():
+    # Streamlit serves ./static next to the main script; the wrapper lives in scripts/, the assets in src/dashboard/.
+    static = ROOT / 'scripts' / 'static'
+    if not static.exists():
+        static.symlink_to(ROOT / 'src' / 'dashboard' / 'static', target_is_directory=True)
     env = {**os.environ, 'PYTHONPATH': str(ROOT), 'APP_DEMO_MODE': 'true', 'LLM_ENABLED': 'false'}
     server = subprocess.Popen([sys.executable, '-m', 'streamlit', 'run', 'scripts/ui_flow_app.py', '--server.headless', 'true',
                                '--server.port', str(PORT), '--browser.gatherUsageStats', 'false'], cwd=ROOT, env=env)
@@ -97,6 +103,7 @@ def main():
             staff_ctx = browser.new_context(viewport={'width': 1440, 'height': 900})
             staff = staff_ctx.new_page()
             staff.on('console', lambda m: m.type == 'error' and problems.append('staff console: ' + m.text[:200]))
+            staff.on('response', lambda r: r.status == 404 and problems.append('404: ' + r.url[:160]))
             login(staff, 'quick_login_staff')
             nav(staff, 'đối soát ocr')
             snap(staff, 'staff_ocr_empty', 'nhân viên mở trang chốt ca')
@@ -138,6 +145,10 @@ def main():
             click(mgr, '[class*="st-key-open_sub_"] button', 'open submission')
             snap(mgr, 'manager_approval_card', 'thẻ interrupt chờ phê duyệt')
             click(mgr, '[class*="st-key-approve_agent_page"] button', 'approve')
+            if mgr.locator('[class*="st-key-approval_card"]').count():
+                problems.append('approval card still on screen after approving')
+            if not mgr.get_by_text('ĐÃ XÁC NHẬN').count():
+                problems.append('no confirmation shown after approving')
             snap(mgr, 'manager_after_approve', 'ngay sau khi bấm Phê duyệt')
             mgr.reload()
             idle(mgr, 3000)

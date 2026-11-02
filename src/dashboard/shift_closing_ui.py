@@ -222,6 +222,11 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
         st.info(f'{SHIFT_LABELS[shift_code]} ngày {chosen_date:%d/%m/%Y} đã được duyệt và ghi sổ. '
                 'Gửi lại sẽ tạo bản cập nhật và vẫn phải được Quản lý phê duyệt.')
 
+    # Manager work first: staff submissions and the pending interrupt sit above the form, not below it.
+    if is_admin:
+        render_staff_submissions(user_role, user_name)
+    render_page_approval(user_role, user_name, is_admin)
+
     # 3. KHU VỰC TẢI ẢNH CHỐT CA & AI OCR EXTRACTOR
     with st.container(key='ocr_workspace'):
         col_upload, col_result = st.columns([1, 2.1], gap="medium")
@@ -575,9 +580,6 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                         st.rerun()
 
     _save_workspace(username, st.session_state.get('ocr_day_images', {}))
-    if is_admin:
-        render_staff_submissions(user_role, user_name)
-    render_page_approval(user_role, user_name, is_admin)
     render_ocr_benchmark_panel()
 
     day_reports = get_all_shift_reports(chosen_d_str)

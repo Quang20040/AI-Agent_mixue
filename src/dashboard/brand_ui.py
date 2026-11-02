@@ -924,12 +924,8 @@ def render_approval_card(agent, pending, clean_role, user_name, is_admin, key_su
             st.markdown(f"**Xác nhận kế hoạch {pending['plan_id']}**")
             with st.expander('Xem nội dung kế hoạch trước khi duyệt'):
                 st.json(pending['plan'])
-        accept, reject = st.columns(2)
-        approved = accept.button('✅ Phê duyệt', type='primary', key=f'approve_agent{key_suffix}', disabled=not is_admin)
-        cancelled = reject.button('🛑 Hủy', key=f'reject_agent{key_suffix}')
-        if not is_admin:
-            st.caption('🔒 Chỉ Quản lý/Chủ quán được phê duyệt (kiểm tra lại ở máy chủ khi tiếp tục luồng).')
-        if approved or cancelled:
+        def decide(approved: bool):
+            # Runs before the next script run, so the answered card is never drawn again (no faded ghost).
             result = agent.resume_approval(approved, clean_role, user_name,
                                            user_id=st.session_state.get('username', user_name))
             report_day = ((pending.get('plan') or {}).get('fields') or {}).get('report_date')
@@ -939,7 +935,13 @@ def render_approval_card(agent, pending, clean_role, user_name, is_admin, key_su
             st.session_state.setdefault('chat_history_vi', []).append(
                 {'role': 'assistant', 'content': result['text'], 'evidence': result.get('evidence_refs', [])})
             st.session_state['approval_notice'] = result['text']
-            st.rerun()
+
+        accept, reject = st.columns(2)
+        accept.button('✅ Phê duyệt', type='primary', key=f'approve_agent{key_suffix}', disabled=not is_admin,
+                      on_click=decide, args=(True,))
+        reject.button('🛑 Hủy', key=f'reject_agent{key_suffix}', on_click=decide, args=(False,))
+        if not is_admin:
+            st.caption('🔒 Chỉ Quản lý/Chủ quán được phê duyệt (kiểm tra lại ở máy chủ khi tiếp tục luồng).')
 
 
 def _render_chat_conversation(agent, role, user_name, history_height=250, key_suffix=""):

@@ -25,3 +25,4 @@ output/
 data/*.lock
 data/shift_photos/chat_attachments/
 
+scripts/static
