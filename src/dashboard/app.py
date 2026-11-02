@@ -201,6 +201,17 @@ def get_cached_daily_revenue():
     return df
 
 
+def quick_chart(df, x, y, kind, color):
+    """A plain Vega-Lite spec: st.line_chart/bar_chart build and validate an Altair chart on every run (~0.1 s each)."""
+    data = pd.DataFrame({x: pd.to_datetime(df[x]).dt.strftime("%Y-%m-%d"), y: df[y]})
+    st.vega_lite_chart(data, {
+        "mark": {"type": kind, "color": color, "tooltip": True, **({"point": True} if kind == "line" else {})},
+        "encoding": {"x": {"field": x, "type": "temporal", "title": None, "axis": {"format": "%d/%m"}},
+                     "y": {"field": y, "type": "quantitative", "title": None}},
+        "height": 260,
+    }, use_container_width=True)
+
+
 @st.fragment
 def render_live_home():
     render_home(get_cached_menu_list(), get_cached_sales(), user_role=user_role)
@@ -729,7 +740,7 @@ with st.container(key="workspace"):
                             daily_agg = sales_df.groupby("business_date")["quantity_sold"].sum().reset_index()
                             daily_agg.columns = ["Ngày kinh doanh", "Số ly bán"]
                             daily_agg["Ngày kinh doanh"] = pd.to_datetime(daily_agg["Ngày kinh doanh"])
-                            st.line_chart(daily_agg.set_index("Ngày kinh doanh"), color="#E60012")
+                            quick_chart(daily_agg, "Ngày kinh doanh", "Số ly bán", "line", "#E60012")
 
                     with c2:
                         with st.container(border=True):
@@ -769,7 +780,7 @@ with st.container(key="workspace"):
                                 chart_rev = daily_rev_df.copy()
                                 chart_rev["Ngày"] = pd.to_datetime(chart_rev["business_date"])
                                 chart_rev = chart_rev.rename(columns={"revenue_vnd": "Doanh thu (VND)"})
-                                st.bar_chart(chart_rev.set_index("Ngày")["Doanh thu (VND)"], color="#E60012")
+                                quick_chart(chart_rev, "Ngày", "Doanh thu (VND)", "bar", "#E60012")
 
                         with c_chart2:
                             with st.container(border=True):
@@ -777,7 +788,7 @@ with st.container(key="workspace"):
                                 dod_df = daily_rev_df.copy()
                                 dod_df["Ngày"] = pd.to_datetime(dod_df["business_date"])
                                 dod_df = dod_df.rename(columns={"dod_growth_pct": "Tăng trưởng (%)"})
-                                st.line_chart(dod_df.set_index("Ngày")["Tăng trưởng (%)"], color="#FFB800")
+                                quick_chart(dod_df, "Ngày", "Tăng trưởng (%)", "line", "#FFB800")
 
                         # Bảng kê chi tiết 30 ngày
                         st.write("##### 📋 Bảng Kê Doanh Thu & Món Bán Chạy Từng Ngày")
@@ -1109,7 +1120,13 @@ with st.container(key="workspace"):
         saved_orders = list_plans("REPLENISHMENT_PO")
         if not saved_orders:
             st.info("Chưa có đơn nhập hàng. Tạo dự thảo để lưu đơn đầu tiên.")
-        for order in saved_orders:
+        shown_orders = saved_orders[:8]
+        if len(saved_orders) > 8:
+            older = {f"{o['plan_id']} · {o['target_date']}": o for o in saved_orders[8:]}
+            pick = st.selectbox(f"Đơn cũ hơn ({len(older)})", ["—"] + list(older), key="older_po_pick")
+            if pick != "—":
+                shown_orders = shown_orders + [older[pick]]
+        for order in shown_orders:
             approved = order["status"] == "APPROVED"
             status_label = "Đã duyệt · Chờ nhận hàng" if approved else "Chờ duyệt"
             with st.expander(f"{order['plan_id']} · {order['target_date']} · {status_label}"):
@@ -1124,13 +1141,15 @@ with st.container(key="workspace"):
                         "ingredient_id": "Mã nguyên liệu", "ingredient_name": "Nguyên liệu", "display_order": "Số thùng/kiện",
                         "carton_spec": "Quy cách", "recommended_order_qty": "Tổng lượng", "unit": "Đơn vị"})
                     st.dataframe(details, use_container_width=True, hide_index=True)
-                    export = details.copy()
-                    export.insert(0, "Mã đơn", order["plan_id"])
-                    export.insert(1, "Ngày đặt", order["target_date"])
-                    export.insert(2, "Trạng thái", status_label)
-                    export.insert(3, "Người duyệt", order.get("approved_by", ""))
-                    export.insert(4, "Thời điểm duyệt", order.get("approved_at", ""))
-                    st.download_button("Tải phiếu đặt hàng CSV", export.to_csv(index=False).encode("utf-8-sig"),
+                    def order_csv(details=details, order=order, status_label=status_label):
+                        export = details.copy()
+                        export.insert(0, "Mã đơn", order["plan_id"])
+                        export.insert(1, "Ngày đặt", order["target_date"])
+                        export.insert(2, "Trạng thái", status_label)
+                        export.insert(3, "Người duyệt", order.get("approved_by", ""))
+                        export.insert(4, "Thời điểm duyệt", order.get("approved_at", ""))
+                        return export.to_csv(index=False).encode("utf-8-sig")
+                    st.download_button("Tải phiếu đặt hàng CSV", order_csv, on_click="ignore",
                                        file_name=f"{order['plan_id']}.csv", mime="text/csv", key=f"download_{order['plan_id']}")
                 if not approved and st.button("Ký duyệt đơn đã lưu", key=f"approve_{order['plan_id']}"):
                     result = agent.tool_approve_plan(order["plan_id"], user_role=role_key, user_name=user_name)

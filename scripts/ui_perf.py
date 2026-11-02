@@ -14,7 +14,8 @@ from playwright.sync_api import sync_playwright
 ROOT = Path(__file__).resolve().parents[1]
 PORT = 8631
 URL = f'http://localhost:{PORT}'
-PAGES = ['tuyết vương ai', 'đối soát ocr', 'báo cáo', 'dự báo', 'sơ chế', 'nhập hàng', 'tem ly', 'trang chủ']
+PAGES = [('tuyết vương ai', 'ai agent'), ('đối soát ocr', 'ocr'), ('báo cáo', 'kho'), ('dự báo', 'dự báo'),
+         ('sơ chế', 'sơ chế'), ('nhập hàng', 'nhập hàng'), ('tem ly', 'công thức'), ('trang chủ', 'trang chủ')]
 STATE = "() => document.querySelector('[data-testid=\"stApp\"]')?.getAttribute('data-test-script-state')"
 
 
@@ -54,13 +55,14 @@ def run(browser, phone):
     page.locator('.st-key-quick_login_manager button').first.click()
     login = settle(page)
     rows = [('mở trang đăng nhập', first), ('đăng nhập', login)]
-    for name in PAGES:
-        target = '.st-key-mobile_navigation label' if phone else '.st-key-main_navigation label'
+    for desktop_name, phone_name in PAGES:
+        target = '.st-key-mobile_dock label' if phone else '.st-key-main_navigation label'
+        name = phone_name if phone else desktop_name
         t = time.time()
-        page.evaluate("([sel, t]) => [...document.querySelectorAll(sel)].find(l => l.textContent.toLowerCase().includes(t))?.click()",
+        found = page.evaluate("([sel, t]) => [...document.querySelectorAll(sel)].find(l => l.textContent.toLowerCase().includes(t))?.click() === undefined",
                       [target, name])
         settle(page)
-        rows.append((name, time.time() - t - 0.6))
+        rows.append((desktop_name, (time.time() - t - 0.6) if found else float('nan')))
     ctx.close()
     return rows
 
