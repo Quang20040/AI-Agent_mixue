@@ -686,6 +686,10 @@ def merge_image_extractions(results, *, names, shas, shift_hint, target_date):
             hint = next(((r.get('suggestions') or {}).get(key) for _, r in good if (r.get('suggestions') or {}).get(key)), None)
             if hint and output['field_readings'][key]['status'] == 'not_present':
                 output['suggestions'][key] = hint
+    for _, r in good:  # a per-image arithmetic correction beats re-parsing the misread cell
+        for key, hint in (r.get('suggestions') or {}).items():
+            if 'thừa một chữ số' in str(hint.get('reason', '')) and output.get(key) is None:
+                output['suggestions'][key] = hint
     sheets = [r['day_sheet'] for _, r in sorted(good) if r.get('day_sheet')]
     if sheets:
         from src.engine.day_sheet import SHIFTS
@@ -1120,10 +1124,33 @@ def _ocr_error(exc: Exception, attempts: list[str]) -> dict[str, Any]:
     }
 
 
+def _extra_digit_fix(total: int, expected: int) -> int | None:
+    """'21389' read where the page says '2389': one stray stroke read as a digit. Returns the fixed total."""
+    if total <= 0 or expected <= 0 or total % 1000 or expected % 1000:
+        return None
+    digits = str(total // 1000)
+    for index in range(len(digits)):
+        candidate = digits[:index] + digits[index + 1:]
+        if candidate and int(candidate) * 1000 == expected:
+            return expected
+    return None
+
+
 def _finish_extraction(result, valid_images, shift_hint, target_date, attempts, model_name):
     """Verification rules applied to a parsed reading (consistency, blur, layout traps)."""
     consistency = check_ocr_consistency(result)
     warnings = list(result.warnings)
+    total_fix = None
+    shift_check = consistency.get('shift_check') or {}
+    total_reading = result.fields['total_collected_vnd']
+    if shift_check.get('checked') and not shift_check.get('is_consistent') and total_reading.value is not None:
+        total_fix = _extra_digit_fix(total_reading.value, shift_check['component_sum_vnd'])
+        if total_fix is not None:
+            note = (f'Tổng thu về đọc được {total_reading.value:,} có thể thừa một chữ số (nét bút/gạch bị đọc thành số); '
+                    f'bỏ chữ số đó thì bằng đúng tổng các khoản {total_fix:,}. Đã điền gợi ý {total_fix:,}, hãy đối chiếu ảnh.')
+            result.fields['total_collected_vnd'] = total_reading.model_copy(update={
+                'status': 'uncertain', 'review_reason': (note + ' ' + total_reading.review_reason)[:500]})
+            warnings.append(note)
 
     is_any_blurry = any(item[4].get('is_blurry') for item in valid_images)
     image_quality = valid_images[0][4] if len(valid_images) == 1 else {
@@ -1169,6 +1196,11 @@ def _finish_extraction(result, valid_images, shift_hint, target_date, attempts, 
     combined_sha = hashlib.sha256(''.join(item[3] for item in valid_images).encode()).hexdigest()
     image_sha = valid_images[0][3] if len(valid_images) == 1 else combined_sha
 
+    suggestions = suggest_values(result.fields)
+    if total_fix is not None:
+        suggestions['total_collected_vnd'] = {
+            'value': total_fix, 'basis': f'Bỏ một chữ số thừa → bằng tổng các khoản ({total_fix:,} đ)',
+            'reason': 'Tổng thu về có thể bị đọc thừa một chữ số'}
     return {
         'status': 'NEEDS_REVIEW',
         'business_date': target_date,
@@ -1178,7 +1210,7 @@ def _finish_extraction(result, valid_images, shift_hint, target_date, attempts, 
         'shift_code': shift_hint,
         **{key: value.value if value.status == 'read' else None for key, value in result.fields.items()},
         'field_readings': {key: value.model_dump() for key, value in result.fields.items()},
-        'suggestions': suggest_values(result.fields),
+        'suggestions': suggestions,
         'regions': regions,
         'consistency': consistency,
         'image_quality': image_quality,

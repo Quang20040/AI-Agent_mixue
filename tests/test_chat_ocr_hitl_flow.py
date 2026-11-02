@@ -240,3 +240,18 @@ def test_chat_reads_a_two_shift_page_and_uses_suggestions_on_request(offline_age
     assert pending['meta']['suggestions']['cash_vnd']['value'] == 2014000
     assert pending['fields']['cash_diff_vnd'] == 20000  # "(dư20k)" has an explicit unit: read directly
     assert no_writes == []
+
+
+def test_approval_card_checks_the_numbers_staff_confirmed(offline_agent):
+    """OCR read Tổng thu về 21,389,000; staff corrected it to 2,389,000 → the manager sees no stale mismatch."""
+    stale = {'shift_check': {'checked': True, 'is_consistent': False}, 'is_consistent': False,
+             'discrepancies': [{'message': 'lệch -19,000,000 so với Tổng thu về ghi trên ảnh (21,389,000)'}]}
+    reviewed = dict(cash_vnd=1_193_000, cash_diff_vnd=15_000, bank_transfer_vnd=1_126_000, shopee_food_vnd=85_000,
+                    grab_food_vnd=0, be_food_vnd=0, petty_cash_kept_vnd=1_000_000, expenses_vnd=0,
+                    total_collected_vnd=2_389_000)
+    result = offline_agent.submit_shift_review_for_approval(
+        extracted={'document_type': 'handwritten_ledger', 'consistency': stale, 'field_readings': {}},
+        reviewed_values=reviewed, report_date='2026-11-01', shift_code='CA_SANG', signed_by='Hà', **MANAGER)
+    plan = result['pending_approval']['plan']
+    assert plan['consistency']['discrepancies'] == []
+    assert plan['consistency']['shift_check']['cash_expected_vnd'] == 1_178_000

@@ -3,7 +3,7 @@ name: UI screenshots
 on:
   push:
     branches: [ "feat/**" ]
-    paths: [ "src/dashboard/**", "scripts/ui_screenshots.py", ".github/workflows/ui-screenshots.yml" ]
+    paths: [ "src/dashboard/**", "scripts/ui_screenshots.py", "scripts/ui_card_preview.py", ".github/workflows/ui-screenshots.yml" ]
   workflow_dispatch:
 
 permissions:

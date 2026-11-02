@@ -81,3 +81,25 @@ def test_shortage_annotations():
     assert parse_cell('1163 (thiếu 15k)', handwritten=True)['diff'] == -15_000
     assert parse_cell('1163 (-15k)', handwritten=True)['value'] == 1_163_000
     assert parse_cell('1193 (+15k)', handwritten=True)['diff'] == 15_000
+
+
+def test_extra_digit_in_total_is_caught_and_suggested(monkeypatch):
+    """'21389' read for '2389' (a stray stroke): no silent 21,389,000; a checked suggestion of 2,389,000."""
+    import copy
+
+    from src.engine import vision_ocr
+    spec = copy.deepcopy(SPEC)
+    spec['clean']['20261101_ca_sang_chieu.jpg']['sections'][0]['total_collected'] = {'text': '21389', 'legibility': 'clear'}
+    monkeypatch.setitem(globals(), 'SPEC', spec)
+    vision_ocr._DAY_SHEETS.clear()
+    result = extract_image(image_paths=PHOTOS, shift_hint='CA_SANG', target_date=spec['business_date'], model=_reader('clean'))
+    assert result['total_collected_vnd'] is None
+    assert result['suggestions']['total_collected_vnd']['value'] == 2_389_000
+    assert any('thừa một chữ số' in w for w in result['warnings'])
+
+
+def test_extra_digit_rule_only_fires_on_exact_match():
+    from src.engine.vision_ocr import _extra_digit_fix
+    assert _extra_digit_fix(21_389_000, 2_389_000) == 2_389_000
+    assert _extra_digit_fix(2_489_000, 2_389_000) is None
+    assert _extra_digit_fix(2_389_500, 2_389_000) is None

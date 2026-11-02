@@ -69,7 +69,32 @@ def main(out):
                         settle(page, 5000)
                     shoot(page, out / f'{name}{suffix}.png', width)
                 page.close()
+            shoot_cards(browser, out)
             browser.close()
+    finally:
+        server.terminate()
+        server.wait(timeout=20)
+
+
+CARD_PORT = PORT + 1
+CARDS = [('card_ok', ''), ('card_mismatch', '?total=21389000'), ('card_staff', '?admin=0')]
+
+
+def shoot_cards(browser, out):
+    """The approval card on its own page (sample data), desktop and phone width."""
+    env = {**os.environ, 'PYTHONPATH': str(ROOT)}
+    server = subprocess.Popen([sys.executable, '-m', 'streamlit', 'run', 'scripts/ui_card_preview.py', '--server.headless', 'true',
+                               '--server.port', str(CARD_PORT), '--browser.gatherUsageStats', 'false'], cwd=ROOT, env=env)
+    try:
+        url = f'http://localhost:{CARD_PORT}'
+        wait_server(url)
+        for width, suffix in ((1440, ''), (390, '_mobile')):
+            page = browser.new_page(viewport={'width': width, 'height': 900}, device_scale_factor=1)
+            for name, query in CARDS:
+                page.goto(url + '/' + query)
+                settle(page, 3500)
+                shoot(page, out / f'{name}{suffix}.png', width)
+            page.close()
     finally:
         server.terminate()
         server.wait(timeout=20)

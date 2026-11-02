@@ -92,8 +92,21 @@
 [class*="st-key-approval_card"] h4, [class*="st-key-approval_card"] [data-testid="stMarkdownContainer"] p,
 [class*="st-key-approval_card"] [data-testid="stCaptionContainer"] { color: #fff !important; }
 [class*="st-key-approval_card"] .vocr-table { background: #fff; border-radius: 14px; overflow: hidden; color: var(--px-ink); }
-[class*="st-key-approval_card"] button[kind="primary"] { background: #fff !important; color: var(--px-red-dark) !important; border: 0 !important; }
-[class*="st-key-approval_card"] button[kind="secondary"] { background: transparent !important; color: #fff !important; border: 1px solid #ffb3ba !important; }
+[class*="st-key-approval_card"] [data-testid="stCaptionContainer"] *, [class*="st-key-approval_card"] h4 * { color: #fff !important; }
+[class*="st-key-approval_card"] code { background: rgba(255,255,255,.18) !important; color: #fff !important; border-radius: 6px; padding: 1px 6px; }
+[class*="st-key-approval_card"] h4 code { background: #fff !important; color: var(--px-red-dark) !important; }
+[class*="st-key-approval_card"] button[kind="primary"] { background: #fff !important; border: 0 !important; }
+[class*="st-key-approval_card"] button[kind="primary"],
+[class*="st-key-approval_card"] button[kind="primary"] * { color: var(--px-red-dark) !important; font-weight: 700 !important; }
+[class*="st-key-approval_card"] button[kind="primary"]:disabled { opacity: .55; }
+[class*="st-key-approval_card"] button[kind="secondary"] { background: transparent !important; border: 1px solid #ffb3ba !important; }
+[class*="st-key-approval_card"] button[kind="secondary"],
+[class*="st-key-approval_card"] button[kind="secondary"] * { color: #fff !important; }
+/* Warnings on the red card: a white panel with dark text instead of red-on-red. */
+[class*="st-key-approval_card"] [data-testid="stAlert"] > div { background: #fff !important; border-left: 4px solid #f59e0b !important; border-radius: 12px !important; }
+[class*="st-key-approval_card"] [data-testid="stAlert"] *,
+[class*="st-key-approval_card"] [data-testid="stAlert"] [data-testid="stMarkdownContainer"] p { color: #7c2d12 !important; font-size: 14px !important; }
+[class*="st-key-approval_card"] .px-cash-note { background: rgba(255,255,255,.14); border-radius: 12px; padding: 8px 12px; font-size: 14px; }
 
 /* ---------- Chat ---------- */
 .px-chat-head { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }

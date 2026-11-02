@@ -933,6 +933,23 @@ class OcrChatMixin:
                 filenames.append(att["filename"])
         fields = {mf: reviewed_values.get(mf) for mf in MONEY_FIELDS}
         fields.update(report_date=report_date, shift_code=shift_code)
+        # The manager approves the numbers the staff checked, so the arithmetic check is re-run on them
+        # (the OCR-time check may describe a misread that the staff already corrected).
+        from src.engine.vision_ocr import MoneyReading, ShiftReading, check_ocr_consistency
+        readings = extracted.get("field_readings", {}) or {}
+        consistency = check_ocr_consistency(ShiftReading(
+            document_type=extracted.get("document_type", "unknown"),
+            document_date=report_date, signed_by=signed_by or "", raw_text="Reviewed values",
+            fields={mf: MoneyReading(
+                value=int(fields[mf]) if fields.get(mf) is not None else None,
+                normalized_value=int(fields[mf]) if fields.get(mf) is not None else None,
+                status="read" if fields.get(mf) is not None else "not_present",
+                source=(readings.get(mf) or {}).get("source", "unknown"),
+                raw_text=str((readings.get(mf) or {}).get("raw_text", ""))[:300],
+                unit_explicit=True,
+                evidence=f"Nhân viên xác nhận: {fields[mf]}" if fields.get(mf) is not None else "",
+            ) for mf in MONEY_FIELDS},
+        ))
         draft = store.save_ocr_draft(
             owner, self._conversation_id, store_id=actor.store_id, user_id=actor.user_id,
             file_id=file_ids[0] if file_ids else "",
@@ -945,7 +962,7 @@ class OcrChatMixin:
                 "notes": notes,
                 "bank_transfer_formula": bank_transfer_formula,
                 "field_readings": extracted.get("field_readings", {}),
-                "consistency": extracted.get("consistency") or {},
+                "consistency": consistency,
                 "warnings": list(extracted.get("warnings", [])),
                 "file_ids": file_ids,
                 "filenames": filenames,

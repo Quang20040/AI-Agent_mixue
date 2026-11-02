@@ -905,8 +905,15 @@ def render_approval_card(agent, pending, clean_role, user_name, is_admin, key_su
                               for k in vocr.FIELD_LABELS if fields.get(k) is not None)
             st.markdown(f"<table class='vocr-table'><thead><tr><th>Khoản mục</th><th>Giá trị sẽ ghi sổ</th></tr></thead><tbody>{summary}</tbody></table>",
                         unsafe_allow_html=True)
-            for disc in (draft.get('consistency') or {}).get('discrepancies', []):
+            consistency = draft.get('consistency') or {}
+            cash_note = (consistency.get('shift_check') or {}).get('cash_explanation')
+            if cash_note:
+                st.markdown(f"<div class='px-cash-note'>💵 {escape(cash_note)}</div>", unsafe_allow_html=True)
+            discrepancies = consistency.get('discrepancies', [])
+            for disc in discrepancies:
                 st.warning(f"⚠️ {disc.get('message')}")
+            if consistency.get('shift_check', {}).get('checked') and not discrepancies:
+                st.markdown("<div class='px-cash-note'>⚖️ Cộng ngang khớp với Tổng thu về.</div>", unsafe_allow_html=True)
         else:
             st.markdown(f"**Xác nhận kế hoạch {pending['plan_id']}**")
             with st.expander('Xem nội dung kế hoạch trước khi duyệt'):
