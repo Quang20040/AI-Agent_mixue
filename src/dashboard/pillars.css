@@ -166,7 +166,7 @@
 .px-kpi { background: #fff; border: 1px solid var(--px-line); border-radius: 20px; padding: 16px 18px; }
 .px-kpi small, .px-kpi span { display: block; font-size: 12px; color: var(--px-muted); }
 .px-kpi b { display: block; font-size: 24px; font-weight: 800; color: var(--px-ink); margin: 4px 0 2px; }
-.px-kpi b.ok { color: var(--px-ok); } .px-kpi b.bad { color: var(--px-red-dark); }
+.px-kpi b.ok { color: var(--px-ok); } .px-kpi b.bad { color: var(--px-red-dark); } .px-kpi b.muted { color: var(--px-muted); font-size: 20px; }
 .px-card, .mx-card.px-card { background: #fff !important; border: 1px solid var(--px-line) !important; border-radius: 20px !important; padding: 20px 22px !important; box-shadow: none !important; }
 .px-card .px-section-head h2 { font-size: 16px !important; }
 .mx-shortcuts.px-card .mx-shortcut-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }

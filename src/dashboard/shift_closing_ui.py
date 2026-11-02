@@ -9,6 +9,7 @@ Hỗ trợ:
 """
 
 import hashlib
+from datetime import date
 import time
 from pathlib import Path
 
@@ -18,6 +19,7 @@ import streamlit as st
 from html import escape
 
 from src.auth import normalize_role
+from src.dashboard.sales_view import business_today
 from src.engine.day_sheet import SHIFT_LABELS
 from src.dashboard import ocr_components as vocr
 from src.engine.shift_service import (
@@ -95,18 +97,36 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
     if st.session_state.get('shift_ocr_selection') not in shift_options:
         st.session_state.shift_ocr_selection = shift_options[0]
     if 'shift_chosen_date_picker' not in st.session_state:
-        st.session_state.shift_chosen_date_picker = latest_shift_report_date()
+        st.session_state.shift_chosen_date_picker = business_today()  # realtime: open on today
 
     def choose_sample(filenames, ca):
-        sample_day = latest_shift_report_date()
-        st.session_state.shift_chosen_date_picker = sample_day
-        day_images = st.session_state.setdefault('ocr_day_images', {}).setdefault(sample_day.isoformat(), [])
+        # Sample photos go into the day being closed (today by default); a photo from another day is
+        # flagged after reading, exactly as a real photo would be.
+        day = st.session_state.shift_chosen_date_picker.isoformat()
+        day_images = st.session_state.setdefault('ocr_day_images', {}).setdefault(day, [])
         for filename in filenames:
             p_str = str(SHIFT_PHOTOS_DIR / filename)
             if p_str not in day_images:
                 day_images.append(p_str)
         if ca:
             st.session_state.shift_ocr_selection = next(item for item in shift_options if item[0] == ca)
+
+
+    def move_to_day(target_iso):
+        """Photo says another day: carry the photos and their reading over and open that day."""
+        source = st.session_state.shift_chosen_date_picker.isoformat()
+        images = st.session_state.setdefault('ocr_day_images', {})
+        moved = images.pop(source, [])
+        target = images.setdefault(target_iso, [])
+        target.extend(p for p in moved if p not in target)
+        for key in ('ocr_day_read', 'ocr_day_reading'):
+            bucket = st.session_state.setdefault(key, {})
+            if source in bucket:
+                bucket[target_iso] = bucket.pop(source)
+        st.session_state.shift_chosen_date_picker = date.fromisoformat(target_iso)
+
+    def back_to_today():
+        st.session_state.shift_chosen_date_picker = business_today()
 
     with st.container(key='ocr_page_head'):
         head, date_col, shift_col = st.columns([3.2, 1, 1.5], gap='medium', vertical_alignment='bottom')
@@ -123,6 +143,10 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                 selection_mode='single', label_visibility='collapsed',
             ) or shift_options[0]
     shift_code = selected_shift_type[0]
+    if chosen_date != business_today():
+        past, back = st.columns([5, 1.2], vertical_alignment='center')
+        past.info(f'Đang xem ngày **{chosen_date:%d/%m/%Y}** (không phải hôm nay). Dữ liệu ngày này để tra cứu hoặc chốt bù.')
+        back.button('Về hôm nay', key='ocr_back_today', use_container_width=True, on_click=back_to_today)
     steps_slot = st.empty()
 
     chosen_d_str = chosen_date.isoformat()
@@ -138,6 +162,12 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
         ("App giao hàng", f"{money(summary['total_delivery_apps_vnd'])} đ", 'ShopeeFood · GrabFood · BeFood', ''),
         ("Lệch so với thực thu POS", f"{money(var_pos).replace('-', '−')} đ", f"POS {money(summary['pos_revenue_vnd'])} đ",
          'ok' if abs(var_pos) <= 50000 else 'bad'),
+    ] if get_all_shift_reports(chosen_d_str) else [
+        (f"Tổng thu về · {chosen_date:%d/%m}", 'Chưa chốt', 'Chưa có ca nào được duyệt', 'muted'),
+        ("Tiền mặt gom ca", '—', 'Sau khi chốt ca', 'muted'),
+        ("Chuyển khoản", '—', 'Sau khi chốt ca', 'muted'),
+        ("App giao hàng", '—', 'Sau khi chốt ca', 'muted'),
+        ("Lệch so với thực thu POS", '—', 'Có khi ca tối chốt cùng phiếu POS', 'muted'),
     ]
     st.markdown('<section class="px-kpis" aria-label="Tổng kết ngày">' + ''.join(
         f'<div class="px-kpi"><small>{label}</small><b class="px-num {tone}">{value}</b><span>{note}</span></div>'
@@ -160,7 +190,7 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                 day_images[:] = [p for p in day_images if p and Path(p).is_file()]
                 st.session_state.setdefault('ocr_day_reading', {})
 
-                st.markdown(f'<div class="px-mini-head">Ảnh mẫu {latest_shift_report_date():%d/%m/%Y}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="px-mini-head">Ảnh mẫu (chụp ngày {latest_shift_report_date():%d/%m/%Y})</div>', unsafe_allow_html=True)
                 samples = [("📷 Sổ Ca Sáng", ['20261014_ca_sang_chieu.jpg'], 'CA_SANG'),
                            ("📷 Sổ Ca Chiều", ['20261014_ca_sang_chieu.jpg'], 'CA_CHIEU'),
                            ("📷 Sổ Ca Tối", ['20261014_ca_toi_tong_ket.jpg'], 'CA_TOI'),
@@ -249,6 +279,13 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                                        {img['sha256']: img for img in day_cover.get('images', [])})
                 extracted = st.session_state.get('extracted_cache') or {}
                 vocr.render_pipeline_steps(extracted, slot=steps_slot)
+                photo_date = extracted.get('document_date')
+                if extracted.get('status') == 'NEEDS_REVIEW' and photo_date and photo_date != chosen_d_str:
+                    warn, move = st.columns([3.2, 1.3], vertical_alignment='center')
+                    warn.error(f'Ảnh ghi ngày **{date.fromisoformat(photo_date):%d/%m/%Y}** nhưng bạn đang chốt ngày '
+                               f'**{chosen_date:%d/%m/%Y}**. Kiểm tra lại ảnh, hoặc chuyển sang đúng ngày trên ảnh.')
+                    move.button(f'Chốt cho ngày {date.fromisoformat(photo_date):%d/%m}', key='ocr_move_day',
+                                use_container_width=True, on_click=move_to_day, args=(photo_date,))
                 sheet_info = extracted.get('day_sheet') or {}
                 if extracted.get('status') == 'NEEDS_REVIEW' and sheet_info and not sheet_info.get('shift_present', True):
                     found = ', '.join(SHIFT_SHORT[x] for x in sheet_info.get('detected_shifts', [])) or 'không có ca nào'

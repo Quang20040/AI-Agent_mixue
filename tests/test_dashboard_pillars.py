@@ -242,7 +242,15 @@ def test_day_photos_are_read_once_and_each_shift_fills_its_own_numbers(monkeypat
 
     assert number('Tiền mặt thu tại quầy (đ)') == 653000
     html = ' '.join(m.value for m in app.markdown)
+    assert 'có trong ảnh đã đọc' in html  # opened on today: the photos' shifts are read, nothing closed yet
+    # The sample photos say 14/10: the page flags it and offers to close that day instead.
+    assert any('Ảnh ghi ngày **14/10/2026**' in e.value for e in app.error)
+    app.button(key='ocr_move_day').click().run()
+    assert not app.exception
+    assert app.session_state['shift_chosen_date_picker'].isoformat() == '2026-10-14'
+    html = ' '.join(m.value for m in app.markdown)
     assert 'đã duyệt, đã ghi sổ' in html and 'Gửi lại sẽ tạo bản cập nhật' in ' '.join(i.value for i in app.info)
+    assert number('Tiền mặt thu tại quầy (đ)') == 653000
     # Switch to the afternoon: numbers change, nothing is sent to the model again.
     app.session_state['shift_ocr_selection'] = ('CA_CHIEU', 'Ca chiều')
     app.run()

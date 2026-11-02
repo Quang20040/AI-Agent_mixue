@@ -9,7 +9,7 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from datetime import date, datetime
+from datetime import datetime
 
 import pandas as pd
 import streamlit as st
@@ -32,6 +32,7 @@ from src.auth import (
     is_admin_role,
     reset_employee_password,
 )
+from src.dashboard.sales_view import business_today
 from src.dashboard.brand_ui import (
     install_brand,
     nav_group_css,
@@ -296,7 +297,7 @@ with st.container(key="workspace"):
                         item_choices = [f"{row['Mã NL']} — {row['Tên mặt hàng (Quy cách)']}" for _, row in matrix_df_items.iterrows()]
 
                         with st.form("staff_stock_request_form", clear_on_submit=True):
-                            e_date = st.date_input("Ngày phát sinh lệnh", value=date.today())
+                            e_date = st.date_input("Ngày phát sinh lệnh", value=business_today())
                             selected_item_str = st.selectbox("Chọn mặt hàng & quy cách đóng gói", item_choices)
                             selected_ing_id = selected_item_str.split(" — ")[0]
 
@@ -448,7 +449,7 @@ with st.container(key="workspace"):
                         with act_tab1:
                             st.caption("Quản lý/Chủ quán tạo lệnh xuất, nhập hoặc kiểm kê đếm kho (duyệt tự động).")
                             with st.form("admin_stock_entry_form", clear_on_submit=True):
-                                e_date = st.date_input("Ngày phát sinh", value=date.today(), key="admin_stock_date")
+                                e_date = st.date_input("Ngày phát sinh", value=business_today(), key="admin_stock_date")
 
                                 item_choices = [f"{row['Mã NL']} — {row['Tên mặt hàng (Quy cách)']}" for _, row in matrix_df.iterrows()]
                                 selected_item_str = st.selectbox("Chọn mặt hàng & quy cách", item_choices, key="admin_stock_item")
@@ -1003,7 +1004,7 @@ with st.container(key="workspace"):
         with col_po1:
             with st.container(border=True):
                 lead_time = st.number_input("Thời gian giao hàng (Lead Time - ngày)", min_value=1, max_value=7, value=2, key="lead_time_in_vi")
-                po_date = st.date_input("Ngày đề xuất đặt hàng", value=date.today(), key="po_date_in_vi")
+                po_date = st.date_input("Ngày đề xuất đặt hàng", value=business_today(), key="po_date_in_vi")
 
                 if st.button("📋 Tạo Dự thảo Đơn Đặt hàng", key="calc_po_btn_vi", type="primary", use_container_width=True):
                     res = agent.tool_optimize_replenishment(target_date=po_date.isoformat(), lead_time_days=lead_time)

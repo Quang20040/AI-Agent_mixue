@@ -359,9 +359,11 @@ def _home_state(agent, user_role, user_name):
         state['plans_waiting'] = sum(1 for p in list_plans()
                                      if p.get('status') == 'PENDING_APPROVAL' and str(p.get('target_date', ''))[:10] >= today)
         state['stock_waiting'] = len(get_pending_requests())
-    latest = latest_shift_report_date()
-    summary = get_daily_closing_summary(latest)
-    state.update(latest=latest, reports=len(get_all_shift_reports(latest)), summary=summary)
+    # Realtime: everything on the home page is about today; the last day with data is only a hint.
+    today_d = business_today()
+    summary = get_daily_closing_summary(today_d.isoformat())
+    state.update(latest=today_d, reports=len(get_all_shift_reports(today_d.isoformat())), summary=summary,
+                 last_closed=latest_shift_report_date())
     state['bench_raw'], state['bench_verified'] = _benchmark_headline()
     return state
 
@@ -419,15 +421,16 @@ def render_pillars(user_role):
     st.markdown('<div class="px-section-head"><h2>2 trụ cột kỹ thuật</h2>'
                 '<span>Mọi số liệu ghi sổ đều qua bằng chứng và người phê duyệt</span></div>', unsafe_allow_html=True)
     summary = state.get('summary') or {}
-    latest = state.get('latest')
     columns = st.columns(len(visible), gap='medium')
     for column, (page, key, tag, title, lead, bullets) in zip(columns, visible):
         with column, st.container(border=True, key=f'{key}_card'):
             if key == 'pillar_open_ocr':
                 icon, heading = ui_icon('camera'), 'Verifiable Vision OCR'
                 variance = summary.get('variance_pos_vnd')
-                stats = [('Ca đã chốt · ' + (f'{latest:%d/%m}' if latest else '—'), str(state.get('reports', 0)), state.get('reports', 0)),
-                         ('Đối soát POS ↔ sổ', f"{variance:+,.0f} đ".replace(',', '.').replace('-', '−') if variance is not None else '—', None),
+                closed_today = state.get('reports', 0)
+                stats = [('Ca đã chốt hôm nay', f'{closed_today}/3', None),
+                         ('Lệch POS ↔ sổ hôm nay', f"{variance:+,.0f} đ".replace(',', '.').replace('-', '−')
+                          if closed_today and variance is not None else '—', None),
                          ('Số sai không bị gắn cờ', f"{state.get('bench_raw', '—')} → {state.get('bench_verified', '—')}", None)]
                 draft = state.get('draft')
                 badge = (f'<span class="px-pill warn">{len(draft.get("missing_fields") or [])} trường chờ xác nhận</span>' if draft
@@ -464,38 +467,48 @@ def render_pillars(user_role):
 
 
 def render_home_kpis(sales, menu):
-    """Four figures from the latest business day that has data (never 'today' guesses)."""
+    """Today's figures (realtime). A day without data says so; past days are looked up on their own pages."""
     from src.engine.shift_service import get_all_shift_reports
     number = lambda value: f'{value:,.0f}'.replace(',', '.')
     state = st.session_state.get('_home_state') or {}
+    today_d = business_today()
+    day = today_d.isoformat()
+    label_day = f'{today_d:%d/%m}'
     cards = []
+    rows = sales.iloc[0:0]
+    last_sales_day = None
     if not sales.empty:
         frame = sales.copy()
         frame['business_date'] = frame['business_date'].astype(str).str[:10]
-        day = frame['business_date'].max()
-        today_rows = frame[frame['business_date'] == day]
-        top = today_rows.groupby('sku_name')['quantity_sold'].sum().sort_values(ascending=False)
-        label_day = f'{day[8:10]}/{day[5:7]}'
-        cards += [(f'Doanh thu POS · {label_day}', f"{number(today_rows['revenue_vnd'].sum())} đ", 'Nguồn: sales_daily', ''),
-                  ('Số ly bán ra', f"{number(today_rows['quantity_sold'].sum())} ly",
+        rows = frame[frame['business_date'] == day]
+        last_sales_day = frame['business_date'].max()
+    if not rows.empty:
+        top = rows.groupby('sku_name')['quantity_sold'].sum().sort_values(ascending=False)
+        cards += [(f'Doanh thu POS hôm nay · {label_day}', f"{number(rows['revenue_vnd'].sum())} đ", 'Nguồn: sales_daily', ''),
+                  ('Số ly bán hôm nay', f"{number(rows['quantity_sold'].sum())} ly",
                    f'{escape(top.index[0])} dẫn đầu · {int(top.iloc[0])} ly' if len(top) else '', '')]
     else:
-        cards.append(('Doanh thu POS', 'Chưa có dữ liệu', 'Nhập dữ liệu bán hàng để xem', ''))
-    summary, latest = state.get('summary') or {}, state.get('latest')
-    if latest and summary.get('total_collected_vnd'):
-        reports = get_all_shift_reports(latest)
+        hint = f'Ngày gần nhất có số: {last_sales_day[8:10]}/{last_sales_day[5:7]}' if last_sales_day else 'Chưa nhập dữ liệu bán hàng'
+        cards += [(f'Doanh thu POS hôm nay · {label_day}', 'Chưa có số', escape(hint), 'muted'),
+                  ('Số ly bán hôm nay', 'Chưa có số', 'Cập nhật khi nhập doanh thu POS', 'muted')]
+    summary = state.get('summary') or {}
+    reports = get_all_shift_reports(day)
+    if reports:
         signer = next((r.get('signed_by') for r in reversed(reports) if r.get('signed_by')), '')
         variance = summary.get('variance_pos_vnd') or 0
-        cards += [(f'Tổng thu sổ chốt ca · {latest:%d/%m}', f"{number(summary['total_collected_vnd'])} đ",
-                   'Đã duyệt' + (f' · ký: {escape(signer)}' if signer else ''), ''),
+        cards += [(f'Tổng thu sổ chốt ca · {label_day}', f"{number(summary.get('total_collected_vnd') or 0)} đ",
+                   f'{len(reports)}/3 ca đã duyệt' + (f' · ký: {escape(signer)}' if signer else ''), ''),
                   ('Lệch so với thực thu POS', f"{number(variance).replace('-', '−')} đ",
                    f"POS {number(summary.get('pos_collected_vnd') or 0)} đ · " + ('trong ngưỡng' if abs(variance) < 50_000 else 'cần kiểm tra'),
                    'ok' if abs(variance) < 50_000 else 'bad')]
     else:
-        cards.append(('Thực đơn', f'{len(menu)} món', 'Tra cứu công thức từng món', ''))
+        last = state.get('last_closed')
+        cards += [(f'Tổng thu sổ chốt ca · {label_day}', 'Chưa chốt ca nào',
+                   'Ngày gần nhất đã chốt: ' + f'{last:%d/%m}' if last and last != today_d else 'Chốt ca ở trang OCR', 'muted'),
+                  ('Lệch so với thực thu POS', '—', 'Có khi ca tối đã chốt cùng phiếu POS', 'muted')]
     html = ''.join(f'<div class="px-kpi"><small>{escape(label)}</small><b class="px-num {tone}">{escape(value)}</b><span>{note}</span></div>'
                    for label, value, note, tone in cards)
-    st.markdown(f'<section class="px-kpis" aria-label="Số liệu ngày gần nhất">{html}</section>', unsafe_allow_html=True)
+    st.markdown(f'<section class="px-kpis" aria-label="Số liệu hôm nay">{html}</section>', unsafe_allow_html=True)
 
 
 def render_shortcuts(user_role):
