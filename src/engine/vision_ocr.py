@@ -456,6 +456,9 @@ def check_ocr_consistency(result: ShiftReading) -> dict[str, Any]:
     if shift_total is not None and shift_components:
         comp_sum = sum(shift_components.values()) - expenses_val
         shift_diff = comp_sum - shift_total
+        surplus = result.fields['cash_diff_vnd'].value or 0
+        # This shop counts the cash surplus inside "Tiền mặt" but leaves it out of "Tổng thu về".
+        surplus_excluded = bool(surplus) and shift_diff == surplus
         shift_check = {
             'checked': True,
             'total_collected_vnd': shift_total,
@@ -463,9 +466,10 @@ def check_ocr_consistency(result: ShiftReading) -> dict[str, Any]:
             'expenses_vnd': expenses_val,
             'difference_vnd': shift_diff,
             'components': shift_components,
-            'is_consistent': shift_diff == 0,
+            'is_consistent': shift_diff == 0 or surplus_excluded,
+            'surplus_excluded_vnd': surplus if surplus_excluded else 0,
         }
-        if shift_diff != 0:
+        if shift_diff != 0 and not surplus_excluded:
             msg = (
                 f'Chênh lệch cộng ngang sổ ca: Tổng các khoản ({comp_sum:,}) '
                 f'lệch {shift_diff:+,} so với Tổng thu về ghi trên ảnh ({shift_total:,}). '
@@ -645,6 +649,7 @@ def merge_image_extractions(results, *, names, shas, shift_hint, target_date):
     consistency = check_ocr_consistency(merged)
     output = dict(good[0][1])
     output.update({key: reading.value if reading.status == 'read' else None for key, reading in merged.fields.items()})
+    merged.warnings = list(dict.fromkeys(merged.warnings))
     output.update(field_readings={key: reading.model_dump() for key, reading in merged.fields.items()},
                   suggestions=suggest_values(merged.fields),
                   field_candidates=provenance, document_date=merged.document_date, document_type=merged.document_type,

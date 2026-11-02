@@ -1,0 +1,488 @@
+{
+ "_note": "Ảnh thật ngày 01/11/2026. clean = bản chép đúng (đo tầng quy tắc); hard = các lỗi đọc thường gặp (chữ bị gạch, bảng nghiêng lệch hàng, phiếu POS che nhãn). Không phải đầu ra mô hình thật.",
+ "business_date": "2026-11-01",
+ "truth": {
+  "CA_SANG": {
+   "cash_vnd": 1193000,
+   "cash_diff_vnd": 15000,
+   "bank_transfer_vnd": 1126000,
+   "shopee_food_vnd": 85000,
+   "be_food_vnd": 0,
+   "grab_food_vnd": 0,
+   "petty_cash_kept_vnd": 1000000,
+   "expenses_vnd": 0,
+   "total_collected_vnd": 2389000,
+   "pos_revenue_vnd": null,
+   "pos_collected_vnd": null,
+   "signed_by": "Hà"
+  },
+  "CA_CHIEU": {
+   "cash_vnd": 2483000,
+   "cash_diff_vnd": 18000,
+   "bank_transfer_vnd": 3027000,
+   "shopee_food_vnd": 221000,
+   "be_food_vnd": 0,
+   "grab_food_vnd": 122000,
+   "petty_cash_kept_vnd": 1000000,
+   "expenses_vnd": 0,
+   "total_collected_vnd": 5835000,
+   "pos_revenue_vnd": null,
+   "pos_collected_vnd": null,
+   "signed_by": "Nhi"
+  },
+  "CA_TOI": {
+   "cash_vnd": 3821000,
+   "cash_diff_vnd": 91000,
+   "bank_transfer_vnd": 6138000,
+   "shopee_food_vnd": 533000,
+   "be_food_vnd": 0,
+   "grab_food_vnd": 221000,
+   "petty_cash_kept_vnd": 1000000,
+   "expenses_vnd": 0,
+   "total_collected_vnd": 10662000,
+   "pos_revenue_vnd": 10943000,
+   "pos_collected_vnd": 10662921,
+   "signed_by": "Anh"
+  }
+ },
+ "clean": {
+  "20261101_ca_sang_chieu.jpg": {
+   "transcription": "BÁO CÁO DOANH THU CÁC CA TRONG NGÀY\nNgày 1/11/26\n1. Ca sáng bàn giao (8h-13h)\nTiền mặt | 1193 (dư 15k)\nChuyển khoản | 1126\nShopee food | 85\nBe food | 0\nGrab food | 0\nCố định két | 1.000.000đ\nTổng thu về: 2389\nCa sáng kí xác nhận: Hà\n2. Ca chiều bàn giao (13h-18h)\nTiền mặt | 2483 (dư 18k)\nChuyển khoản | 1557 + 1470\nShopee food | 221\nBe food | 0\nGrab food | 122\nCố định két | 1.000.000đ\nTổng thu về: 5835\nCa chiều kí xác nhận: Nhi",
+   "document_kind": "handwritten_ledger",
+   "document_date": "2026-11-01",
+   "sections": [
+    {
+     "shift": "CA_SANG",
+     "cash": {
+      "text": "1193 (dư 15k)",
+      "legibility": "clear"
+     },
+     "bank_transfer": {
+      "text": "1126",
+      "legibility": "clear"
+     },
+     "shopee_food": {
+      "text": "85",
+      "legibility": "clear"
+     },
+     "be_food": {
+      "text": "0",
+      "legibility": "clear"
+     },
+     "grab_food": {
+      "text": "0",
+      "legibility": "clear"
+     },
+     "petty_cash": {
+      "text": "1.000.000đ",
+      "legibility": "clear"
+     },
+     "total_collected": {
+      "text": "2389",
+      "legibility": "clear"
+     },
+     "expenses": {
+      "text": "",
+      "legibility": "empty"
+     },
+     "signed_by": "Hà"
+    },
+    {
+     "shift": "CA_CHIEU",
+     "cash": {
+      "text": "2483 (dư 18k)",
+      "legibility": "clear"
+     },
+     "bank_transfer": {
+      "text": "1557 + 1470",
+      "legibility": "clear"
+     },
+     "shopee_food": {
+      "text": "221",
+      "legibility": "clear"
+     },
+     "be_food": {
+      "text": "0",
+      "legibility": "clear"
+     },
+     "grab_food": {
+      "text": "122",
+      "legibility": "clear"
+     },
+     "petty_cash": {
+      "text": "1.000.000đ",
+      "legibility": "clear"
+     },
+     "total_collected": {
+      "text": "5835",
+      "legibility": "clear"
+     },
+     "expenses": {
+      "text": "",
+      "legibility": "empty"
+     },
+     "signed_by": "Nhi"
+    }
+   ],
+   "pos_slip": {
+    "present": false,
+    "business_date": "",
+    "total_revenue": {
+     "text": "",
+     "legibility": "empty"
+    },
+    "collected": {
+     "text": "",
+     "legibility": "empty"
+    },
+    "cash": {
+     "text": "",
+     "legibility": "empty"
+    },
+    "grab_food": {
+     "text": "",
+     "legibility": "empty"
+    },
+    "shopee_food": {
+     "text": "",
+     "legibility": "empty"
+    },
+    "be_food": {
+     "text": "",
+     "legibility": "empty"
+    }
+   },
+   "notes": []
+  },
+  "20261101_ca_toi_tong_ket.jpg": {
+   "transcription": "3. Ca tối chốt tổng hợp cả ngày\n3.1 Chốt cốc (bỏ qua)\n3.2 Doanh thu tổng cả ngày\nTiền mặt | 3821 (dư 91k)\nChuyển khoản | 3509 + 2629\nShopee food | 533\nBe food & Miniapp | \nGrab food | 221\nCố định két | 1.000.000đ\nSố dư TK MB cuối ngày | 23,237 (bỏ qua)\n4. Khoản chi trong ngày: - - -\n5. Tổng thu về: 10,662\nKý xác nhận: Anh",
+   "document_kind": "handwritten_ledger",
+   "document_date": "",
+   "sections": [
+    {
+     "shift": "CA_TOI",
+     "cash": {
+      "text": "3821 (dư 91k)",
+      "legibility": "clear"
+     },
+     "bank_transfer": {
+      "text": "3509 + 2629",
+      "legibility": "clear"
+     },
+     "shopee_food": {
+      "text": "533",
+      "legibility": "clear"
+     },
+     "be_food": {
+      "text": "",
+      "legibility": "empty"
+     },
+     "grab_food": {
+      "text": "221",
+      "legibility": "clear"
+     },
+     "petty_cash": {
+      "text": "1.000.000đ",
+      "legibility": "clear"
+     },
+     "total_collected": {
+      "text": "10,662",
+      "legibility": "clear"
+     },
+     "expenses": {
+      "text": "",
+      "legibility": "empty"
+     },
+     "signed_by": "Anh"
+    }
+   ],
+   "pos_slip": {
+    "present": false,
+    "business_date": "",
+    "total_revenue": {
+     "text": "",
+     "legibility": "empty"
+    },
+    "collected": {
+     "text": "",
+     "legibility": "empty"
+    },
+    "cash": {
+     "text": "",
+     "legibility": "empty"
+    },
+    "grab_food": {
+     "text": "",
+     "legibility": "empty"
+    },
+    "shopee_food": {
+     "text": "",
+     "legibility": "empty"
+    },
+    "be_food": {
+     "text": "",
+     "legibility": "empty"
+    }
+   },
+   "notes": []
+  },
+  "20261101_ca_toi_pos_slip.jpg": {
+   "transcription": "Thống kê bán hàng tại cửa hàng\nNgày làm việc: 2026-11-01 Đến 2026-11-01\nTổng doanh thu: 10,943,000\nSố tiền thu được: 10,662,921\nChi tiết số tiền thu được: 1.Cash: 9,908,000; 2.GrabFood: 221,000; 3.Shopeefood: 533,921\n(Bên phải: bảng 3.2 ca tối, nhãn dòng bị phiếu POS che)\n3821 (dư 91k) | 3509 + 2629 | 533 | | 221 | 1.000.000đ | 23,237",
+   "document_kind": "composite",
+   "document_date": "2026-11-01",
+   "sections": [
+    {
+     "shift": "CA_TOI",
+     "cash": {
+      "text": "3821 (dư 91k)",
+      "legibility": "clear"
+     },
+     "bank_transfer": {
+      "text": "3509 + 2629",
+      "legibility": "clear"
+     },
+     "shopee_food": {
+      "text": "533",
+      "legibility": "clear"
+     },
+     "be_food": {
+      "text": "",
+      "legibility": "empty"
+     },
+     "grab_food": {
+      "text": "221",
+      "legibility": "clear"
+     },
+     "petty_cash": {
+      "text": "1.000.000đ",
+      "legibility": "clear"
+     },
+     "total_collected": {
+      "text": "",
+      "legibility": "empty"
+     },
+     "expenses": {
+      "text": "",
+      "legibility": "empty"
+     },
+     "signed_by": "Anh"
+    }
+   ],
+   "pos_slip": {
+    "present": true,
+    "business_date": "2026-11-01",
+    "total_revenue": {
+     "text": "10,943,000",
+     "legibility": "clear"
+    },
+    "collected": {
+     "text": "10,662,921",
+     "legibility": "clear"
+    },
+    "cash": {
+     "text": "9,908,000",
+     "legibility": "clear"
+    },
+    "grab_food": {
+     "text": "221,000",
+     "legibility": "clear"
+    },
+    "shopee_food": {
+     "text": "533,921",
+     "legibility": "clear"
+    },
+    "be_food": {
+     "text": "",
+     "legibility": "empty"
+    }
+   },
+   "notes": [
+    "Phiếu POS che nhãn dòng của bảng 3.2."
+   ]
+  }
+ },
+ "hard": {
+  "20261101_ca_sang_chieu.jpg": {
+   "transcription": "BÁO CÁO DOANH THU CÁC CA TRONG NGÀY\nNgày 1/11/26\n1. Ca sáng bàn giao (8h-13h)\nTiền mặt | 1193 (dư 15k)\nChuyển khoản | 1126\nShopee food | 85\nBe food | 0\nGrab food | 0\nCố định két | 1.000.000đ\nTổng thu về: 2389\nCa sáng kí xác nhận: Hà\n2. Ca chiều bàn giao (13h-18h)\nTiền mặt | 2483 (dư 18k)\nChuyển khoản | 1557 + 1470\nShopee food | 221\nBe food | 0\nGrab food | 122\nCố định két | 1.000.000đ\nTổng thu về: 5835\nCa chiều kí xác nhận: Nhi",
+   "document_kind": "handwritten_ledger",
+   "document_date": "2026-11-01",
+   "sections": [
+    {
+     "shift": "CA_SANG",
+     "cash": {
+      "text": "2093 1193 (dư 15k)",
+      "legibility": "unsure"
+     },
+     "bank_transfer": {
+      "text": "1126",
+      "legibility": "clear"
+     },
+     "shopee_food": {
+      "text": "85",
+      "legibility": "clear"
+     },
+     "be_food": {
+      "text": "0",
+      "legibility": "clear"
+     },
+     "grab_food": {
+      "text": "0",
+      "legibility": "clear"
+     },
+     "petty_cash": {
+      "text": "1.000.000đ",
+      "legibility": "clear"
+     },
+     "total_collected": {
+      "text": "2389",
+      "legibility": "clear"
+     },
+     "expenses": {
+      "text": "",
+      "legibility": "empty"
+     },
+     "signed_by": "Hà"
+    },
+    {
+     "shift": "CA_CHIEU",
+     "cash": {
+      "text": "2483 (dư 18k)",
+      "legibility": "clear"
+     },
+     "bank_transfer": {
+      "text": "1557 + 1470",
+      "legibility": "clear"
+     },
+     "shopee_food": {
+      "text": "221",
+      "legibility": "clear"
+     },
+     "be_food": {
+      "text": "122",
+      "legibility": "clear"
+     },
+     "grab_food": {
+      "text": "1.000.000đ",
+      "legibility": "clear"
+     },
+     "petty_cash": {
+      "text": "",
+      "legibility": "empty"
+     },
+     "total_collected": {
+      "text": "5835",
+      "legibility": "clear"
+     },
+     "expenses": {
+      "text": "",
+      "legibility": "empty"
+     },
+     "signed_by": "Nhi"
+    }
+   ],
+   "pos_slip": {
+    "present": false,
+    "business_date": "",
+    "total_revenue": {
+     "text": "",
+     "legibility": "empty"
+    },
+    "collected": {
+     "text": "",
+     "legibility": "empty"
+    },
+    "cash": {
+     "text": "",
+     "legibility": "empty"
+    },
+    "grab_food": {
+     "text": "",
+     "legibility": "empty"
+    },
+    "shopee_food": {
+     "text": "",
+     "legibility": "empty"
+    },
+    "be_food": {
+     "text": "",
+     "legibility": "empty"
+    }
+   },
+   "notes": []
+  },
+  "20261101_ca_toi_pos_slip.jpg": {
+   "transcription": "Thống kê bán hàng tại cửa hàng\nNgày làm việc: 2026-11-01 Đến 2026-11-01\nTổng doanh thu: 10,943,000\nSố tiền thu được: 10,662,921\nChi tiết số tiền thu được: 1.Cash: 9,908,000; 2.GrabFood: 221,000; 3.Shopeefood: 533,921\n(Bên phải: bảng 3.2 ca tối, nhãn dòng bị phiếu POS che)\n3821 (dư 91k) | 3509 + 2629 | 533 | | 221 | 1.000.000đ | 23,237",
+   "document_kind": "composite",
+   "document_date": "2026-11-01",
+   "sections": [
+    {
+     "shift": "CA_TOI",
+     "cash": {
+      "text": "3821 (dư 91k)",
+      "legibility": "clear"
+     },
+     "bank_transfer": {
+      "text": "3509 + 2629",
+      "legibility": "clear"
+     },
+     "shopee_food": {
+      "text": "533",
+      "legibility": "clear"
+     },
+     "be_food": {
+      "text": "221",
+      "legibility": "clear"
+     },
+     "grab_food": {
+      "text": "1.000.000đ",
+      "legibility": "clear"
+     },
+     "petty_cash": {
+      "text": "23,237",
+      "legibility": "unsure"
+     },
+     "total_collected": {
+      "text": "",
+      "legibility": "empty"
+     },
+     "expenses": {
+      "text": "",
+      "legibility": "empty"
+     },
+     "signed_by": ""
+    }
+   ],
+   "pos_slip": {
+    "present": true,
+    "business_date": "2026-11-01",
+    "total_revenue": {
+     "text": "10,943,000",
+     "legibility": "clear"
+    },
+    "collected": {
+     "text": "10,662,921",
+     "legibility": "clear"
+    },
+    "cash": {
+     "text": "9,908,000",
+     "legibility": "clear"
+    },
+    "grab_food": {
+     "text": "221,000",
+     "legibility": "clear"
+    },
+    "shopee_food": {
+     "text": "533,921",
+     "legibility": "clear"
+    },
+    "be_food": {
+     "text": "",
+     "legibility": "empty"
+    }
+   },
+   "notes": [
+    "Phiếu POS che nhãn dòng của bảng 3.2."
+   ]
+  }
+ }
+}

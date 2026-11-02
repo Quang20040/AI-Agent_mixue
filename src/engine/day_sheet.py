@@ -129,7 +129,13 @@ def build_day_sheet_prompt(target_date: str | None) -> str:
         'Ca sáng/chiều không có dòng này -> empty.\n'
         '   - KHÔNG chép bảng "3.1. Chốt cốc/ đồ lưu niệm" (U, 500, 700, Ốc quế…; là số lượng cốc, không phải tiền), '
         'KHÔNG chép "Số dư TK MB cuối ngày", KHÔNG chép ví dụ in sẵn trong phần lưu ý.\n'
-        '   - Đọc đúng hàng: không đẩy số của Grab food sang Be food. Nếu phiếu POS che mất ô, để legibility=illegible.\n'
+        '   - ĐỌC ĐÚNG HÀNG: ảnh thường bị nghiêng nên dòng chữ viết tay lệch so với nhãn in. Gán theo THỨ TỰ Ô trong lưới '
+        'bảng: ô viết tay thứ k thuộc dòng in sẵn thứ k (Tiền mặt, Chuyển khoản, Shopee food, Be food, Grab food, Cố định két). '
+        '"1.000.000đ" luôn là Cố định két. Ô trống vẫn là một dòng (legibility=empty), đừng bỏ qua khiến các số trôi lên.\n'
+        '   - Nếu phiếu POS hoặc ngón tay che NHÃN dòng nhưng vẫn thấy số, vẫn gán số theo thứ tự dòng; '
+        'nếu che mất chính ô số thì legibility=illegible. Dòng "Số dư TK MB cuối ngày" nằm DƯỚI Cố định két, không phải tiền của ca.\n'
+        '   - Chữ bị gạch/tô xóa: KHÔNG chép, chỉ chép số viết lại cuối cùng (đặt legibility=unsure nếu có sửa).\n'
+        '   - Giữ nguyên dấu phẩy/chấm người viết dùng (ví dụ tổng "10,662"), không tự thêm số 0.\n'
         '4) `pos_slip`: phiếu in nhiệt "Thống kê bán hàng" (nếu có trên ảnh, present=true). Chép nguyên văn số: '
         'total_revenue = "Tổng doanh thu", collected = "Số tiền thu được", cash/grab_food/shopee_food/be_food = mục '
         '"Chi tiết số tiền thu được". Chữ số bị logo MIXUE đè -> legibility=unsure.\n'
@@ -156,7 +162,9 @@ def _number(term: str, *, handwritten: bool) -> tuple[int, bool, bool] | None:
     grouped = bool(re.search(r'\d[.,]\d{3}(?!\d)', text))
     digits = re.sub(r'\D', '', text)
     amount = int(digits)
-    scaled = explicit_k or (handwritten and not grouped and not explicit_vnd and 0 < amount < 100_000)
+    # Ledger shorthand is in thousands: "653", and also "10,662" (a day total written with a comma).
+    # A full handwritten VND amount carries "đ" or has at least two groups ("1.000.000").
+    scaled = explicit_k or (handwritten and not explicit_vnd and 0 < amount < (1_000_000 if grouped else 100_000))
     amount = amount * 1000 if scaled else amount
     return (-amount if negative else amount), scaled, explicit_k or explicit_vnd or grouped
 
@@ -165,7 +173,7 @@ def parse_cell(text: str, *, handwritten: bool, expenses: bool = False) -> dict[
     """Interpret one transcribed cell. Never raises; unparseable text gives value=None."""
     raw = (text or '').strip()
     out = {'raw': raw, 'value': None, 'terms': [], 'scaled': False, 'explicit_unit': False,
-           'is_expression': False, 'diff': None, 'diff_text': ''}
+           'is_expression': False, 'diff': None, 'diff_text': '', 'ambiguous': False}
     if not raw:
         return out
     if m := _ANNOTATION.search(raw):
@@ -185,6 +193,16 @@ def parse_cell(text: str, *, handwritten: bool, expenses: bool = False) -> dict[
         terms = [t.group(0) for t in terms if t] or re.findall(r'\d[\d.,]*', raw_main)[:1]
     else:
         terms = [t for t in re.split(r'\s*\+\s*', raw_main) if re.search(r'\d', t)]
+    # Several numbers in one term without "+" usually means a struck-out value next to the correction
+    # ("2093 1193"): keep the last one and say so.
+    cleaned = []
+    for term in terms:
+        numbers = re.findall(r'\d[\d.,]*\s*(?:k|nghìn|nghin|ngàn|ngan|đ)?', term, re.IGNORECASE)
+        if len(numbers) > 1 and not expenses:
+            out['ambiguous'] = True
+            term = numbers[-1]
+        cleaned.append(term)
+    terms = cleaned
     parsed = [_number(t, handwritten=handwritten) for t in terms]
     if not parsed or any(p is None for p in parsed):
         return out
@@ -208,6 +226,10 @@ def _reading(cell: Cell, *, field: str, label: str, title: str, handwritten: boo
         return (MoneyReading(status='unreadable', source=source, raw_text=cell.text[:300], evidence=evidence,
                              review_reason='Không tách được số tiền từ ô này.'), parsed)
     reasons = []
+    if parsed.get('ambiguous'):
+        reasons.append('Ô có nhiều số (có thể có số bị gạch/sửa); đang lấy số viết sau cùng, cần đối chiếu ảnh.')
+    if field == 'petty_cash_kept_vnd' and parsed['value'] != 1_000_000:
+        reasons.append('Cố định két của quán luôn là 1.000.000đ; số này có thể là ô khác (ví dụ Số dư TK) do đọc lệch hàng.')
     if cell.legibility == 'unsure':
         reasons.append('Mô hình không chắc một vài chữ số trong ô.')
     if parsed['is_expression']:
@@ -222,6 +244,69 @@ def _reading(cell: Cell, *, field: str, label: str, title: str, handwritten: boo
                          unit_explicit=parsed['explicit_unit'], review_reason=' '.join(reasons)[:500]), parsed)
 
 
+MONEY_ROW_ORDER = ('cash', 'bank_transfer', 'shopee_food', 'be_food', 'grab_food', 'petty_cash')
+ALIGN_REASON = 'Có thể đọc lệch hàng (ảnh nghiêng hoặc nhãn bị che)'
+
+
+def _is_petty(cell: Cell) -> bool:
+    parsed = parse_cell(cell.text, handwritten=True)
+    return parsed['value'] == 1_000_000 and parsed['explicit_unit']
+
+
+def realign_rows(section: LedgerSection) -> tuple[dict[str, Cell], list[str], set[str]]:
+    """Undo a row shift on tilted/covered tables, using two facts about this shop's form.
+
+    "Cố định két" is always 1.000.000đ and is the last money row. If that value was read on an earlier row,
+    the model skipped (k) rows above it. Every way of re-inserting the skipped rows is tried; candidates whose
+    horizontal sum matches "Tổng thu về" (with or without the cash surplus) are preferred. Rows on which the
+    remaining candidates agree are re-assigned; rows on which they disagree are left for a person.
+    Returns (cells by row, notes, rows that stay ambiguous).
+    """
+    cells = {row: getattr(section, row) for row in MONEY_ROW_ORDER}
+    if _is_petty(cells['petty_cash']):
+        return cells, [], set()
+    found = next((i for i, row in enumerate(MONEY_ROW_ORDER[:-1]) if _is_petty(cells[row])), None)
+    if found is None or found == 0:
+        return cells, [], set()
+    missing = len(MONEY_ROW_ORDER) - 1 - found
+    from itertools import combinations
+    read = [cells[row] for row in MONEY_ROW_ORDER[:found + 1]]
+    total = parse_cell(section.total_collected.text, handwritten=True)['value']
+    surplus = parse_cell(section.cash.text, handwritten=True)['diff'] or 0
+    candidates = []
+    for holes in combinations(range(1, found + 1 + missing - 1), missing):
+        seq, it = [], iter(read)
+        for index in range(len(MONEY_ROW_ORDER)):
+            seq.append(Cell(text='', legibility='empty') if index in holes else next(it, Cell(text='', legibility='empty')))
+        candidates.append(dict(zip(MONEY_ROW_ORDER, seq)))
+    candidates = [c for c in candidates if _is_petty(c['petty_cash'])] or candidates
+
+    def matches(c):
+        if total is None:
+            return False
+        parts = [parse_cell(c[r].text, handwritten=True)['value'] or 0 for r in MONEY_ROW_ORDER[:-1]]
+        return sum(parts) in {total, total + surplus}
+
+    consistent = [c for c in candidates if matches(c)]
+    kept = consistent or candidates
+    # The sum cannot tell rows apart. At this shop Be food is almost always empty, so a skipped empty row is
+    # most likely Be food; prefer that when it is one of the possibilities.
+    be_empty = [c for c in kept if not c['be_food'].text.strip()]
+    kept = be_empty or kept
+    aligned, ambiguous = {}, set()
+    for row in MONEY_ROW_ORDER:
+        texts = {c[row].text for c in kept}
+        if len(texts) == 1:
+            aligned[row] = kept[0][row]
+        else:
+            aligned[row] = Cell(text='', legibility='illegible')
+            ambiguous.add(row)
+    note = (f'{ALIGN_REASON}: "1.000.000đ" (Cố định két) được đọc ở dòng {LEDGER_ROWS[MONEY_ROW_ORDER[found]][1]}; '
+            'hệ thống đã căn lại các dòng' + (' và kiểm bằng Tổng thu về' if consistent else '')
+            + ('' if not ambiguous else '; chưa xác định được: ' + ', '.join(LEDGER_ROWS[r][1] for r in MONEY_ROW_ORDER if r in ambiguous)) + '.')
+    return aligned, [note], ambiguous
+
+
 def shift_reading_from_day_sheet(sheet: DaySheet, shift: str):
     """Build the per-shift ShiftReading the verification pipeline already knows how to check."""
     from src.engine.vision_ocr import MONEY_FIELDS, MoneyReading, ShiftReading
@@ -230,10 +315,18 @@ def shift_reading_from_day_sheet(sheet: DaySheet, shift: str):
     title = SECTION_TITLES[shift]
     fields: dict[str, Any] = {name: MoneyReading(status='not_present', source='not_applicable') for name in MONEY_FIELDS}
     formula, signed_by, cash_diff = '', '', None
+    align_notes: list[str] = []
     if section is not None:
+        aligned, align_notes, ambiguous = realign_rows(section)
         for attr, (field, label) in LEDGER_ROWS.items():
-            reading, parsed = _reading(getattr(section, attr), field=field, label=label, title=title,
+            cell = aligned.get(attr, getattr(section, attr))
+            reading, parsed = _reading(cell, field=field, label=label, title=title,
                                        handwritten=True, expenses=attr == 'expenses')
+            if align_notes and attr in MONEY_ROW_ORDER:
+                reason = (f'{ALIGN_REASON}; không chắc ô này thuộc dòng nào, hãy đối chiếu ảnh.' if attr in ambiguous
+                          else f'{ALIGN_REASON}; ô đã được căn lại theo thứ tự dòng.')
+                reading.status = 'unreadable' if attr in ambiguous else ('uncertain' if reading.value is not None else reading.status)
+                reading.review_reason = f'{reading.review_reason} {reason}'.strip()[:500]
             fields[field] = reading
             if attr == 'cash' and parsed and parsed.get('diff') is not None:
                 cash_diff = (parsed['diff'], parsed['diff_text'])
@@ -253,7 +346,7 @@ def shift_reading_from_day_sheet(sheet: DaySheet, shift: str):
     kind = sheet.document_kind if sheet.document_kind in {'handwritten_ledger', 'pos_receipt', 'composite'} else (
         'non_financial' if sheet.document_kind == 'non_financial' else 'unreadable')
     present = 'yes' if section is not None or (shift == 'CA_TOI' and slip.present) else 'no'
-    warnings = list(sheet.notes)
+    warnings = list(sheet.notes) + align_notes
     if present == 'no':
         found = ', '.join(SHIFT_LABELS[s.shift] for s in sheet.sections) or 'không có mục ca nào'
         warnings.append(f'Ảnh này không có mục {SHIFT_LABELS[shift]} (ảnh có: {found}).')
@@ -275,12 +368,16 @@ def default_zero_suggestions(sheet: DaySheet, shift: str) -> dict[str, dict[str,
     if section is None:
         return {}
     hints = {}
-    if not section.be_food.text.strip() and section.be_food.legibility == 'empty':
-        hints['be_food_vnd'] = 'Ô Be food để trống trên sổ'
+    aligned, notes, ambiguous = realign_rows(section)
+    be = aligned['be_food']
+    if not be.text.strip() and be.legibility == 'empty' and 'be_food' not in ambiguous:
+        hints['be_food_vnd'] = ('Ô Be food để trống trên sổ' if not notes
+                                else 'Sau khi căn lại hàng, ô Be food là ô trống')
     if not _ANNOTATION.search(section.cash.text or ''):
         hints['cash_diff_vnd'] = 'Ô tiền mặt không ghi dư/thiếu'
-    if shift != 'CA_TOI' and not section.expenses.text.strip():
-        hints['expenses_vnd'] = 'Mẫu sổ ca sáng/chiều không có dòng khoản chi'
+    if not section.expenses.text.strip():
+        hints['expenses_vnd'] = ('Mẫu sổ ca sáng/chiều không có dòng khoản chi' if shift != 'CA_TOI'
+                                 else 'Mục 4. Khoản chi trong ngày để trống')
     return {field: {'value': 0, 'basis': f'{why} → 0 đ', 'reason': why} for field, why in hints.items()}
 
 
