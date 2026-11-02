@@ -73,6 +73,10 @@ def test_ocr_page_renders_verifiable_table_after_a_read(monkeypatch):
     next(b for b in app.button if b.label == '📷 Sổ Ca Sáng').click().run()
     app.button(key='run_shift_ocr').click().run()
     assert not app.exception
+    page = ' '.join(m.value for m in app.markdown)
+    assert 'px-read-summary' in page and 'ô vàng cần kiểm tra' in page
+    assert '<table class="vocr-table vocr-evidence"' not in page  # the evidence lives in a popup
+    app.button(key='ocr_open_evidence').click().run()
     html = ' '.join(m.value for m in app.markdown)
     assert 'vocr-table' in html and '962 + 629' in html and 'Cần kiểm tra' in html
     cash = next(item for item in app.number_input if item.label == 'Tiền mặt thu tại quầy (đ)')

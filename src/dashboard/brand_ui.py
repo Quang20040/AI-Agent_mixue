@@ -924,13 +924,16 @@ def render_approval_card(agent, pending, clean_role, user_name, is_admin, key_su
                         unsafe_allow_html=True)
             consistency = draft.get('consistency') or {}
             cash_note = (consistency.get('shift_check') or {}).get('cash_explanation')
-            if cash_note:
-                st.markdown(f"<div class='px-cash-note'>💵 {escape(cash_note)}</div>", unsafe_allow_html=True)
             discrepancies = consistency.get('discrepancies', [])
+            notes = []
+            if consistency.get('shift_check', {}).get('checked') and not discrepancies:
+                notes.append('⚖️ Cộng ngang khớp với Tổng thu về')
+            if cash_note:
+                notes.append(f'💵 {escape(cash_note)}')
+            if notes:
+                st.markdown(f"<div class='px-cash-note'>{' · '.join(notes)}</div>", unsafe_allow_html=True)
             for disc in discrepancies:
                 st.warning(f"⚠️ {disc.get('message')}")
-            if consistency.get('shift_check', {}).get('checked') and not discrepancies:
-                st.markdown("<div class='px-cash-note'>⚖️ Cộng ngang khớp với Tổng thu về.</div>", unsafe_allow_html=True)
         else:
             st.markdown(f"**Xác nhận kế hoạch {pending['plan_id']}**")
             with st.expander('Xem nội dung kế hoạch trước khi duyệt'):

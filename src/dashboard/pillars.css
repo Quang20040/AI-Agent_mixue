@@ -302,3 +302,7 @@ html.mixue-motion-paused .vocr-badge, html.mixue-motion-paused .px-trace .dot { 
   .px-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .vocr-bar-row { grid-template-columns: 1fr; gap: 4px; }
 }
+
+/* ---------- Decluttered OCR page ---------- */
+.px-read-summary { background: #f8fafc; border: 1px solid var(--px-line); border-radius: 12px; padding: 10px 14px; font-size: 14px; margin: 6px 0 8px; }
+@media (max-width: 760px) { .vocr-steps { display: none !important; } }

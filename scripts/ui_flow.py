@@ -112,6 +112,10 @@ def main():
             snap(staff, 'staff_photos_added', '3 ảnh 01/11 đã tải lên')
             click(staff, '.st-key-run_shift_ocr button', 'read')
             snap(staff, 'staff_read', 'sau khi đọc ảnh')
+            if click(staff, '.st-key-ocr_open_evidence button', 'evidence popup'):
+                snap(staff, 'staff_evidence_popup', 'popup bằng chứng từng ô')
+                staff.keyboard.press('Escape')
+                idle(staff)
             if staff.locator('.st-key-ocr_move_day button').count():
                 click(staff, '.st-key-ocr_move_day button', 'move to photo day')
                 if staff.locator('.st-key-run_shift_ocr button').is_enabled():
