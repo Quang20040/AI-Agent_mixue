@@ -694,7 +694,13 @@ def render_menu_card(menu):
                         open_recipe_popup(sku, name, variant, price)
 
 
-def _apply_login_session(user):
+def _apply_login_session(user, remember=True):
+    if remember:  # a reload brings the same user back (see src/login_sessions.py)
+        from src import login_sessions
+        try:
+            st.query_params[login_sessions.QUERY_KEY] = login_sessions.create(user["username"])
+        except Exception:  # never block a login on this convenience
+            pass
     st.session_state["authenticated"] = True
     st.session_state["user"] = user
     st.session_state["username"] = user["username"]
@@ -926,6 +932,9 @@ def render_approval_card(agent, pending, clean_role, user_name, is_admin, key_su
         if approved or cancelled:
             result = agent.resume_approval(approved, clean_role, user_name,
                                            user_id=st.session_state.get('username', user_name))
+            report_day = ((pending.get('plan') or {}).get('fields') or {}).get('report_date')
+            if approved and pending.get('plan_type') == 'SHIFT_OCR_DRAFT' and report_day:
+                st.session_state['ocr_jump_to_date'] = report_day  # show the day the report was written to
             st.session_state.agent_pending_approval = result.get('pending_approval')
             st.session_state.setdefault('chat_history_vi', []).append(
                 {'role': 'assistant', 'content': result['text'], 'evidence': result.get('evidence_refs', [])})

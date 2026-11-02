@@ -110,8 +110,15 @@ except ValueError as error:
 # KIỂM TRA ĐĂNG NHẬP BẮT BUỘC (MANDATORY AUTHENTICATION)
 # ==============================================================================
 if not st.session_state.get("authenticated", False):
-    render_login_screen()
-    st.stop()
+    from src import login_sessions
+    from src.dashboard.brand_ui import _apply_login_session
+    restored = login_sessions.restore(st.query_params.get(login_sessions.QUERY_KEY))
+    if restored:
+        _apply_login_session(restored, remember=False)
+    else:
+        st.query_params.pop(login_sessions.QUERY_KEY, None)
+        render_login_screen()
+        st.stop()
 
 # Kiểm tra thời gian chờ phiên làm việc (Session Idle Timeout: 15 phút)
 SESSION_TIMEOUT_MINUTES = 15
@@ -119,6 +126,9 @@ last_activity = st.session_state.get("last_activity")
 now_dt = datetime.now()
 if last_activity is not None and isinstance(last_activity, datetime):
     if (now_dt - last_activity).total_seconds() > SESSION_TIMEOUT_MINUTES * 60:
+        from src import login_sessions
+        login_sessions.revoke(st.query_params.get(login_sessions.QUERY_KEY))
+        st.query_params.pop(login_sessions.QUERY_KEY, None)
         for k in ["authenticated", "user", "username", "user_role", "user_name", "user_title", "user_badge", "must_change_password", "main_navigation", "last_activity"]:
             st.session_state.pop(k, None)
         st.warning(f"Phiên làm việc đã hết hạn do không hoạt động quá {SESSION_TIMEOUT_MINUTES} phút. Vui lòng đăng nhập lại.")
@@ -132,6 +142,7 @@ with SessionLocal() as account_db:
     account = account_db.get(User, st.session_state.get("username", ""))
     if not account or not account.is_active:
         st.session_state.clear()
+        st.query_params.clear()
         st.warning("Tài khoản không còn hoạt động. Vui lòng đăng nhập lại.")
         render_login_screen()
         st.stop()
@@ -222,6 +233,9 @@ with st.sidebar:
     if st.button("Đăng xuất", key="btn_logout", icon=":material/logout:", use_container_width=True):
         agent.reset_conversation(start_new=False)
         st.session_state.pop('agent_pending_approval', None)
+        from src import login_sessions
+        login_sessions.revoke(st.query_params.get(login_sessions.QUERY_KEY))
+        st.query_params.pop(login_sessions.QUERY_KEY, None)
         for k in ["authenticated", "user", "username", "user_role", "user_name", "user_title", "user_badge", "must_change_password", "main_navigation", "chat_history_vi", "last_activity"]:
             st.session_state.pop(k, None)
         st.rerun()
@@ -231,6 +245,17 @@ render_topbar(user_name, _pending_notifications, section)
 if section not in (CHAT_PAGE, OCR_PAGE, "Trang chủ"):
     render_page_hero(section, user_name)
 render_mobile_navigation(allowed_tabs, section)
+
+if is_admin and section != OCR_PAGE:
+    # Staff submissions wait on the OCR page; say so wherever the manager is.
+    _waiting = agent.list_staff_submissions(user_role, user_name, user_id=st.session_state.get("username", user_name))
+    if _waiting:
+        def _open_inbox():
+            st.session_state.main_navigation = OCR_PAGE
+        with st.container(key="staff_inbox_banner"):
+            _msg, _btn = st.columns([4, 1.3], vertical_alignment="center")
+            _msg.warning(f"📥 Có **{len(_waiting)}** báo cáo chốt ca nhân viên gửi đang chờ bạn duyệt.")
+            _btn.button("Mở & duyệt", key="open_staff_inbox", type="primary", on_click=_open_inbox, use_container_width=True)
 
 with st.container(key="workspace"):
     if not can_access_page(user_role, section):

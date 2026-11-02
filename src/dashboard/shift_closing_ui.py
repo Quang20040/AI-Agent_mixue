@@ -9,6 +9,7 @@ Hỗ trợ:
 """
 
 import hashlib
+import json
 from datetime import date
 import time
 from pathlib import Path
@@ -34,6 +35,37 @@ from src.engine.shift_service import (
     get_daily_closing_summary,
     latest_shift_report_date,
 )
+
+
+def _workspace_file() -> Path:
+    return SHIFT_UPLOADS_DIR / 'workspace.json'
+
+
+def _load_workspace(username: str) -> dict:
+    """Photos a user added per day, kept on disk so a page reload does not lose them."""
+    try:
+        data = json.loads(_workspace_file().read_text(encoding='utf-8')).get(username, {})
+    except (OSError, ValueError):
+        return {}
+    return {day: [p for p in paths if Path(p).is_file()] for day, paths in data.items()}
+
+
+def _save_workspace(username: str, images: dict) -> None:
+    try:
+        path = _workspace_file()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            data = json.loads(path.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            data = {}
+        keep = {day: list(paths) for day, paths in sorted(images.items())[-14:] if paths}  # last two weeks
+        if data.get(username) != keep:
+            data[username] = keep
+            tmp = path.with_suffix('.tmp')
+            tmp.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
+            tmp.replace(path)
+    except OSError:
+        pass
 
 
 def _render_shift_chips(approved, read_shifts, shift_code):
@@ -101,6 +133,14 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
         st.session_state.shift_ocr_selection = shift_options[0]
     if 'shift_chosen_date_picker' not in st.session_state:
         st.session_state.shift_chosen_date_picker = business_today()  # realtime: open on today
+    if jump := st.session_state.pop('ocr_jump_to_date', None):
+        try:
+            st.session_state.shift_chosen_date_picker = date.fromisoformat(jump)
+        except ValueError:
+            pass
+    username = st.session_state.get('username', user_name)
+    if 'ocr_day_images' not in st.session_state:
+        st.session_state.ocr_day_images = _load_workspace(username)
 
     def choose_sample(filenames, ca):
         # Sample photos go into the day being closed (today by default); a photo from another day is
@@ -534,6 +574,7 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                         st.session_state['approval_notice'] = result['text']
                         st.rerun()
 
+    _save_workspace(username, st.session_state.get('ocr_day_images', {}))
     if is_admin:
         render_staff_submissions(user_role, user_name)
     render_page_approval(user_role, user_name, is_admin)
