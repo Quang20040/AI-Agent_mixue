@@ -3,7 +3,7 @@ name: UI screenshots
 on:
   push:
     branches: [ "feat/**" ]
-    paths: [ "src/dashboard/**", "scripts/ui_screenshots.py", "scripts/ui_card_preview.py", ".github/workflows/ui-screenshots.yml" ]
+    paths: [ "src/**", "scripts/ui_screenshots.py", "scripts/ui_card_preview.py", "scripts/ui_flow*.py", ".github/workflows/ui-screenshots.yml" ]
   workflow_dispatch:
 
 permissions:
@@ -27,6 +27,11 @@ jobs:
         env:
           PYTHONPATH: .
         run: python scripts/ui_screenshots.py ui_screenshots
+      - name: Staff → manager flow
+        if: always()
+        env:
+          PYTHONPATH: .
+        run: python scripts/ui_flow.py ui_screenshots/flow
       - name: Publish to ui-screenshots branch
         if: always()
         run: |
