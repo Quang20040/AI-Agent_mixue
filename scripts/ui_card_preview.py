@@ -19,7 +19,8 @@ values = dict(cash_vnd=1_193_000, cash_diff_vnd=15_000, bank_transfer_vnd=1_126_
               total_collected_vnd=int(st.query_params.get('total', 2_389_000)))
 reading = ShiftReading(document_type='handwritten_ledger', document_date='2026-11-01', signed_by='Hà', raw_text='preview',
                        fields={m: MoneyReading(value=values.get(m), status='read' if values.get(m) is not None else 'not_present',
-                                               source='handwritten_ledger') for m in MONEY_FIELDS})
+                                               source='handwritten_ledger', evidence=f'preview {values.get(m)}' if values.get(m) is not None else '')
+                               for m in MONEY_FIELDS})
 pending = {'plan_type': 'SHIFT_OCR_DRAFT', 'plan_id': 'DRAFT_OCR_PREVIEW', 'requested_by': 'quanly',
            'plan': {'document_type': 'composite', 'fields': {**values, 'report_date': '2026-11-01', 'shift_code': 'CA_SANG'},
                     'consistency': check_ocr_consistency(reading)}}
