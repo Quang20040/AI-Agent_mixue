@@ -404,7 +404,7 @@ def render_home_greeting(agent, user_role, user_name):
     elif state['pending_approval']:
         bubble = 'Luồng đang dừng ở bước phê duyệt. Bạn xem và bấm <b>Phê duyệt</b> giúp mình nhé.'
     else:
-        bubble = 'Hết ca thì chụp sổ chốt ca gửi mình. Số nào chưa chắc mình sẽ để trống cho bạn xác nhận.'
+        bubble = 'Hết ca thì chụp sổ chốt ca gửi mình. Số nào chưa chắc mình điền gợi ý và tô vàng để bạn kiểm tra.'
     tasks = tasks[:4]
     if tasks:  # the most urgent task is the white primary action, as in the design
         tasks[0] = (tasks[0][0], tasks[0][1], 'light')
