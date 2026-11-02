@@ -307,26 +307,25 @@ with st.container(key="workspace"):
                 st.info(f_text, icon="ℹ️")
             del st.session_state["stock_flash_msg"]
 
-        st.caption("📸 Chốt ca bằng ảnh & đối soát OCR nằm ở phân hệ riêng **📸 Chốt Ca & Đối Soát OCR** trên thanh điều hướng. "
-                   "Trang này là công cụ phụ trợ: sổ kho, báo cáo doanh thu và đối soát thất thoát.")
+        st.caption("Chốt ca từ ảnh sổ nằm ở mục **Chốt ca & Quét hóa đơn**. Trang này để xem doanh thu, file kho và duyệt phiếu kho.")
         if not is_admin:
-            (tab_staff_stock,) = st.tabs(["📝 Phiếu Đề Xuất Lệnh Kho Quầy Bar"])
+            (tab_staff_stock,) = st.tabs(["📝 Phiếu xin xuất / nhập kho"])
 
             with tab_staff_stock:
                 # ==============================================================================
                 # GIAO DIỆN DÀNH CHO NHÂN VIÊN (STAFF MAKER REQUEST)
                 # ==============================================================================
-                st.subheader("📝 Phiếu Đề Xuất Lệnh Xuất / Nhập Kho Quầy Bar")
+                st.subheader("📝 Phiếu xin xuất / nhập kho")
                 st.caption("Chi nhánh Mixue 39 Tôn Quang Phiệt · Tạo đề xuất khui hàng pha chế hoặc nhận hàng xe tổng chuyển Quản lý phê duyệt.")
 
                 st.markdown("""
                 <div style="background:#eff6ff; border-left:4px solid #3b82f6; padding:12px 16px; border-radius:6px; margin-bottom:18px;">
-                    <div style="font-weight:600; color:#1e40af; margin-bottom:4px;">🔒 Quy trình Kiểm soát Kho 2 Bước (Maker - Checker)</div>
+                    <div style="font-weight:600; color:#1e40af; margin-bottom:4px;">🔒 Phiếu kho cần Quản lý duyệt</div>
                     <div style="font-size:13px; color:#1e3a8a; line-height:1.5;">
-                        • Theo quy chế vận hành, nhân viên tạo lệnh đề xuất xuất/nhập kho tại quầy.<br>
+                        • Nhân viên ghi phiếu xin xuất hoặc nhập kho tại quầy.<br>
                         • Sau khi gửi, lệnh sẽ ở trạng thái <b>⏳ Chờ Quản lý duyệt</b>.<br>
                         • Quản lý / Chủ cửa hàng sẽ kiểm tra và xác nhận duyệt thì dữ liệu mới được ghi vào sổ thẻ kho chi nhánh.<br>
-                        • Bảng ma trận chi tiết và file bảng tính được bảo mật riêng cho Quản trị viên.
+                        • File kho chi tiết chỉ Quản lý / Chủ quán xem được.
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -335,14 +334,14 @@ with st.container(key="workspace"):
 
                 with col_form:
                     with st.container(border=True):
-                        st.write("#### ✍️ Tạo Phiếu Đề Xuất Lệnh Kho")
+                        st.write("#### ✍️ Phiếu xuất / nhập kho")
                         st.caption("Nhập thông tin xuất khui dùng hoặc nhận hàng xe tổng tại quầy.")
 
                         matrix_df_items = get_stock_matrix_df(stock_year, stock_month)
                         item_choices = [f"{row['Mã NL']} — {row['Tên mặt hàng (Quy cách)']}" for _, row in matrix_df_items.iterrows()]
 
                         with st.form("staff_stock_request_form", clear_on_submit=True):
-                            e_date = st.date_input("Ngày phát sinh lệnh", value=business_today())
+                            e_date = st.date_input("Ngày xuất / nhập", value=business_today())
                             selected_item_str = st.selectbox("Chọn mặt hàng & quy cách đóng gói", item_choices)
                             selected_ing_id = selected_item_str.split(" — ")[0]
 
@@ -350,7 +349,7 @@ with st.container(key="workspace"):
                                 "Loại thao tác đề xuất",
                                 [
                                     ("OUT", "📤 Xuất quầy bar sử dụng (Khui thùng / kiện / dây / bình)"),
-                                    ("IN", "📥 Nhập hàng từ xe tổng về quầy (Nhận hàng PO)")
+                                    ("IN", "📥 Nhận hàng xe tổng về quầy")
                                 ],
                                 format_func=lambda x: x[1]
                             )
@@ -358,7 +357,7 @@ with st.container(key="workspace"):
                             e_qty = st.number_input("Số lượng đề xuất (Thùng / Kiện / Bình / Dây)", min_value=0.1, max_value=50.0, value=1.0, step=0.5)
                             e_notes = st.text_input("Ghi chú lý do / ca trực", placeholder="Ví dụ: Ca sáng khui dùng quầy trà, Nhận bổ sung 2 kiện")
 
-                            btn_submit_req = st.form_submit_button("Gửi Đề Xuất Lệnh Kho Chờ Quản Lý Duyệt 📤", type="primary", use_container_width=True)
+                            btn_submit_req = st.form_submit_button("Gửi phiếu chờ Quản lý duyệt 📤", type="primary", use_container_width=True)
 
                             if btn_submit_req:
                                 res_req = create_stock_request(
@@ -378,7 +377,7 @@ with st.container(key="workspace"):
 
                 with col_history:
                     with st.container(border=True):
-                        st.write("#### 📋 Trạng Thái Các Lệnh Kho Của Bạn")
+                        st.write("#### 📋 Các phiếu kho bạn đã gửi")
                         st.caption("Theo dõi tiến độ phê duyệt từ Quản lý chi nhánh theo thời gian thực.")
 
                         my_username = st.session_state.get("username", "nhanvien")
@@ -386,7 +385,7 @@ with st.container(key="workspace"):
                         if my_reqs:
                             st.dataframe(pd.DataFrame(my_reqs), use_container_width=True, hide_index=True)
                         else:
-                            st.info("Hiện bạn chưa gửi đề xuất lệnh kho nào trong ca này.")
+                            st.info("Bạn chưa gửi phiếu kho nào.")
 
         else:
             # ==============================================================================
@@ -394,13 +393,13 @@ with st.container(key="workspace"):
             # ==============================================================================
             pending_list = get_pending_requests()
             pending_count = len(pending_list)
-            inbox_tab_label = f"📋 Duyệt Lệnh Kho ({pending_count} chờ)" if pending_count > 0 else "📋 Duyệt Lệnh Kho"
+            inbox_tab_label = f"📋 Duyệt nhập / xuất kho ({pending_count} chờ)" if pending_count > 0 else "📋 Duyệt nhập / xuất kho"
 
             tab_inbox, tab_matrix, tab_sales, tab_recon = st.tabs([
                 inbox_tab_label,
                 f"📦 File kho (Tháng {stock_month:02d}/{stock_year})",
-                "📊 Báo Cáo Doanh Thu & Bán Hàng POS",
-                "🔍 Đối Soát Thất Thoát Kho Chi Tiết"
+                "📊 Thống kê doanh thu",
+                "🔍 Kiểm tra hao hụt nguyên liệu"
             ])
 
             # Duyệt phiếu nhập / xuất kho: tick several slips and approve or reject them together.
@@ -410,7 +409,7 @@ with st.container(key="workspace"):
                 st.caption("Phiếu nhân viên gửi chỉ được ghi vào file kho sau khi Quản lý duyệt.")
                 render_approval_center(agent, user_role, user_name, kinds=("stock",), key="stock")
                 st.divider()
-                with st.expander("🕒 Lịch Sử Các Lệnh Đề Xuất Của Toàn Bộ Nhân Viên (Sửa & Xóa Lệnh)", expanded=False):
+                with st.expander("🕒 Lịch sử phiếu kho của nhân viên (sửa / xóa)", expanded=False):
                     all_reqs = get_user_requests(username=None, limit=50)
                     if all_reqs:
                         st.dataframe(pd.DataFrame(all_reqs), use_container_width=True, hide_index=True)
@@ -418,17 +417,17 @@ with st.container(key="workspace"):
                         c_del_hist1, c_del_hist2 = st.columns([3, 1])
                         with c_del_hist1:
                             hist_options = [f"#{r['Mã lệnh'].replace('#', '')} — {r['Mặt hàng']} ({r['Loại lệnh']} {r['Số lượng']}) — {r['Trạng thái']}" for r in all_reqs]
-                            sel_hist_item = st.selectbox("Chọn lệnh kho cần XÓA BỎ:", hist_options, key="sel_hist_to_del")
+                            sel_hist_item = st.selectbox("Chọn phiếu kho cần xóa:", hist_options, key="sel_hist_to_del")
                             sel_hist_id = int(sel_hist_item.split(" — ")[0].replace("#", ""))
                         with c_del_hist2:
                             st.write("")
                             st.write("")
-                            if st.button("🗑️ XÓA LỆNH NÀY", type="secondary", use_container_width=True, key="btn_del_hist_req"):
+                            if st.button("🗑️ Xóa phiếu này", type="secondary", use_container_width=True, key="btn_del_hist_req"):
                                 ok, msg = delete_stock_movement(sel_hist_id, admin_username=st.session_state.get("username", "admin"))
                                 st.session_state["stock_flash_msg"] = {"type": "success" if ok else "error", "text": msg}
                                 st.rerun()
                     else:
-                        st.caption("Chưa có lịch sử lệnh kho nào.")
+                        st.caption("Chưa có phiếu kho nào.")
 
             # File kho của tháng đang chọn (đủ số ngày thực của tháng)
             with tab_matrix:
@@ -464,11 +463,11 @@ with st.container(key="workspace"):
 
                 with col_act:
                     with st.container(border=True):
-                        st.write("#### ⚡ Thao Tác Sửa & Xóa Kho Bằng Tay")
-                        act_tab1, act_tab2, act_tab3 = st.tabs(["➕ Thêm Lệnh", "✏️ Sửa / Xóa 1 Ô", "🗑️ Quản Lý Lệnh Kho"])
+                        st.write("#### ⚡ Nhập / Sửa nhanh số liệu kho")
+                        act_tab1, act_tab2, act_tab3 = st.tabs(["➕ Ghi nhập / xuất kho", "✏️ Sửa 1 ô trên bảng", "🗑️ Lịch sử nhập / xuất"])
 
                         with act_tab1:
-                            st.caption("Quản lý/Chủ quán tạo lệnh xuất, nhập hoặc kiểm kê đếm kho (duyệt tự động).")
+                            st.caption("Quản lý / Chủ quán ghi xuất, nhập hoặc kiểm kho (ghi luôn, không cần duyệt).")
                             with st.form("admin_stock_entry_form", clear_on_submit=True):
                                 e_date = st.date_input("Ngày phát sinh", value=business_today(), key="admin_stock_date")
 
@@ -480,7 +479,7 @@ with st.container(key="workspace"):
                                     "Thao tác kho",
                                     [
                                         ("OUT", "📤 Xuất quầy bar sử dụng (Khui thùng/dây)"),
-                                        ("IN", "📥 Nhập hàng từ kho tổng (PO Received)"),
+                                        ("IN", "📥 Nhập hàng từ kho tổng"),
                                         ("ACTUAL_COUNT", "🔍 Kiểm kê thực tế cuối ngày/tuần")
                                     ],
                                     format_func=lambda x: x[1],
@@ -490,7 +489,7 @@ with st.container(key="workspace"):
                                 e_qty = st.number_input("Số lượng (Thùng / Kiện / Bình / Dây)", min_value=0.0, max_value=50.0, value=1.0, step=0.5, key="admin_stock_qty")
                                 e_notes = st.text_input("Ghi chú (Tùy chọn)", placeholder="Ví dụ: Quản lý nhận hàng ca chiều", key="admin_stock_notes")
 
-                                btn_stock_save = st.form_submit_button("Lưu Ghi Nhận Trực Tiếp Vào Sổ Kho 🚀", type="primary", use_container_width=True)
+                                btn_stock_save = st.form_submit_button("Lưu vào file kho 🚀", type="primary", use_container_width=True)
 
                                 if btn_stock_save:
                                     res_save = create_stock_request(
@@ -509,7 +508,7 @@ with st.container(key="workspace"):
                                         st.error(res_save["message"])
 
                         with act_tab2:
-                            st.caption("Chọn ô cụ thể trên ma trận để xem giá trị, sửa lại hoặc bấm XÓA về trống.")
+                            st.caption("Chọn một ô trên bảng kho để xem, sửa số hoặc xóa về trống.")
                             item_choices_edit = [f"{row['Mã NL']} — {row['Tên mặt hàng (Quy cách)']}" for _, row in matrix_df.iterrows()]
                             edit_item_str = st.selectbox("1. Chọn mặt hàng:", item_choices_edit, key="edit_item_picker")
                             edit_ing_id = edit_item_str.split(" — ")[0]
@@ -551,14 +550,14 @@ with st.container(key="workspace"):
                                     st.rerun()
 
                         with act_tab3:
-                            st.caption("Xem danh sách tất cả các lệnh kho đã ghi nhận. Chọn một lệnh để Sửa số lượng hoặc Xóa vĩnh viễn.")
+                            st.caption("Các lần nhập / xuất đã ghi. Chọn một dòng để sửa số lượng hoặc xóa.")
                             all_movs_tab3 = get_all_movements_detailed(limit=100)
                             if all_movs_tab3:
                                 mov_map = {
                                     f"#{m['id']} [{m['business_date']}] {m['ingredient_name']} — {m['type_label']} {m['quantity']:g} (Bởi: {m['recorded_by']})": m
                                     for m in all_movs_tab3
                                 }
-                                sel_mov_label = st.selectbox("Chọn lệnh kho cần thao tác:", list(mov_map.keys()), key="sel_mov_to_act_tab3")
+                                sel_mov_label = st.selectbox("Chọn dòng nhập / xuất:", list(mov_map.keys()), key="sel_mov_to_act_tab3")
                                 sel_mov = mov_map[sel_mov_label]
 
                                 st.markdown(f"""
@@ -581,16 +580,16 @@ with st.container(key="workspace"):
                                 with c_del_mov:
                                     st.write("")
                                     st.write("")
-                                    if st.button("🗑️ XÓA LỆNH NÀY", type="secondary", use_container_width=True, key="btn_del_mov_perm_tab3"):
+                                    if st.button("🗑️ Xóa phiếu này", type="secondary", use_container_width=True, key="btn_del_mov_perm_tab3"):
                                         ok, msg = delete_stock_movement(sel_mov['id'], admin_username=st.session_state.get("username", "admin"))
                                         st.session_state["stock_flash_msg"] = {"type": "success" if ok else "error", "text": msg}
                                         st.rerun()
                             else:
-                                st.info("Chưa có lệnh kho nào trong hệ thống.")
+                                st.info("Chưa có lần nhập / xuất nào.")
 
                 with col_filter:
                     with st.container(border=True):
-                        st.write("#### 📑 Bảng Điều Khiển Ma Trận & Xuất File")
+                        st.write("#### 📥 Xem & Tải file kho Excel")
                         st.caption("Xuất file bảng tính Excel chuẩn nhận diện Google Sheet hoặc lọc theo tuần.")
 
                         cf1, cf2 = st.columns([1.5, 1])
@@ -602,7 +601,7 @@ with st.container(key="workspace"):
                         with cf2:
                             # Built only when the button is pressed (it costs seconds on a small server).
                             st.download_button(
-                                label="📥 Tải File Excel (.xlsx)",
+                                label="📥 Tải file kho (.xlsx)",
                                 data=lambda y=stock_year, m=stock_month: generate_excel_export(y, m),
                                 on_click="ignore",
                                 file_name=f"Mixue_Kho_{stock_year}_{stock_month}.xlsx",
@@ -670,7 +669,7 @@ with st.container(key="workspace"):
                 with c_hint_col:
                     st.caption("💡 *Mẹo sửa trên bảng:* Nhấp đúp chuột vào bất kỳ ô số liệu nào (trừ các cột công thức tính tự động), gõ số mới, nhấn **Enter**, sau đó bấm **'Lưu Các Ô Đã Sửa Vào Sổ Kho'**.")
 
-                with st.expander("📑 Bảng Chi Tiết Tất Cả Lệnh Kho Đã Ghi Sổ — Tra Cứu & Đối Soát", expanded=False):
+                with st.expander("📑 Tất cả lần nhập / xuất đã ghi", expanded=False):
                     all_movs_list = get_all_movements_detailed(limit=100)
                     if all_movs_list:
                         movs_df = pd.DataFrame(all_movs_list)
@@ -679,7 +678,7 @@ with st.container(key="workspace"):
                                 "id": "Mã",
                                 "business_date": "Ngày",
                                 "ingredient_name": "Mặt hàng",
-                                "type_label": "Loại lệnh",
+                                "type_label": "Loại phiếu",
                                 "quantity": "Số lượng",
                                 "status": "Trạng thái",
                                 "recorded_by": "Người tạo",
@@ -689,7 +688,7 @@ with st.container(key="workspace"):
                         )
                         st.dataframe(show_movs_df, use_container_width=True, hide_index=True)
                     else:
-                        st.caption("Chưa có lệnh kho nào.")
+                        st.caption("Chưa có lần nhập / xuất nào.")
 
             # Thống kê doanh thu: approved shift closings + POS item sales, never added twice.
             with tab_sales:
@@ -700,9 +699,9 @@ with st.container(key="workspace"):
 
             # TAB 4: ĐỐI SOÁT THẤT THOÁT KHO CHI TIẾT
             with tab_recon:
-                st.subheader("🔍 Đối soát Thất thoát Kho Chi tiết: Tiêu thụ Lý thuyết (BOM) vs Tồn Thực tế Kiểm kê")
-                st.caption("Đối soát tự động giữa tổng nhập, lượng tiêu hao theo công thức pha chế BOM và số tồn thực tế kiểm kê cuối kỳ.")
-                if st.button("📊 Tải bảng đối soát kho chi tiết", key="btn_load_recon", type="primary") or "recon_df" in st.session_state:
+                st.subheader("🔍 Kiểm tra hao hụt nguyên liệu")
+                st.caption("So sánh lượng nguyên liệu ước tính theo số ly bán ra với lượng kiểm kho thực tế.")
+                if st.button("📊 Xem bảng hao hụt nguyên liệu", key="btn_load_recon", type="primary") or "recon_df" in st.session_state:
                     if "recon_df" not in st.session_state:
                         st.session_state["recon_df"] = get_cached_reconciliation_data()
                     recon_df = st.session_state["recon_df"]
@@ -711,14 +710,14 @@ with st.container(key="workspace"):
                         "ingredient_id": "Mã nguyên liệu",
                         "ingredient_name": "Tên nguyên liệu",
                         "total_purchased": "Tổng nhập",
-                        "theoretical_usage": "Tiêu hao theo BOM",
+                        "theoretical_usage": "Ước tính theo số ly bán",
                         "actual_stock_count": "Tồn thực tế kiểm kê",
                         "variance": "Chênh lệch kho",
                         "variance_pct": "Tỷ lệ lệch (%)",
                         "unit": "Đơn vị"
                     })
                     st.dataframe(
-                        display_recon[["Mã nguyên liệu", "Tên nguyên liệu", "Tổng nhập", "Tiêu hao theo BOM", "Tồn thực tế kiểm kê", "Chênh lệch kho", "Tỷ lệ lệch (%)", "Đơn vị"]].head(25),
+                        display_recon[["Mã nguyên liệu", "Tên nguyên liệu", "Tổng nhập", "Ước tính theo số ly bán", "Tồn thực tế kiểm kê", "Chênh lệch kho", "Tỷ lệ lệch (%)", "Đơn vị"]].head(25),
                         use_container_width=True,
                         hide_index=True
                     )
@@ -728,41 +727,41 @@ with st.container(key="workspace"):
     # TAB 2: DỰ BÁO NHU CẦU D+1
     # ==============================================================================
     elif section == "Dự báo":
-        st.subheader("📈 Dự báo Nhu cầu Tiêu thụ Ngày mai (D+1) & Kết quả Kiểm chứng Backtest")
+        st.subheader("📈 Dự báo số lượng bán ngày mai")
         st.caption("Dự báo theo số ly, doanh thu gần đây và thời tiết trong giờ bán. Chỉ áp dụng điều chỉnh thời tiết khi kiểm chứng tốt hơn dự báo nền.")
 
         col_bt1, col_bt2 = st.columns([1.15, 1], gap="medium")
         with col_bt1:
             with st.container(border=True):
-                st.write("#### 🎯 So sánh Độ chính xác Các Mô hình Dự báo")
+                st.write("#### 🎯 Cách dự báo nào sát nhất")
                 benchmark = cached_backtest(agent.forecast_engine, (datetime.now(VN).date() - pd.Timedelta(days=1)).isoformat())
-                st.info(f"**Giai đoạn kiểm chứng mô hình nền:** {benchmark.get('evaluation_period', 'Chưa đủ lịch sử')}\n\n**Mô hình nền được chọn:** `{benchmark.get('best_model', 'Chưa xác định')}`")
+                st.info(f"**Thử lại trên các ngày đã qua:** {benchmark.get('evaluation_period', 'Chưa đủ lịch sử')}\n\n**Cách đang dùng:** `{benchmark.get('best_model', 'Chưa xác định')}`")
 
                 bt_table = []
                 for m_name, v in benchmark.get("aggregate_metrics", {}).items():
                     bt_table.append({
-                        "Mô hình dự báo": m_name,
-                        "Sai số tuyệt đối (MAE)": f"{v['MAE']} ly",
-                        "Tỷ lệ sai số (WAPE)": f"{v['WAPE_pct']}%",
-                        "Độ lệch tổng thể (Bias)": f"{v['Bias_pct']}%",
-                        "Đánh giá chuyên môn": "Sai số thấp nhất" if m_name == benchmark['best_model'] else "Mô hình đối chiếu"
+                        "Cách dự báo": m_name,
+                        "Chênh lệch trung bình (ly)": f"{v['MAE']} ly",
+                        "Tỷ lệ sai lệch (%)": f"{v['WAPE_pct']}%",
+                        "Dự báo dư / thiếu (%)": f"{v['Bias_pct']}%",
+                        "Nhận xét": "Sát nhất" if m_name == benchmark['best_model'] else "Để so sánh"
                     })
                 st.dataframe(pd.DataFrame(bt_table), use_container_width=True, hide_index=True)
 
         with col_bt2:
             with st.container(border=True):
-                st.write("#### ⚙️ Thiết lập Dự báo Ngày mai (D+1)")
+                st.write("#### ⚙️ Chọn ngày cần dự báo")
                 target_date_input = st.date_input("Ngày cần dự báo", value=datetime.now(VN).date() + pd.Timedelta(days=1), key="fc_date_picker_vi")
                 model_choice_map = {
-                    "Tự động chọn mô hình tối ưu nhất (Auto)": "auto",
-                    "Trung bình trượt 7 ngày (Moving Average)": "moving_average",
-                    "Chu kỳ tuần trước (Seasonal Naive)": "seasonal_naive",
+                    "Tự động chọn cách sát nhất": "auto",
+                    "Trung bình 7 ngày gần nhất": "moving_average",
+                    "Giống cùng thứ tuần trước": "seasonal_naive",
                     "Trung bình theo thứ trong tuần": "day_of_week_ma"
                 }
-                selected_model_label = st.selectbox("Chọn giải thuật dự báo", list(model_choice_map.keys()))
+                selected_model_label = st.selectbox("Cách dự báo", list(model_choice_map.keys()))
                 selected_model_val = model_choice_map[selected_model_label]
 
-                if st.button("🚀 Chạy Mô hình Dự báo", key="run_fc_btn_vi", type="primary", use_container_width=True):
+                if st.button("🚀 Dự báo", key="run_fc_btn_vi", type="primary", use_container_width=True):
                     with st.spinner("Đang tính toán dự báo sản lượng cho toàn bộ 39 món thực đơn..."):
                         fc_res = agent.forecast_engine.forecast_demand(target_date_input, horizon_days=1, model=selected_model_val)
                         st.session_state.pop('latest_forecast_vi', None)
@@ -807,13 +806,13 @@ with st.container(key="workspace"):
     # TAB 3: KẾ HOẠCH SƠ CHẾ TOPPING
     # ==============================================================================
     elif section == "Sơ chế":
-        st.subheader("🥣 Kế hoạch Sơ chế Topping & Nấu Trà theo Mẻ Chuẩn Mixue")
-        st.caption("Tự động làm tròn số lượng theo quy cách mẻ thực tế tại quầy, tính toán đệm an toàn và tuân thủ thời gian bảo quản SOP Mixue.")
+        st.subheader("🥣 Chuẩn bị & nấu topping theo mẻ")
+        st.caption("Làm tròn theo mẻ nấu thực tế tại quầy, cộng thêm phần dự phòng và giữ đúng thời gian dùng tối đa.")
 
         col_p1, col_p2 = st.columns([1, 1.85], gap="medium")
         with col_p1:
             with st.container(border=True):
-                buffer_val = st.slider("Tỷ lệ đệm an toàn (Buffer)", min_value=0, max_value=30, value=10, step=5, format="%d%%") / 100.0
+                buffer_val = st.slider("Mức nấu dự phòng thêm (%)", min_value=0, max_value=30, value=10, step=5, format="%d%%") / 100.0
                 prep_date = st.date_input("Ngày thực hiện sơ chế", value=datetime.now(VN).date(), key="prep_date_in_vi")
                 with st.expander('Định mức đầu ra tạm tính'):
                     pearl_yield = st.number_input('1 kg trân châu khô cho bao nhiêu gram thành phẩm đã ráo?',
@@ -821,7 +820,7 @@ with st.container(key="workspace"):
                                                  key='pearl_yield_estimate')
                     st.caption('Giả định để lập kế hoạch, chưa phải số đo hay quy chuẩn chính thức. Thay số này rồi tính lại để so sánh.')
 
-                if st.button("⚡ Tính toán Kế hoạch Sơ chế", key="calc_prep_btn_vi", type="primary", use_container_width=True):
+                if st.button("⚡ Tính số mẻ cần nấu", key="calc_prep_btn_vi", type="primary", use_container_width=True):
                     res = agent.tool_optimize_topping_prep(target_date=prep_date.isoformat(), buffer_pct=buffer_val, pearl_yield_g=float(pearl_yield))
                     st.session_state.pop('prep_plan_vi', None)
                     if res.get('status') == 'NO_DATA':
@@ -874,14 +873,14 @@ with st.container(key="workspace"):
                 "unit": "Đơn vị",
                 "expected_waste_qty": "Ước tính hủy thừa",
                 "risk_level": "Nguy cơ hao hụt",
-                "shelf_life_rule": "Hạn dùng theo SOP"
+                "shelf_life_rule": "Thời gian sử dụng tối đa"
             })
 
             risk_map = {"LOW": "Thấp 🟢", "MEDIUM": "Trung bình 🟡", "HIGH": "Cao 🔴"}
             prep_table_display["Nguy cơ hao hụt"] = prep_table_display["Nguy cơ hao hụt"].map(lambda x: risk_map.get(x, x))
 
             st.dataframe(
-                prep_table_display[[column for column in ["Mã topping", "Tên topping / Trà", "Cách chuẩn bị", "Thành phẩm/mẻ (tạm tính)", "Nhu cầu dự báo", "Số mẻ ước tính", "Lượng nấu đề xuất", "Gợi ý nấu đợt đầu", "Đánh giá lại lúc", "Đơn vị", "Ước tính hủy thừa", "Nguy cơ hao hụt", "Hạn dùng theo SOP"] if column in prep_table_display]],
+                prep_table_display[[column for column in ["Mã topping", "Tên topping / Trà", "Cách chuẩn bị", "Thành phẩm/mẻ (tạm tính)", "Nhu cầu dự báo", "Số mẻ ước tính", "Lượng nấu đề xuất", "Gợi ý nấu đợt đầu", "Đánh giá lại lúc", "Đơn vị", "Ước tính hủy thừa", "Nguy cơ hao hụt", "Thời gian sử dụng tối đa"] if column in prep_table_display]],
                 use_container_width=True,
                 hide_index=True
             )
@@ -892,7 +891,7 @@ with st.container(key="workspace"):
                 with c_app1:
                     st.info(f"**Người thao tác:** {user_name} ({user_badge})\n\n*Lưu ý: Chỉ Quản lý cửa hàng hoặc Chủ quán (Admin) mới có quyền ký duyệt.*")
                 with c_app2:
-                    if st.button("✍️ Ký duyệt Kế hoạch Sơ chế", key="approve_prep_btn_vi", type="primary", use_container_width=True):
+                    if st.button("✍️ Duyệt kế hoạch nấu topping", key="approve_prep_btn_vi", type="primary", use_container_width=True):
                         app_res = agent.tool_approve_plan(plan["draft_plan_id"], user_role=role_key, user_name=user_name)
                         if app_res.get("is_approved"):
                             st.success(app_res["message"])
@@ -923,13 +922,13 @@ with st.container(key="workspace"):
     # TAB 4: DỰ THẢO ĐƠN NHẬP HÀNG (REPLENISHMENT PO)
     # ==============================================================================
     elif section == "Nhập hàng":
-        st.subheader("📦 Dự thảo Đơn Đặt hàng & Nhập kho Nguyên liệu (Replenishment PO)")
+        st.subheader("📦 Lập phiếu đặt hàng nguyên liệu")
         st.caption("Tự động rà soát tồn kho hiện tại, thời gian giao hàng (Lead Time) và quy cách bao/gói/thùng của chuỗi Mixue.")
 
         col_po1, col_po2 = st.columns([1, 1.85], gap="medium")
         with col_po1:
             with st.container(border=True):
-                lead_time = st.number_input("Thời gian giao hàng (Lead Time - ngày)", min_value=1, max_value=7, value=2, key="lead_time_in_vi")
+                lead_time = st.number_input("Thời gian chờ giao hàng (ngày)", min_value=1, max_value=7, value=2, key="lead_time_in_vi")
                 po_date = st.date_input("Ngày đề xuất đặt hàng", value=business_today(), key="po_date_in_vi")
 
                 if st.button("📋 Tạo Dự thảo Đơn Đặt hàng", key="calc_po_btn_vi", type="primary", use_container_width=True):
@@ -939,11 +938,11 @@ with st.container(key="workspace"):
         with col_po2:
             st.markdown("""
             <div class="sop-card">
-                <h4>📦 Quy tắc Đặt hàng Chuỗi Mixue (Master Packaging SOP)</h4>
+                <h4>📦 Quy tắc đặt hàng của chuỗi Mixue</h4>
                 <ul>
                     <li><strong>100% Số nguyên Thùng / Kiện:</strong> Nhập hàng theo số nguyên 1, 2, 3... thùng/kiện/cuộn, không nhập lẻ túi theo quy định phân phối kho Mixue.</li>
                     <li><strong>Tự động tách Bán thành phẩm:</strong> Loại trừ các bán thành phẩm tự nấu tại quán (chỉ đặt nguyên liệu thô từ tổng kho Mixue).</li>
-                    <li><strong>Kiểm soát Phê duyệt (Human-in-the-loop):</strong> Nghiêm cấm AI tự ý phát hành đơn — bắt buộc Quản lý Bùi Văn Quang hoặc Chủ quán Nguyễn Hạnh Chi ký duyệt.</li>
+                    <li><strong>Quản lý duyệt mới đặt:</strong> Nghiêm cấm AI tự ý phát hành đơn — bắt buộc Quản lý Bùi Văn Quang hoặc Chủ quán Nguyễn Hạnh Chi ký duyệt.</li>
                 </ul>
             </div>
             """, unsafe_allow_html=True)
@@ -1054,7 +1053,7 @@ with st.container(key="workspace"):
         st.caption("Tra cứu định lượng nguyên liệu và hướng dẫn pha chế theo món.")
 
         with st.container(border=True):
-            st.write("#### 🍵 Sổ tay Định lượng Công thức Pha chế (BOM)")
+            st.write("#### 🍵 Định lượng công thức pha chế từng món")
             menu_items_raw = get_cached_menu_list()
             menu_choices = [f"{m[0]} — {m[1]} ({m[2] if m[2] else 'Chuẩn'})" for m in menu_items_raw]
             selected_menu = st.selectbox("Chọn món để xem định lượng", menu_choices)

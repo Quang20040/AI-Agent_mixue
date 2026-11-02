@@ -46,7 +46,7 @@ def navigate_to(page):
 
 def render_mobile_navigation(pages, current):
     st.session_state['mobile_navigation'] = current
-    short = {'Trang chủ': '🏠 Trang chủ', 'Báo cáo & kho': '📦 Kho', 'Dự báo': '📈 Dự báo', 'Sơ chế': '🥣 Sơ chế', 'Nhập hàng': '🛒 Nhập hàng', 'Tem & công thức': '📋 Công thức', '👥 Quản lý nhân viên': '👥 Nhân sự', '💬 Tuyết Vương AI': '💬 AI Agent', '📸 Chốt ca & OCR': '📸 OCR'}
+    short = {'Trang chủ': '🏠 Trang chủ', 'Báo cáo & kho': '📦 Kho', 'Dự báo': '📈 Dự báo', 'Sơ chế': '🥣 Topping', 'Nhập hàng': '🛒 Đặt hàng', 'Tem & công thức': '📋 Công thức', '👥 Quản lý nhân viên': '👥 Nhân sự', '💬 Tuyết Vương AI': '💬 Trợ lý', '📸 Chốt ca & OCR': '📸 Chốt ca'}
     def change_page():
         navigate_to(st.session_state.mobile_navigation)
     with st.container(key='mobile_dock'):
@@ -161,27 +161,27 @@ NAV_ICONS = {
     'Tem & công thức': '📋', '👥 Quản lý nhân viên': '👥', '💬 Tuyết Vương AI': '💬', '📸 Chốt ca & OCR': '📸',
 }
 NAV_LABELS = {
-    'Báo cáo & kho': 'Báo cáo & sổ kho', 'Tem & công thức': 'Tem ly & công thức', 'Dự báo': 'Dự báo nhu cầu',
-    'Sơ chế': 'Sơ chế topping', 'Nhập hàng': 'Đơn nhập hàng', '👥 Quản lý nhân viên': 'Quản lý nhân viên',
-    '💬 Tuyết Vương AI': 'Tuyết Vương AI (LangGraph Agent)',
-    '📸 Chốt ca & OCR': 'Chốt Ca & Đối Soát OCR (Chữ viết tay & POS)',
+    'Báo cáo & kho': 'Doanh thu & Kho hàng', 'Tem & công thức': 'Công thức & Mã tem ly', 'Dự báo': 'Dự báo bán hàng',
+    'Sơ chế': 'Chuẩn bị & Nấu topping', 'Nhập hàng': 'Đặt hàng nguyên liệu', '👥 Quản lý nhân viên': 'Quản lý nhân viên',
+    '💬 Tuyết Vương AI': 'Trợ lý Tuyết Vương',
+    '📸 Chốt ca & OCR': 'Chốt ca & Quét hóa đơn',
 }
 NAV_GROUP_TITLES = {
-    'core': 'TRỤ CỘT AI CỦA ĐỀ TÀI',
-    'support': 'CÔNG CỤ PHỤ TRỢ',
-    'admin': 'QUẢN TRỊ',
+    'core': '⭐ NGHIỆP VỤ CHÍNH',
+    'support': '📦 KHO HÀNG & VẬN HÀNH',
+    'admin': '⚙️ QUẢN LÝ CỬA HÀNG',
 }
 
 PAGE_HEROES = {
     'Trang chủ': ('Xin chào, {name}!', 'Cùng kiểm soát vận hành quán Mixue 2132 hiệu quả hơn mỗi ngày ✨', 'Chất lượng hôm nay\nTạo nên khách hàng ngày mai!'),
-    'Báo cáo & kho': ('Báo cáo & quản lý kho', 'Theo dõi tồn kho, duyệt lệnh kho và đối soát doanh thu theo ca', 'Kho gọn gàng,\nVận hành trơn tru!'),
-    'Dự báo': ('Dự báo nhu cầu', 'Dự báo số ly bán ra và nhu cầu nguyên liệu cho ngày kế tiếp', 'Dự báo chuẩn,\nNhập hàng đủ!'),
-    'Sơ chế': ('Sơ chế topping', 'Lên kế hoạch sơ chế topping theo dự báo, hạn chế hao hụt', 'Sơ chế đúng lượng,\nKhông lãng phí!'),
-    'Nhập hàng': ('Nhập hàng & đề xuất', 'Tạo đơn nhập, nhận hàng và theo dõi các yêu cầu chờ duyệt', 'Đủ hàng mỗi ngày,\nKhông lo gián đoạn!'),
-    'Tem & công thức': ('Công thức pha chế', 'Tra cứu định lượng nguyên liệu và quy trình pha chế theo món', 'Đúng công thức,\nĐậm vị Mixue!'),
-    '👥 Quản lý nhân viên': ('Quản lý nhân sự & phân quyền chi nhánh', 'Quản trị danh sách nhân viên, cấp phát tài khoản mới và quyền reset mật khẩu', 'Chăm chút đội ngũ,\nTạo nên trải nghiệm ngọt ngào!'),
-    '💬 Tuyết Vương AI': ('Tuyết Vương AI — LangGraph Agent dựa trên bằng chứng', 'Đồ thị trạng thái 6 node · RBAC máy chủ · tạm dừng interrupt() chờ Quản lý phê duyệt', 'Không có bằng chứng,\nkhông kết luận!'),
-    '📸 Chốt ca & OCR': ('Chốt ca & đối soát OCR có kiểm chứng', 'Đọc sổ chốt ca viết tay và hóa đơn POS · gắn cờ trường mơ hồ · đối soát số học chéo', 'Số chưa chắc,\nđể người xác nhận!'),
+    'Báo cáo & kho': ('Doanh thu & Quản lý kho', 'Xem doanh thu thực tế, kiểm tra file kho hàng tháng và duyệt phiếu nhập / xuất kho', 'Kho gọn gàng,\nVận hành trơn tru!'),
+    'Dự báo': ('Dự báo bán hàng', 'Ước tính số ly bán ra ngày mai để chuẩn bị nguyên liệu vừa đủ', 'Dự báo chuẩn,\nNhập hàng đủ!'),
+    'Sơ chế': ('Chuẩn bị & Nấu topping', 'Tính số mẻ topping cần nấu theo lượng bán dự kiến, hạn chế bỏ phí', 'Nấu đúng lượng,\nKhông lãng phí!'),
+    'Nhập hàng': ('Đặt hàng nguyên liệu', 'Lập phiếu đặt hàng theo tồn kho và lượng dùng, chờ Quản lý duyệt', 'Đủ hàng mỗi ngày,\nKhông lo gián đoạn!'),
+    'Tem & công thức': ('Công thức & Mã tem ly', 'Tra cứu định lượng nguyên liệu, cách pha từng món và mã tem dán ly', 'Đúng công thức,\nĐậm vị Mixue!'),
+    '👥 Quản lý nhân viên': ('Quản lý nhân viên', 'Danh sách nhân viên, cấp tài khoản mới và đặt lại mật khẩu', 'Chăm chút đội ngũ,\nTạo nên trải nghiệm ngọt ngào!'),
+    '💬 Tuyết Vương AI': ('Trợ lý Tuyết Vương', 'Hỏi đáp nhanh công thức pha chế, tra cứu doanh thu, kiểm tra kho hàng và hỗ trợ công việc tại quán', 'Hỏi gì cũng có,\nnói có sách mách có chứng!'),
+    '📸 Chốt ca & OCR': ('Chốt ca & Quét ảnh hóa đơn', 'Tải ảnh chụp sổ giao ca hoặc hóa đơn máy bán hàng để tự động đọc số tiền và gửi Quản lý duyệt', 'Số chưa chắc,\nđể người xác nhận!'),
 }
 
 
@@ -545,13 +545,13 @@ def render_home_kpis(sales, menu):
 def render_shortcuts(user_role):
     from src.auth import get_allowed_pages
     pages = get_allowed_pages(user_role)
-    features = [('Báo cáo & kho', 'box', 'Sổ kho, doanh thu POS'), ('Dự báo', 'trend', 'Nhu cầu theo thời tiết'),
-                ('Sơ chế', 'prep', 'Tối ưu mẻ topping'), ('Nhập hàng', 'store', 'Dự thảo đơn PO'),
-                ('Tem & công thức', 'recipe', 'Giải mã tem, BOM')]
+    features = [('Báo cáo & kho', 'box', 'Doanh thu, file kho'), ('Dự báo', 'trend', 'Số ly bán ngày mai'),
+                ('Sơ chế', 'prep', 'Số mẻ topping cần nấu'), ('Nhập hàng', 'store', 'Phiếu đặt nguyên liệu'),
+                ('Tem & công thức', 'recipe', 'Công thức, mã tem ly')]
     cards = ''.join(f'<button type="button" class="mx-shortcut tone-{i}" data-command-page="{escape(nav_label(page))}"><span class="mx-shortcut-icon">{ui_icon(icon)}</span><span class="mx-shortcut-arrow">↗</span><b>{escape(NAV_LABELS.get(page, page))}</b><small>{desc}</small></button>'
                     for i, (page, icon, desc) in enumerate(features) if page in pages)
     if cards:
-        st.markdown(f'<section class="mx-card mx-shortcuts px-card"><div class="px-section-head"><h2>Dữ liệu &amp; công cụ phụ trợ</h2><span>Công cụ tất định cung cấp số liệu cho Agent</span></div><div class="mx-shortcut-grid">{cards}</div></section>', unsafe_allow_html=True)
+        st.markdown(f'<section class="mx-card mx-shortcuts px-card"><div class="px-section-head"><h2>Truy cập nhanh</h2><span>Truy cập nhanh các chức năng quản lý cửa hàng</span></div><div class="mx-shortcut-grid">{cards}</div></section>', unsafe_allow_html=True)
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -644,7 +644,7 @@ def _render_recipe_modal_body(sku, name, variant, price):
             unsafe_allow_html=True,
         )
     else:
-        st.info("Đang đồng bộ định lượng nguyên liệu chi tiết từ sổ tay BOM cửa hàng 2132.")
+        st.info("Đang tải định lượng nguyên liệu của món này.")
 
     c_ask, c_close = st.columns([1.6, 1])
     with c_ask:
@@ -931,7 +931,7 @@ def render_approval_card(agent, pending, clean_role, user_name, is_admin, key_su
             from src.dashboard import ocr_components as vocr
             draft = pending.get('plan') or {}
             fields = draft.get('fields', {})
-            st.markdown(f"#### ⏸️ LangGraph `interrupt()` · Phê duyệt lưu chốt ca `{pending['plan_id']}`")
+            st.markdown(f"#### ⏸️ Chờ duyệt báo cáo chốt ca `{pending['plan_id']}`")
             submitter = ((draft.get('meta') or {}).get('submitted_by_name') or '')
             sent_by = f"Nhân viên gửi `{submitter}` · " if submitter else ''
             st.caption(f"{sent_by}Yêu cầu bởi `{pending.get('requested_by')}` · Ngày `{fields.get('report_date')}` · Ca `{fields.get('shift_code')}` · "
@@ -1068,14 +1068,14 @@ def _render_chat_conversation(agent, role, user_name, history_height=250, key_su
 
     exec_mode = st.session_state.get('agent_execution_mode')
     if exec_mode == 'llm':
-        st.caption('🟢 Chế độ AI Online (Gemini + LangGraph Tool Calling) · Đã xác thực nguồn dữ liệu.')
+        st.caption('🟢 Đang dùng AI trực tuyến · số liệu lấy từ dữ liệu của quán.')
     elif exec_mode == 'offline_fallback':
         st.caption('⚡ Đã tự động chuyển sang Động cơ Tra cứu Cục bộ (do kết nối API gián đoạn) · Vẫn đảm bảo chính xác 100%.')
     elif exec_mode == 'offline_rules':
         st.caption('⚡ Chế độ Tra cứu Nhanh cục bộ (<50ms) · Bạn có thể bấm nút "⚡ Chế độ Nhanh (Offline)" phía trên để bật AI Online.')
     pending = st.session_state.get('agent_pending_approval')
     if pending and pending.get('plan_type') == 'SHIFT_OCR_DRAFT' and st.session_state.get('main_navigation') == '📸 Chốt ca & OCR':
-        st.caption('⏸️ Thẻ phê duyệt chốt ca đang hiển thị trong phần **Chốt Ca & Đối Soát OCR** phía trên.')
+        st.caption('⏸️ Thẻ duyệt báo cáo chốt ca đang hiển thị ở phía trên.')
     elif pending:
         render_approval_card(agent, pending, clean_role, user_name, is_admin, key_suffix)
 
@@ -1160,9 +1160,9 @@ def _render_chat_conversation(agent, role, user_name, history_height=250, key_su
             c_act1, c_act2 = st.columns(2)
             waiting = bool(pending and pending.get('plan_id') == active_ocr_draft['draft_id'])
             btn_confirm = c_act1.button(
-                "⏸️ Đang chờ Quản lý phê duyệt" if waiting else "📨 Yêu cầu phê duyệt lưu (LangGraph interrupt)",
+                "⏸️ Đang chờ Quản lý phê duyệt" if waiting else "📨 Gửi yêu cầu Quản lý duyệt",
                 type="primary", key=f"confirm_ocr_{active_ocr_draft['draft_id']}{key_suffix}", disabled=waiting,
-                help="Gọi request_shift_draft_confirmation: luồng dừng ở interrupt() và chỉ ghi sổ khi Quản lý bấm Phê duyệt.")
+                help="Báo cáo chỉ được ghi sổ khi Quản lý bấm Phê duyệt.")
             btn_cancel = c_act2.button("🛑 Hủy dự thảo", key=f"cancel_ocr_{active_ocr_draft['draft_id']}{key_suffix}")
             if btn_confirm:
                 st.session_state.chat_input_val = 'Yêu cầu phê duyệt lưu báo cáo chốt ca'
@@ -1224,11 +1224,11 @@ def _render_chat_conversation(agent, role, user_name, history_height=250, key_su
 
 
 ACTION_CHIPS = (
-    ('chip_ocr_read', '📸 Đọc & đối soát ảnh sổ chốt ca viết tay', 'Đọc & đối soát ảnh sổ chốt ca viết tay', True),
-    ('chip_ocr_update', '✏️ Cập nhật số liệu dự thảo OCR đang chờ', 'Cập nhật số liệu dự thảo OCR đang chờ', False),
-    ('chip_ocr_approve', '✅ Yêu cầu phê duyệt lưu báo cáo chốt ca', 'Yêu cầu phê duyệt lưu báo cáo chốt ca', False),
-    ('chip_sticker_sop', '🏷️ Giải mã tem ly 24101 & tra cứu SOP nấu trân châu', 'Giải mã tem ly 24101 & tra cứu SOP nấu trân châu', False),
-    ('chip_governance', '🛡️ Kiểm tra quyền hạn & lịch sử phê duyệt (HITL)', 'Kiểm tra quyền hạn & lịch sử phê duyệt (HITL)', False),
+    ('chip_ocr_read', '📸 Đọc ảnh sổ chốt ca', 'Đọc & đối soát ảnh sổ chốt ca viết tay', True),
+    ('chip_ocr_update', '✏️ Sửa số trong bản đọc đang chờ', 'Cập nhật số liệu dự thảo OCR đang chờ', False),
+    ('chip_ocr_approve', '✅ Gửi Quản lý duyệt báo cáo', 'Yêu cầu phê duyệt lưu báo cáo chốt ca', False),
+    ('chip_sticker_sop', '🏷️ Đọc mã tem ly 24101 & cách nấu trân châu', 'Giải mã tem ly 24101 & tra cứu SOP nấu trân châu', False),
+    ('chip_governance', '🛡️ Xem quyền tài khoản & lịch sử duyệt', 'Xem quyền tài khoản & lịch sử duyệt', False),
 )
 
 
@@ -1314,7 +1314,7 @@ def render_chat(agent, role, user_name, mode="auto"):
 
     def render_action_chips():
         with st.container(key="chat_action_chips"):
-            st.caption('⚡ Thao tác nhanh — 2 trụ cột OCR & Agent')
+            st.caption('⚡ Gợi ý thao tác nhanh')
             for column, (key, label, question, opens) in zip(st.columns(len(ACTION_CHIPS), gap="small"), ACTION_CHIPS):
                 column.button(label, key=key, use_container_width=True, on_click=ask_chip, args=(question, opens), help=question)
 
@@ -1346,7 +1346,7 @@ def render_chat(agent, role, user_name, mode="auto"):
         title, mode_col, action = st.columns([3.2, 1.3, 1.1])
         title.markdown(
             f'<div class="px-chat-head"><img src="{asset("snow-king-cutout.png")}" alt="">'
-            '<div><span class="px-eyebrow">TRỤ CỘT 2 · LANGGRAPH AGENT</span><h3>Tuyết Vương AI</h3></div></div>',
+            '<div><span class="px-eyebrow">TRỢ LÝ VẬN HÀNH CỬA HÀNG</span><h3>Trợ lý Tuyết Vương</h3></div></div>',
             unsafe_allow_html=True,
         )
         mode_label = '🟢 AI Online (Gemini)' if is_online_now else '⚡ Chế độ Nhanh (Offline)'
@@ -1374,9 +1374,11 @@ def render_chat(agent, role, user_name, mode="auto"):
             render_chat_context(is_admin)
 
 
-TRACE_NODES = (('guard', 'Chặn injection / dữ liệu nhạy cảm'), ('model', 'Gemini chọn công cụ hoặc offline router'),
-               ('authorize', 'Kiểm tra RBAC theo vai trò'), ('tools', 'Gọi công cụ, gắn bằng chứng'),
-               ('approval', 'interrupt() chờ Admin'))
+TRACE_NODES = (('guard', 'Kiểm tra an toàn', 'Chặn nội dung lạ và dữ liệu nhạy cảm'),
+               ('model', 'Hiểu câu hỏi', 'AI trực tuyến hoặc bộ tra cứu nhanh'),
+               ('authorize', 'Kiểm tra quyền', 'Theo vai trò tài khoản'),
+               ('tools', 'Tra dữ liệu', 'Lấy số từ dữ liệu của quán, kèm nguồn'),
+               ('approval', 'Chờ duyệt', 'Việc ghi sổ cần Quản lý duyệt'))
 
 
 def render_agent_rail(agent, role, user_name, is_online):
@@ -1391,7 +1393,7 @@ def render_agent_rail(agent, role, user_name, is_online):
     last_tool = st.session_state.get('agent_last_tool')
     asked = any(m.get('role') == 'user' for m in saved.get('messages', []))
     rows = []
-    for node, hint in TRACE_NODES:
+    for node, label, hint in TRACE_NODES:
         if node == 'approval':
             state, mark, note = ('pause', '⏸', 'đang chờ') if pending else ('idle', '', 'khi ghi sổ')
         elif not asked:
@@ -1399,28 +1401,28 @@ def render_agent_rail(agent, role, user_name, is_online):
         else:
             state, mark = '', '✓'
             note = escape(last_tool) if node == 'tools' and last_tool else ('online' if node == 'model' and is_online else 'offline' if node == 'model' else '')
-        rows.append(f'<li title="{escape(hint)}"><span class="dot {state}">{mark}</span>{node}<small>{note}</small></li>')
+        rows.append(f'<li title="{escape(hint)}"><span class="dot {state}">{mark}</span>{label}<small>{note}</small></li>')
     rt = agent._runtime()
     allowed = [spec for spec in rt.tools.values() if spec.allowed(role)]
     effects = {}
     for spec in allowed:
         effects[spec.effect] = effects.get(spec.effect, 0) + 1
-    effect_vi = {'read': 'Chỉ đọc', 'draft': 'Tạo dự thảo', 'approval': 'Cần phê duyệt'}
+    effect_vi = {'read': 'Chỉ xem', 'draft': 'Tạo bản nháp', 'approval': 'Cần Quản lý duyệt'}
     rbac = ''.join(f'<div class="px-kv"><span>{effect_vi.get(k, k)}</span><b class="px-num">{v}</b></div>' for k, v in sorted(effects.items()))
     account = escape(str(st.session_state.get('username', user_name)))
-    role_note = ('Admin · duyệt được interrupt' if is_admin_role(role)
-                 else 'Nhân viên · bị chặn ở node authorize với công cụ cần phê duyệt')
+    role_note = ('Quản lý · được duyệt các yêu cầu ghi sổ' if is_admin_role(role)
+                 else 'Nhân viên · việc ghi sổ phải chờ Quản lý duyệt')
     evidence = next((m.get('evidence') for m in reversed(saved.get('messages', [])) if m.get('role') == 'assistant' and m.get('evidence')), []) or []
     refs = ''.join(f'<span class="px-ref">{escape(str(ref))}</span>' for ref in evidence[:6]) or '<small>Chưa có bằng chứng trong cuộc trò chuyện này.</small>'
     status = ''
     if draft:
-        status = (f'<div class="px-kv"><span>Dự thảo OCR</span><b>{escape(draft["draft_id"])}</b></div>'
+        status = (f'<div class="px-kv"><span>Bản đọc ảnh đang chờ</span><b>{escape(draft["draft_id"])}</b></div>'
                   f'<div class="px-kv"><span>Trường chờ xác nhận</span><b class="px-num">{len(draft.get("missing_fields") or [])}</b></div>')
     st.markdown(f'''<div class="px-rail">
-    <div class="px-rail-card"><h4>Luồng LangGraph · lượt này</h4><ol class="px-trace">{''.join(rows)}</ol>{status}</div>
-    <div class="px-rail-card"><h4>Quyền hạn (máy chủ xác thực)</h4><div class="px-kv"><span>Tài khoản</span><b>{account} · {escape(role)}</b></div>
-    <div class="px-kv"><span>Công cụ được phép</span><b class="px-num">{len(allowed)}/{len(rt.tools)}</b></div>{rbac}<p class="px-rail-note">{escape(role_note)}</p></div>
-    <div class="px-rail-card"><h4>Nguồn bằng chứng</h4>{refs}<p class="px-rail-note">Thiếu nguồn cho câu hỏi số liệu → trả MISSING_EVIDENCE, không đoán.</p></div></div>''', unsafe_allow_html=True)
+    <div class="px-rail-card"><h4>Trạng thái xử lý</h4><ol class="px-trace">{''.join(rows)}</ol>{status}</div>
+    <div class="px-rail-card"><h4>Quyền tài khoản hiện tại</h4><div class="px-kv"><span>Tài khoản</span><b>{account} · {escape(role)}</b></div>
+    <div class="px-kv"><span>Chức năng được dùng</span><b class="px-num">{len(allowed)}/{len(rt.tools)}</b></div>{rbac}<p class="px-rail-note">{escape(role_note)}</p></div>
+    <div class="px-rail-card"><h4>Nguồn dữ liệu đối chiếu</h4>{refs}<p class="px-rail-note">Không có số liệu gốc thì Tuyết Vương nói chưa có dữ liệu, không đoán.</p></div></div>''', unsafe_allow_html=True)
 
 
 def render_chat_context(is_admin):

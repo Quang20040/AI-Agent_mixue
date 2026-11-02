@@ -13,7 +13,7 @@ from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
 PORT = 8599
-PAGES = [('home', None), ('ocr', 'đối soát ocr'), ('chat', 'tuyết vương ai')]
+PAGES = [('home', None), ('ocr', 'chốt ca'), ('chat', 'trợ lý'), ('stock', 'doanh thu & kho')]
 
 
 def wait_server(url, timeout=90):

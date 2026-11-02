@@ -501,26 +501,26 @@ class OcrChatMixin:
         plans = list_plans() if admin else []
         recent = plans[:5]
 
-        effect_vi = {"read": "Chỉ đọc", "draft": "Tạo/sửa dự thảo", "approval": "Cần phê duyệt (interrupt)"}
+        effect_vi = {"read": "Chỉ xem", "draft": "Tạo/sửa bản nháp", "approval": "Cần Quản lý duyệt"}
         lines = [
-            "### 🛡️ Quyền hạn & quản trị phê duyệt (RBAC + Human-in-the-Loop)",
+            "### 🛡️ Quyền tài khoản & việc chờ duyệt",
             f"- **Tài khoản:** `{actor.user_id}` · **Họ tên:** {actor.name} · **Vai trò do máy chủ xác thực:** `{actor.role}`"
             + (" (Quản trị)" if admin else " (Nhân viên)"),
             f"- **Trang được truy cập:** {', '.join(get_allowed_pages(actor.role)) or 'Không có'}",
-            "\n**Công cụ Agent được phép gọi:**",
+            "\n**Chức năng được dùng:**",
         ]
         for effect in ("read", "draft", "approval"):
             if by_effect.get(effect):
                 lines.append(f"- {effect_vi[effect]} ({len(by_effect[effect])}): " + ", ".join(f"`{n}`" for n in sorted(by_effect[effect])))
         if denied:
-            lines.append(f"- 🔒 Bị chặn ở node `_authorize` ({len(denied)}): " + ", ".join(f"`{n}`" for n in sorted(denied)))
+            lines.append(f"- 🔒 Không được dùng ({len(denied)}): " + ", ".join(f"`{n}`" for n in sorted(denied)))
         lines.append("\n**Trạng thái phê duyệt trong cuộc trò chuyện này:**")
         if pending:
-            lines.append(f"- ⏸️ Đang dừng tại `interrupt()`: **{pending.get('plan_id')}** ({pending.get('plan_type')}) — chờ bấm Phê duyệt/Hủy.")
+            lines.append(f"- ⏸️ Đang chờ duyệt: **{pending.get('plan_id')}** — chờ bấm Phê duyệt/Hủy.")
         else:
-            lines.append("- Không có bước `interrupt()` nào đang chờ.")
+            lines.append("- Không có yêu cầu nào đang chờ duyệt.")
         if draft:
-            lines.append(f"- 📸 Dự thảo OCR `{draft['draft_id']}`: {len(draft.get('missing_fields') or [])} trường còn thiếu"
+            lines.append(f"- 📸 Bản đọc ảnh `{draft['draft_id']}`: {len(draft.get('missing_fields') or [])} ô còn thiếu"
                          + (" · đủ điều kiện gửi phê duyệt" if draft.get("is_complete") else ""))
         if admin:
             approved = sum(1 for p in plans if p.get("status") == "APPROVED")
@@ -1061,6 +1061,24 @@ class OcrChatMixin:
             return [{"draft_id": d, "ok": False, "text": "🔒 Chỉ Quản lý/Chủ quán được duyệt."} for d in draft_ids]
         store = self._ensure_store()
         results = []
+        # Approvals from the queue run in their own conversation (one per batch), so a question still open in
+        # the manager's chat never blocks them and the chat history stays readable.
+        owner = self._conversation_owner(actor)
+        original = self._conversation_id
+        if approve:
+            self._conversation_id = store.create(owner)
+            store.set_title(owner, self._conversation_id,
+                            f"🗂️ Duyệt hàng đợi {datetime.now().strftime('%d/%m %H:%M')}")
+        try:
+            results = self._decide_each(draft_ids, approve, actor, store, user_role, user_name, user_id, reason)
+        finally:
+            self._conversation_id = original
+            if approve and store.owns(owner, original):
+                store.touch(owner, original)
+        return results
+
+    def _decide_each(self, draft_ids, approve, actor, store, user_role, user_name, user_id, reason):
+        results = []
         for draft_id in draft_ids:
             sub = store.get_ocr_draft_by_id(draft_id)
             if not sub or sub.get("status") != "SUBMITTED" or sub.get("store_id") != actor.store_id:
@@ -1072,11 +1090,6 @@ class OcrChatMixin:
                                                             "decided_at": datetime.now(timezone.utc).isoformat(timespec="seconds")})
                 results.append({"draft_id": draft_id, "ok": True, "text": f"Đã từ chối {label}."})
                 continue
-            existing = self.conversation_history(user_role, user_name, user_id=user_id).get("pending_approval")
-            if existing:
-                results.append({"draft_id": draft_id, "ok": False,
-                                "text": "Đang có một yêu cầu khác chờ bạn trả lời trong Trợ lý Tuyết Vương; xử lý nó trước."})
-                break
             opened = self.open_staff_submission(draft_id, user_role, user_name, user_id=user_id)
             if not opened.get("pending_approval"):
                 results.append({"draft_id": draft_id, "ok": False, "text": opened.get("text", "Không mở được báo cáo.")})
@@ -1113,7 +1126,7 @@ class OcrChatMixin:
         ocr_topic = any(w in q_norm for w in ("chot ca", "ocr", "du thao", "so tay", "hoa don pos")) or bool(draft_ref)
 
         # Governance / HITL overview (RBAC is read from the authenticated actor, not the text).
-        if "hitl" in q_norm or (any(w in q_norm for w in ("quyen han", "phan quyen"))
+        if "hitl" in q_norm or (any(w in q_norm for w in ("quyen han", "phan quyen", "quyen tai khoan"))
                                 and any(w in q_norm for w in ("phe duyet", "lich su", "interrupt"))):
             return {"forced_call": {"name": "get_governance_overview", "args": {}}}
 
@@ -1182,6 +1195,6 @@ class OcrChatMixin:
                 "2. Mình gọi `inspect_attached_shift_image`: tách vùng 🧾 POS và ✍️ sổ tay, kiểm tra độ mờ, giữ chuỗi đọc thô, "
                 "đọc mọi ca có trên trang, gợi ý số cho ô viết tắt (653 → 653.000, `962 + 629` → 1.591.000) nhưng vẫn đánh dấu ⚠️, và đối soát cộng ngang.\n"
                 "3. Nhắn `dùng số gợi ý` để điền các ô ⚠️, hoặc sửa bằng lời, ví dụ: `Sửa tiền mặt thành 653000`.\n"
-                "4. Gõ `Yêu cầu phê duyệt lưu báo cáo chốt ca` — luồng LangGraph dừng ở `interrupt()` chờ Quản lý bấm **Phê duyệt**."),
+                "4. Gõ `Yêu cầu phê duyệt lưu báo cáo chốt ca` — báo cáo chờ Quản lý bấm **Phê duyệt** rồi mới ghi sổ."),
                 "tool_called": "ocr_guidance"}
         return None

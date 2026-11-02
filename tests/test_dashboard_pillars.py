@@ -42,7 +42,7 @@ def test_chat_action_chip_reaches_governance_tool():
         assert any(b.key == key for b in app.button), key
     app.button(key='chip_governance').click().run()
     assert not app.exception
-    assert 'Quyền hạn' in app.session_state['chat_history_vi'][-1]['content']
+    assert 'Quyền tài khoản' in app.session_state['chat_history_vi'][-1]['content']
 
 
 def test_probation_staff_gets_agent_but_not_ocr_page():
@@ -106,7 +106,7 @@ def test_chat_draft_and_interrupt_cards_render(monkeypatch):
     app.button(key='chip_ocr_approve').click().run()
     assert not app.exception
     assert app.session_state['agent_pending_approval']['plan_type'] == 'SHIFT_OCR_DRAFT'
-    assert any('interrupt()' in m.value for m in app.markdown)
+    assert any('Chờ duyệt báo cáo chốt ca' in m.value for m in app.markdown)
     app.button(key='approve_agent').click().run()
     assert not app.exception
     assert 'ĐÃ XÁC NHẬN' in app.session_state['chat_history_vi'][-1]['content']
@@ -215,9 +215,9 @@ def test_chat_page_has_langgraph_rail_with_rbac_counts():
         app = _login(key)
         app.radio(key='main_navigation').set_value('💬 Tuyết Vương AI').run()
         html = ' '.join(m.value for m in app.markdown)
-        assert 'px-chat-head' in html and 'px-rail' in html and 'Luồng LangGraph' in html
-        assert ('duyệt được interrupt' in html) is admin
-        assert 'Quyền hạn (máy chủ xác thực)' in html
+        assert 'px-chat-head' in html and 'px-rail' in html and 'Trạng thái xử lý' in html
+        assert ('được duyệt các yêu cầu ghi sổ' in html) is admin
+        assert 'Quyền tài khoản hiện tại' in html
 
 
 def test_day_photos_are_read_once_and_each_shift_fills_its_own_numbers(monkeypatch):

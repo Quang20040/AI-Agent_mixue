@@ -176,9 +176,9 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
     with st.container(key='ocr_page_head'):
         head, date_col, shift_col = st.columns([3.2, 1, 1.5], gap='medium', vertical_alignment='bottom')
         head.markdown(
-            '<div class="px-page-head"><span class="px-eyebrow">Trụ cột 1 · Verifiable Vision OCR</span>'
-            '<h2>Chốt ca &amp; Đối soát OCR</h2>'
-            '<p>AI đọc ảnh, quy tắc kiểm chứng điền số; ô vàng là số cần bạn kiểm tra.</p></div>',
+            '<div class="px-page-head"><span class="px-eyebrow">CA LÀM VIỆC &amp; BÀN GIAO TIỀN</span>'
+            '<h2>Chốt ca từ ảnh sổ &amp; hóa đơn</h2>'
+            '<p>Chụp sổ giao ca, Tuyết Vương đọc số; ô vàng là số cần bạn kiểm tra trước khi gửi.</p></div>',
             unsafe_allow_html=True)
         chosen_date = date_col.date_input("Ngày làm việc", key="shift_chosen_date_picker")
         with shift_col:
@@ -524,7 +524,7 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                         )
                         agent = st.session_state.get('operations_agent')
                         if agent is None:
-                            st.error('Chưa khởi tạo được Agent để gửi phê duyệt.')
+                            st.error('Trợ lý chưa sẵn sàng để gửi duyệt. Tải lại trang rồi thử lại.')
                             return
                         # One governed write path: same draft -> request_shift_draft_confirmation -> interrupt()
                         # as the chat; nothing is written to shift_reports before a manager approves.
@@ -697,27 +697,26 @@ def render_ocr_benchmark_panel():
         run_ocr_benchmark,
     )
 
-    with st.expander('📊 Kiểm định & phân loại lỗi OCR (bộ ảnh có đáp án)', expanded=False), \
+    with st.expander('📊 Kiểm tra độ chính xác khi đọc ảnh (bộ ảnh có đáp án)', expanded=False), \
             st.container(key='ocr_benchmark_card'):
         dataset = st.radio(
             "Bộ dữ liệu kiểm định",
             ["synthetic", "real"],
-            format_func=lambda k: {"synthetic": "4 ảnh tổng hợp có đáp án (bản đọc mô phỏng)",
-                                   "real": "Ảnh thật của cửa hàng có đáp án (data/ocr_eval)"}[k],
+            format_func=lambda k: {"synthetic": "4 ảnh mẫu có đáp án",
+                                   "real": "Ảnh thật của quán có đáp án"}[k],
             horizontal=True, key="ocr_benchmark_dataset",
         )
-        st.caption("So sánh bản đọc thô (tin thẳng số mô hình trả về) với pipeline có kiểm chứng theo 7 nhóm lỗi. "
-                   + ("Ảnh tổng hợp: `printed_pos`, `handwritten_ledger`, `blurry_image`, `composite_multi_doc`."
-                      if dataset == "synthetic" else
-                      "Ảnh thật: đáp án lấy từ báo cáo chốt ca đã duyệt. *Phát lại* chấm lại bản đọc đã lưu bằng pipeline hiện tại, không cần mạng."))
+        st.caption("So sánh khi tin thẳng số AI đọc với khi qua bước kiểm tra, theo 7 loại lỗi hay gặp. "
+                   + ("Ảnh mẫu: hóa đơn in, sổ viết tay, ảnh mờ, ảnh ghép." if dataset == "synthetic" else
+                      "Ảnh thật: đáp án là báo cáo chốt ca đã duyệt. Chấm lại bản đọc đã lưu, không cần mạng."))
         settings = AgentSettings.from_env()
         live_ready = bool(settings.llm_enabled and settings.allow_external_transfer)
         c1, c2 = st.columns(2)
-        offline_label = "▶️ Chạy kiểm định (bản đọc mô phỏng)" if dataset == "synthetic" else "▶️ Phát lại bản đọc đã lưu (offline)"
+        offline_label = "▶️ Chạy kiểm tra (ảnh mẫu)" if dataset == "synthetic" else "▶️ Chấm lại bản đọc đã lưu"
         if c1.button(offline_label, key="run_ocr_benchmark", use_container_width=True):
             st.session_state["ocr_benchmark_report"] = (run_ocr_benchmark("scripted") if dataset == "synthetic"
                                                         else run_dataset_benchmark(mode="replay"))
-        if c2.button("🌐 Chạy với mô hình Vision thật", key="run_ocr_benchmark_live", use_container_width=True,
+        if c2.button("🌐 Chạy với AI thật", key="run_ocr_benchmark_live", use_container_width=True,
                      disabled=not live_ready,
                      help=None if live_ready else "Cần bật LLM_ENABLED và ALLOW_EXTERNAL_DATA_TRANSFER."):
             with st.spinner("Đang gửi ảnh kiểm định tới mô hình Vision…"):

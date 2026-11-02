@@ -14,8 +14,8 @@ from playwright.sync_api import sync_playwright
 ROOT = Path(__file__).resolve().parents[1]
 PORT = 8631
 URL = f'http://localhost:{PORT}'
-PAGES = [('tuyết vương ai', 'ai agent'), ('đối soát ocr', 'ocr'), ('báo cáo', 'kho'), ('dự báo', 'dự báo'),
-         ('sơ chế', 'sơ chế'), ('nhập hàng', 'nhập hàng'), ('tem ly', 'công thức'), ('trang chủ', 'trang chủ')]
+PAGES = [('trợ lý', 'trợ lý'), ('chốt ca', 'chốt ca'), ('doanh thu & kho', 'kho'), ('dự báo', 'dự báo'),
+         ('topping', 'topping'), ('đặt hàng', 'đặt hàng'), ('công thức', 'công thức'), ('trang chủ', 'trang chủ')]
 STATE = "() => document.querySelector('[data-testid=\"stApp\"]')?.getAttribute('data-test-script-state')"
 
 

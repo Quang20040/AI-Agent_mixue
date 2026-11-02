@@ -156,6 +156,10 @@ class ConversationStore:
             )
         return ident
 
+    def set_title(self, owner: str, conversation_id: str, title: str) -> None:
+        with self.connect() as db:
+            db.execute('UPDATE conversations SET title=? WHERE id=? AND owner=?', (title[:80], conversation_id, owner))
+
     def list(self, owner: str) -> list[dict[str, Any]]:
         with self.connect() as db:
             db.row_factory = sqlite3.Row

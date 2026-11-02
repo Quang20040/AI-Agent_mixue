@@ -512,8 +512,8 @@ Không tiết lộ suy luận nội bộ.'''
         if pending:
             payload = pending[0].value
             if payload.get('plan_type') == 'SHIFT_OCR_DRAFT':
-                text = (f"⏸️ **Dự thảo chốt ca `{payload['plan_id']}` đã qua kiểm định và đang tạm dừng chờ Quản lý phê duyệt.**\n\n"
-                        "LangGraph đã dừng tại bước `interrupt()`; chưa có số liệu nào được ghi vào sổ doanh thu. "
+                text = (f"⏸️ **Báo cáo chốt ca `{payload['plan_id']}` đã được kiểm tra và đang chờ Quản lý duyệt.**\n\n"
+                        "Chưa có số liệu nào được ghi vào sổ doanh thu. "
                         "Bấm **Phê duyệt** hoặc **Hủy** trên thẻ xác nhận bên dưới.")
             else:
                 text = f"Kế hoạch **{payload['plan_id']}** đang chờ bạn xem và xác nhận bên dưới."

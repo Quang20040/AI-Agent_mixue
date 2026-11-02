@@ -120,7 +120,7 @@ def test_three_step_flow_pauses_at_interrupt_and_writes_only_after_approval(offl
     paused = offline_agent.process_query('Yêu cầu phê duyệt lưu báo cáo chốt ca', **MANAGER)
     assert paused['raw_result']['status'] == 'PENDING_APPROVAL'
     assert paused['pending_approval']['plan_type'] == 'SHIFT_OCR_DRAFT'
-    assert 'interrupt()' in paused['text']
+    assert 'chờ Quản lý duyệt' in paused['text']
     assert no_writes == []  # nothing saved while the graph is paused
     assert offline_agent.conversation_history(**MANAGER)['pending_approval']['plan_type'] == 'SHIFT_OCR_DRAFT'
 
@@ -147,7 +147,7 @@ def test_staff_request_is_denied_by_authorize_node_and_draft_is_kept(offline_age
     offline_agent.process_query(COMPLETE_EDIT, **STAFF)
     denied = offline_agent.process_query('Yêu cầu phê duyệt lưu báo cáo chốt ca', **STAFF)
     assert denied['raw_result']['status'] == 'UNAUTHORIZED'
-    assert '_authorize' in denied['text']
+    assert 'không đủ quyền' in denied['text']
     assert offline_agent.conversation_history(**STAFF)['pending_approval'] is None
     assert offline_agent.get_active_ocr_draft() is not None
     assert no_writes == []
@@ -181,7 +181,7 @@ def test_number_followed_by_a_word_starting_with_k_is_not_multiplied():
 
 def test_quick_chips_answer_without_a_draft(offline_agent):
     guide = offline_agent.process_query('Đọc & đối soát ảnh sổ chốt ca viết tay', **MANAGER)
-    assert guide['tool_called'] == 'ocr_guidance' and 'interrupt()' in guide['text']
+    assert guide['tool_called'] == 'ocr_guidance' and 'Phê duyệt' in guide['text']
     view = offline_agent.process_query('Cập nhật số liệu dự thảo OCR đang chờ', **MANAGER)
     assert view['raw_result']['status'] == 'NO_ACTIVE_DRAFT'
     approve = offline_agent.process_query('Yêu cầu phê duyệt lưu báo cáo chốt ca', **MANAGER)

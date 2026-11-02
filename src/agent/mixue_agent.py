@@ -1632,7 +1632,7 @@ Bạn được trang bị 8 công cụ vận hành:
             if raw.get("draft") is not None:
                 result["pending_ocr_draft"] = raw["draft"]
             if forced["name"] == "request_shift_draft_confirmation" and raw.get("status") == "UNAUTHORIZED":
-                result["text"] = ("🔒 **Từ chối ở node `_authorize` (RBAC máy chủ):** vai trò `"
+                result["text"] = ("🔒 **Tài khoản không đủ quyền:** vai trò `"
                                   f"{actor.role}` không được gửi phê duyệt lưu doanh thu chốt ca. "
                                   "Dự thảo vẫn được giữ nguyên để Quản lý/Chủ quán kiểm tra và phê duyệt.")
         raw_status = (result.get("raw_result") or {}).get("status")

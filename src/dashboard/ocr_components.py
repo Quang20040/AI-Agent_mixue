@@ -44,8 +44,8 @@ SOURCE_BADGES: dict[str, tuple[str, str]] = {
 }
 
 STATUS_BADGES: dict[str, tuple[str, str]] = {
-    'read': ('✅ Đọc rõ · read', 'ok'),
-    'uncertain': ('⚠️ Cần kiểm tra · uncertain', 'warn'),
+    'read': ('✅ Đọc rõ', 'ok'),
+    'uncertain': ('⚠️ Cần kiểm tra lại', 'warn'),
     'unreadable': ('❌ Mờ / không đọc được', 'bad'),
     'not_present': ('❌ Không có trên ảnh', 'muted'),
 }
@@ -83,9 +83,9 @@ def money(value: Any) -> str:
 
 def pipeline_states(extracted: dict[str, Any] | None) -> list[tuple[str, str, str]]:
     """(title, detail, state) for the six verification stages; state is pending|done|warn|active."""
-    titles = ['Chất lượng ảnh', 'Tách vùng chứng từ', 'Đọc thô', 'Quy tắc kiểm chứng', 'Đối soát số học', 'Người xác nhận']
-    idle = ['Độ nét, tương phản', 'POS · sổ tay · ảnh ghép', 'Giữ nguyên chuỗi trên ảnh', 'Không nhân 1.000, không tự cộng',
-            'Cộng ngang & chéo POS', 'Quản lý phê duyệt']
+    titles = ['Kiểm tra ảnh', 'Nhận diện loại giấy tờ', 'Đọc chữ & số', 'Kiểm tra các ô chưa rõ', 'So khớp tổng tiền', 'Chờ xác nhận']
+    idle = ['Độ nét, độ sáng', 'Hóa đơn POS · sổ tay', 'Chép đúng như trên ảnh', 'Ô chưa chắc tô vàng',
+            'Cộng các khoản so với tổng', 'Quản lý duyệt']
     extracted = extracted or {}
     if extracted.get('status') != 'NEEDS_REVIEW':
         states = ['pending'] * 6
@@ -100,12 +100,12 @@ def pipeline_states(extracted: dict[str, Any] | None) -> list[tuple[str, str, st
     discrepancies = (extracted.get('consistency') or {}).get('discrepancies') or []
     doc_label = DOCUMENT_BADGES.get(extracted.get('document_type') or 'unknown', DOCUMENT_BADGES['unknown'])[0]
     return [
-        (titles[0], 'Ảnh mờ: mọi trường chờ xác nhận' if quality.get('is_blurry') else f"Đủ nét · tương phản {quality.get('contrast', '—')}",
+        (titles[0], 'Ảnh mờ: mọi ô cần kiểm tra' if quality.get('is_blurry') else f"Đủ nét · tương phản {quality.get('contrast', '—')}",
          'warn' if quality.get('is_blurry') else 'done'),
         (titles[1], doc_label, 'done'),
-        (titles[2], f'{with_text} trường có chữ', 'done'),
-        (titles[3], f'{flagged} trường gắn cờ' if flagged else 'Không có trường mơ hồ', 'warn' if flagged else 'done'),
-        (titles[4], f'{len(discrepancies)} chênh lệch' if discrepancies else 'Các khoản khớp nhau', 'warn' if discrepancies else 'done'),
+        (titles[2], f'{with_text} ô có chữ', 'done'),
+        (titles[3], f'{flagged} ô cần kiểm tra' if flagged else 'Không có ô chưa rõ', 'warn' if flagged else 'done'),
+        (titles[4], f'{len(discrepancies)} chỗ lệch' if discrepancies else 'Tổng tiền khớp', 'warn' if discrepancies else 'done'),
         (titles[5], 'Đang chờ bạn xác nhận', 'active'),
     ]
 
@@ -117,7 +117,7 @@ def render_pipeline_steps(extracted: dict[str, Any] | None = None, slot=None) ->
         f'<li class="vocr-step {state}"><span class="dot" aria-hidden="true">{marks[state] or index}</span>'
         f'<div><b>{escape(title)}</b>{escape(detail)}</div><i class="fill" aria-hidden="true"></i></li>'
         for index, (title, detail, state) in enumerate(pipeline_states(extracted), 1))
-    html = f'<ol class="vocr-steps" aria-label="Quy trình kiểm chứng" style="list-style:none;padding:0">{items}</ol>'
+    html = f'<ol class="vocr-steps" aria-label="Các bước đọc ảnh" style="list-style:none;padding:0">{items}</ol>'
     (slot or st).markdown(html, unsafe_allow_html=True)
 
 
@@ -192,7 +192,7 @@ def render_field_table(field_readings: dict[str, dict[str, Any]], form_values: d
             + f"<td>{badge(*STATUS_BADGES.get(row['status'], STATUS_BADGES['not_present']))} {' '.join(flags)}"
             + (f"<div class='vocr-why'>{escape(reason)}</div>" if reason else '') + "</td></tr>")
     st.markdown(
-        '<div class="vocr-scroll"><table class="vocr-table vocr-evidence"><thead><tr><th>Khoản mục · nguồn</th><th>Đọc thô</th>'
+        '<div class="vocr-scroll"><table class="vocr-table vocr-evidence"><thead><tr><th>Khoản mục · nguồn</th><th>Chữ trên ảnh</th>'
         '<th>Điền vào form</th><th>Trạng thái · lý do cần xác nhận</th>'
         '</tr></thead><tbody>' + ''.join(body) + '</tbody></table></div>', unsafe_allow_html=True)
     st.caption('Trường ⚠️ được điền sẵn theo gợi ý và tô vàng: số đọc thô luôn được giữ nguyên để đối chiếu; '
@@ -221,8 +221,8 @@ def render_benchmark(report: dict[str, Any], images: dict[str, bytes] | None = N
     suggestions = report.get('suggestion_summary') or {}
     m1, m2, m3, m4 = st.columns(4)
     m1.metric('Trường được chấm', verified.get('fields_evaluated', 0))
-    m2.metric('Số sai không bị gắn cờ · bản đọc thô', raw.get('errors_reaching_form', 0))
-    m3.metric('Số sai không bị gắn cờ · có kiểm chứng', verified.get('errors_reaching_form', 0),
+    m2.metric('Số sai lọt vào form · AI đọc thẳng', raw.get('errors_reaching_form', 0))
+    m3.metric('Số sai lọt vào form · sau khi kiểm tra', verified.get('errors_reaching_form', 0),
               delta=verified.get('errors_reaching_form', 0) - raw.get('errors_reaching_form', 0), delta_color='inverse')
     m4.metric('Gợi ý điền sẵn (ô vàng) đúng', f"{suggestions.get('correct', 0)}/{suggestions.get('total', 0)}",
               help='Ô chưa chắc vẫn được điền gợi ý nhưng tô vàng; nhân viên phải kiểm tra, Quản lý duyệt mới ghi sổ.')
@@ -233,8 +233,8 @@ def render_benchmark(report: dict[str, Any], images: dict[str, bytes] | None = N
         f"<div class='vocr-bar-line'><span class='vocr-bar raw' style='--w:{raw['taxonomy_7'].get(key, 0) / top * 100:.0f}%'></span>{raw['taxonomy_7'].get(key, 0)}</div>"
         f"<div class='vocr-bar-line'><span class='vocr-bar ver' style='--w:{verified['taxonomy_7'].get(key, 0) / top * 100:.0f}%'></span>{verified['taxonomy_7'].get(key, 0)}</div>"
         "</div></div>" for key in report['taxonomy_order'])
-    st.markdown("<div class='vocr-legend'><span><i style='background:#f4a3ab'></i>Bản đọc thô</span>"
-                "<span><i style='background:#c4000f'></i>Có kiểm chứng</span></div>"
+    st.markdown("<div class='vocr-legend'><span><i style='background:#f4a3ab'></i>AI đọc thẳng</span>"
+                "<span><i style='background:#c4000f'></i>Sau khi kiểm tra</span></div>"
                 f"<div class='vocr-bars'>{bars}</div>", unsafe_allow_html=True)
     rows = ''.join(
         f"<tr><td><code>{key}</code></td><td>{escape(labels[key])}</td>"
@@ -244,8 +244,8 @@ def render_benchmark(report: dict[str, Any], images: dict[str, bytes] | None = N
     other_ver = ', '.join(f'{k}: {v}' for k, v in verified.get('other_counts', {}).items()) or '—'
     rows += f"<tr><td colspan='2'><i>Khác (không có trên ảnh, ảnh mờ không cảnh báo…)</i></td><td>{escape(other_raw)}</td><td>{escape(other_ver)}</td></tr>"
     with st.expander('Bảng số liệu 7 nhóm lỗi', expanded=False):
-        st.markdown('<table class="vocr-table"><thead><tr><th>Nhóm lỗi</th><th>Ý nghĩa</th><th>Bản đọc thô (tin số mô hình)</th>'
-                    '<th>Pipeline có kiểm chứng</th></tr></thead><tbody>' + rows + '</tbody></table>', unsafe_allow_html=True)
+        st.markdown('<table class="vocr-table"><thead><tr><th>Nhóm lỗi</th><th>Ý nghĩa</th><th>AI đọc thẳng</th>'
+                    '<th>Sau khi kiểm tra</th></tr></thead><tbody>' + rows + '</tbody></table>', unsafe_allow_html=True)
     st.caption(report.get('note', ''))
 
     cases = report.get('cases', [])
@@ -275,7 +275,7 @@ def render_benchmark(report: dict[str, Any], images: dict[str, bytes] | None = N
                     for name, res in case['verified']['field_results'].items()
                     if not (res['outcome'] == 'correct_not_present' and case['raw']['field_results'][name]['outcome'] == 'correct_not_present'))
                 consistency = case['verified']['consistency_check_passed']
-                st.markdown('<table class="vocr-table"><thead><tr><th>Trường</th><th>Bản đọc thô</th><th>Có kiểm chứng</th><th>Chi tiết</th>'
+                st.markdown('<table class="vocr-table"><thead><tr><th>Trường</th><th>AI đọc thẳng</th><th>Sau khi kiểm tra</th><th>Chi tiết</th>'
                             '</tr></thead><tbody>' + lines + '</tbody></table>', unsafe_allow_html=True)
                 st.caption(('✅' if consistency else '❌') + ' Kiểm tra số học: '
                            + ('đã phát hiện đúng chênh lệch / số khớp.' if consistency else 'chưa phát hiện chênh lệch.'))
