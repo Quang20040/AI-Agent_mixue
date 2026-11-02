@@ -908,8 +908,21 @@ def _from_day_sheet(sheet, valid_images, shift_hint, target_date, attempts, mode
     return out
 
 
+_MODEL_IMAGES: dict[str, tuple[bytes, str]] = {}
+
+
 def _model_image(data: bytes, mime: str) -> tuple[bytes, str]:
-    """What the vision model sees: upright, RGB, readable size (small phone photos are upscaled)."""
+    """What the vision model sees (cached per photo, so retries and other output modes skip the work)."""
+    key = hashlib.sha256(data).hexdigest()
+    if key not in _MODEL_IMAGES:
+        if len(_MODEL_IMAGES) >= 32:
+            _MODEL_IMAGES.pop(next(iter(_MODEL_IMAGES)))
+        _MODEL_IMAGES[key] = _prepare_model_image(data, mime)
+    return _MODEL_IMAGES[key]
+
+
+def _prepare_model_image(data: bytes, mime: str) -> tuple[bytes, str]:
+    """Upright, RGB, readable size (small phone photos are upscaled)."""
     try:
         with Image.open(io.BytesIO(data)) as image:
             image = ImageOps.exif_transpose(image).convert('RGB')

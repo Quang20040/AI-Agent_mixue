@@ -579,10 +579,11 @@ with st.container(key="workspace"):
                                 list(stock_views)
                             )
                         with cf2:
-                            excel_data = generate_excel_export(stock_year, stock_month)
+                            # Built only when the button is pressed (it costs seconds on a small server).
                             st.download_button(
                                 label="📥 Tải File Excel (.xlsx)",
-                                data=excel_data,
+                                data=lambda y=stock_year, m=stock_month: generate_excel_export(y, m),
+                                on_click="ignore",
                                 file_name=f"Mixue_Kho_{stock_year}_{stock_month}.xlsx",
                                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                 use_container_width=True

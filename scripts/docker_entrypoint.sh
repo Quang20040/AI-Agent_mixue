@@ -46,4 +46,4 @@ fi
 # First boot on a server: create the owner account from OWNER_USERNAME / OWNER_INITIAL_PASSWORD.
 python scripts/provision_admin.py --from-env
 
-exec streamlit run src/dashboard/app.py --server.port="${PORT:-8501}" --server.address=0.0.0.0 --server.headless=true
+exec python scripts/serve.py --server.port="${PORT:-8501}" --server.address=0.0.0.0 --server.headless=true

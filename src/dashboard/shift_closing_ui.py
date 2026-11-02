@@ -14,6 +14,9 @@ import time
 from pathlib import Path
 
 import pandas as pd
+
+from src.engine.image_upload import UploadError, save_photo, thumbnail
+
 import streamlit as st
 
 from html import escape
@@ -65,7 +68,7 @@ def _render_day_images(day_images, chosen_d_str, chosen_date, shift_code, covera
         has_shift = info is None or shift_code in info.get('shifts', []) or (
             shift_code == 'CA_TOI' and info.get('has_pos_slip'))
         with st.container(key=f"ocr_img_{'on' if has_shift else 'off'}_{idx}"):
-            st.image(p, use_container_width=True)
+            st.image(thumbnail(p), use_container_width=True)
             if info is None:
                 tags = '<span class="vocr-badge vocr-unk">Chưa đọc</span>'
             else:
@@ -203,9 +206,10 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
 
                 uploaded_files = st.file_uploader(
                     "Thêm ảnh của ngày này (sổ chốt ca, phiếu POS) — một ảnh có thể chứa nhiều ca",
-                    type=["jpg", "jpeg", "png", "webp"],
+                    type=None,  # any photo the phone offers (HEIC, JPEG, PNG, WebP…); checked by content below
                     accept_multiple_files=True,
-                    key="shift_photo_uploader"
+                    key="shift_photo_uploader",
+                    help="Chọn ảnh bất kỳ từ thư viện hoặc chụp mới; ảnh được tự xoay đúng chiều và nén nhẹ trước khi đọc.",
                 )
                 if uploaded_files:
                     seen = st.session_state.setdefault('ocr_uploaded_seen', set())
@@ -216,12 +220,11 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                         if (chosen_d_str, digest) in seen:
                             continue  # already added (or removed on purpose) for this day
                         seen.add((chosen_d_str, digest))
-                        if len(contents) > 10 * 1024 * 1024:
-                            st.error(f"Ảnh '{uf.name}' vượt 10 MB. Hãy chọn ảnh nhỏ hơn.")
+                        try:
+                            save_path = save_photo(contents, uf.name, SHIFT_UPLOADS_DIR)
+                        except UploadError as exc:
+                            st.error(str(exc))
                             continue
-                        save_path = SHIFT_UPLOADS_DIR / (digest + Path(uf.name).suffix.lower())
-                        if not save_path.exists():
-                            save_path.write_bytes(contents)
                         if str(save_path) not in day_images:
                             day_images.append(str(save_path))
 
@@ -613,7 +616,7 @@ def render_day_reports(day_reports, chosen_date, is_admin):
                     st.caption(f"Ký bởi: **{rep.get('signed_by')}** | Thu về: **{rep.get('total_collected_vnd', 0):,.0f} đ**")
                     img_p = rep.get("image_path")
                     if img_p and Path(img_p).exists():
-                        st.image(img_p, use_container_width=True)
+                        st.image(thumbnail(img_p), use_container_width=True)
                     else:
                         st.caption("*(Không có ảnh chứng từ)*")
 

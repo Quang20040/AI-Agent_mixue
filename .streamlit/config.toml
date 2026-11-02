@@ -11,6 +11,8 @@ font = "sans serif"
 enableStaticServing = true
 # Compress the websocket stream (page HTML is resent on every interaction).
 enableWebsocketCompression = true
+# Phone photos are normalized after upload; allow full-size originals.
+maxUploadSize = 40
 
 [browser]
 gatherUsageStats = false

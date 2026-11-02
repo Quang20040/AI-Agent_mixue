@@ -1125,7 +1125,7 @@ def _render_chat_conversation(agent, role, user_name, history_height=250, key_su
                      expanded=bool(st.session_state.pop('ocr_uploader_open', False))):
         uploaded_slips = st.file_uploader(
             "Chọn file ảnh chụp phiếu POS, sổ chốt ca viết tay hoặc hóa đơn (hỗ trợ chọn nhiều ảnh cùng lúc)",
-            type=["jpg", "jpeg", "png", "webp"],
+            type=None,  # any photo the phone offers; checked and normalized by content before reading
             accept_multiple_files=True,
             key=f"ocr_slip_uploader_{account_id}{key_suffix}",
         )
@@ -1135,7 +1135,17 @@ def _render_chat_conversation(agent, role, user_name, history_height=250, key_su
             btn_txt = f"🚀 Gửi {count} ảnh cho Tuyết Vương AI đọc" if count > 1 else "🚀 Gửi ảnh cho Tuyết Vương AI đọc"
             if st.button(btn_txt, key=f"btn_process_slip_{account_id}{key_suffix}"):
                 with st.spinner(f"Tuyết Vương đang kiểm tra bố cục và nhận diện {count} chứng từ..." if count > 1 else "Tuyết Vương đang kiểm tra bố cục và nhận diện chứng từ..."):
-                    files_payload = [(f.name, f.getvalue()) for f in uploaded_slips]
+                    from src.engine.image_upload import UploadError, normalize_photo
+                    files_payload, rejected = [], []
+                    for f in uploaded_slips:
+                        try:
+                            files_payload.append((Path(f.name).stem + '.jpg', normalize_photo(f.getvalue(), f.name)))
+                        except UploadError as exc:
+                            rejected.append(str(exc))
+                    for message in rejected:
+                        st.error(message)
+                    if not files_payload:
+                        st.stop()
                     img_res = agent.process_image_message(
                         files=files_payload,
                         user_role=clean_role,
