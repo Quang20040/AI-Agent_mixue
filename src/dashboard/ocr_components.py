@@ -6,6 +6,7 @@ derives or fills a number itself.
 """
 from __future__ import annotations
 
+import re
 from html import escape
 from typing import Any
 
@@ -60,6 +61,11 @@ _CSS = '''<style>
 .vocr-table td{padding:6px 8px;border-bottom:1px solid #f1f5f9;vertical-align:top}
 .vocr-table code{background:#f8fafc;padding:1px 5px;border-radius:4px}
 .vocr-num{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
+.vocr-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.vocr-evidence{min-width:560px}
+.vocr-evidence .vocr-val{white-space:nowrap;min-width:110px}
+.vocr-evidence td:first-child{min-width:110px}
+.vocr-why{font-size:12px;color:#64748b;margin-top:4px;line-height:1.4}
 </style>'''
 
 
@@ -143,6 +149,18 @@ def field_rows(field_readings: dict[str, dict[str, Any]], form_values: dict[str,
     return rows
 
 
+def short_reason(text: str, limit: int = 220) -> str:
+    """Review reasons are built from several rules and repeat themselves; keep each sentence once."""
+    seen, parts = set(), []
+    for sentence in re.split(r'(?<=[.;])\s+', (text or '').strip()):
+        key = sentence.strip().rstrip('.;').lower()
+        if key and key not in seen:
+            seen.add(key)
+            parts.append(sentence.strip())
+    out = ' '.join(parts)
+    return out if len(out) <= limit else out[:limit].rsplit(' ', 1)[0] + '…'
+
+
 def render_field_table(field_readings: dict[str, dict[str, Any]], form_values: dict[str, Any] | None = None,
                        suggestions: dict[str, dict[str, Any]] | None = None) -> None:
     suggestions = suggestions or {}
@@ -152,12 +170,12 @@ def render_field_table(field_readings: dict[str, dict[str, Any]], form_values: d
         return
     def value_cell(row):
         if row['normalized_value'] is not None:
-            return f"<td class='vocr-num'>{money(row['normalized_value'])}</td>"
+            return f"<td class='vocr-num vocr-val'>{money(row['normalized_value'])}</td>"
         hint = suggestions.get(row['field'])
         if hint:
-            return (f"<td class='vocr-num vocr-suggest' title='{escape(hint['basis'])}'>{money(hint['value'])}"
+            return (f"<td class='vocr-num vocr-val vocr-suggest' title='{escape(hint['basis'])}'>{money(hint['value'])}"
                     "<br><small>gợi ý · ô vàng</small></td>")
-        return "<td class='vocr-num'>—</td>"
+        return "<td class='vocr-num vocr-val'>—</td>"
 
     body = []
     for row in rows:
@@ -166,17 +184,17 @@ def render_field_table(field_readings: dict[str, dict[str, Any]], form_values: d
             flags.append(badge('Σ biểu thức', 'warn'))
         if row['unit_explicit'] is False:
             flags.append(badge('đơn vị chưa rõ', 'warn'))
+        reason = short_reason(row['review_reason'])
         body.append(
-            f"<tr><td><b>{escape(row['label'])}</b><br><small><code>{escape(row['field'])}</code></small></td>"
-            f"<td>{badge(*SOURCE_BADGES.get(row['source'], SOURCE_BADGES['unknown']))}</td>"
-            f"<td>{badge(*STATUS_BADGES.get(row['status'], STATUS_BADGES['not_present']))}<br>{' '.join(flags)}</td>"
+            f"<tr><td><b>{escape(row['label'])}</b><br>{badge(*SOURCE_BADGES.get(row['source'], SOURCE_BADGES['unknown']))}</td>"
             f"<td><code>{escape(str(row['raw_text'])[:80]) or '—'}</code></td>"
             + value_cell(row)
-            + f"<td>{escape(row['review_reason'][:260]) or '—'}</td></tr>")
+            + f"<td>{badge(*STATUS_BADGES.get(row['status'], STATUS_BADGES['not_present']))} {' '.join(flags)}"
+            + (f"<div class='vocr-why'>{escape(reason)}</div>" if reason else '') + "</td></tr>")
     st.markdown(
-        '<table class="vocr-table"><thead><tr><th>Khoản mục</th><th>Nguồn</th><th>Trạng thái</th>'
-        '<th>Đọc thô (raw_text)</th><th>Giá trị điền vào form</th><th>Lý do cần xác nhận (review_reason)</th>'
-        '</tr></thead><tbody>' + ''.join(body) + '</tbody></table>', unsafe_allow_html=True)
+        '<div class="vocr-scroll"><table class="vocr-table vocr-evidence"><thead><tr><th>Khoản mục · nguồn</th><th>Đọc thô</th>'
+        '<th>Điền vào form</th><th>Trạng thái · lý do cần xác nhận</th>'
+        '</tr></thead><tbody>' + ''.join(body) + '</tbody></table></div>', unsafe_allow_html=True)
     st.caption('Trường ⚠️ được điền sẵn theo gợi ý và tô vàng: số đọc thô luôn được giữ nguyên để đối chiếu; '
                'nhân viên phải kiểm tra, Quản lý phê duyệt mới ghi sổ.' if suggestions else
                'Trường ⚠️ chưa có gợi ý đáng tin (sai nguồn chứng từ, bảng đếm cốc, hai nguồn mâu thuẫn) nên để trống.')
@@ -188,10 +206,13 @@ def render_image_quality(quality: dict[str, Any] | None) -> None:
     tone = 'bad' if quality.get('is_blurry') else 'ok'
     sharp = 'Ảnh mờ / tương phản thấp' if quality.get('is_blurry') else 'Ảnh đủ nét'
     layout = '2 cột (có thể là ảnh ghép)' if quality.get('has_dual_columns') else '1 vùng chính'
-    st.markdown(
-        f"{badge(sharp, tone)} {badge('Bố cục: ' + layout, 'unk')} "
-        f"<small>tương phản {quality.get('contrast', '—')} · cạnh max {quality.get('edge_max', '—')} · "
-        f"{quality.get('width', '—')}×{quality.get('height', '—')} px</small>", unsafe_allow_html=True)
+    details = ''
+    if quality.get('width'):
+        details = (f"<small>tương phản {quality.get('contrast', '—')} · cạnh max {quality.get('edge_max', '—')} · "
+                   f"{quality['width']}×{quality.get('height', '—')} px</small>")
+    elif quality.get('image_count'):
+        details = f"<small>{quality['image_count']} ảnh</small>"
+    st.markdown(f"{badge(sharp, tone)} {badge('Bố cục: ' + layout, 'unk')} {details}", unsafe_allow_html=True)
 
 
 def render_benchmark(report: dict[str, Any], images: dict[str, bytes] | None = None) -> None:

@@ -1030,6 +1030,7 @@ class OcrChatMixin:
             image_paths=store.attachment_paths(sub.get("file_ids") or []),
             review_seconds=meta.get("review_seconds"), user_role=user_role, user_name=user_name, user_id=user_id,
             review_meta={"from_staff_draft": draft_id, "submitted_by": meta.get("submitted_by"),
+                         "submitted_by_name": submitter,
                          "suggested_fields": meta.get("suggested_fields", []),
                          "suggestions_edited": meta.get("suggestions_edited", [])},
         )

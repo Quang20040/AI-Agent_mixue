@@ -342,7 +342,7 @@ def _home_state(agent, user_role, user_name):
     from src.auth import is_admin_role
     from src.engine.plan_service import list_plans
     from src.engine.shift_service import get_all_shift_reports, get_daily_closing_summary, latest_shift_report_date
-    state = {'pending_approval': None, 'draft': None, 'plans_waiting': 0, 'stock_waiting': 0}
+    state = {'pending_approval': None, 'draft': None, 'plans_waiting': 0, 'stock_waiting': 0, 'staff_waiting': 0}
     if agent is not None:
         try:
             history = agent.conversation_history(user_role, user_name, user_id=st.session_state.get('username', user_name))
@@ -359,6 +359,12 @@ def _home_state(agent, user_role, user_name):
         state['plans_waiting'] = sum(1 for p in list_plans()
                                      if p.get('status') == 'PENDING_APPROVAL' and str(p.get('target_date', ''))[:10] >= today)
         state['stock_waiting'] = len(get_pending_requests())
+        if agent is not None:
+            try:
+                state['staff_waiting'] = len(agent.list_staff_submissions(
+                    user_role, user_name, user_id=st.session_state.get('username', user_name)))
+            except Exception:  # noqa: BLE001
+                pass
     # Realtime: everything on the home page is about today; the last day with data is only a hint.
     today_d = business_today()
     summary = get_daily_closing_summary(today_d.isoformat())
@@ -381,13 +387,16 @@ def render_home_greeting(agent, user_role, user_name):
         tasks.append((CHAT_PAGE, f"Duyệt {state['pending_approval'].get('plan_id', 'yêu cầu')}", 'light'))
     if state['draft']:
         tasks.append((CHAT_PAGE, f"Dự thảo OCR còn {len(state['draft'].get('missing_fields') or [])} trường chờ xác nhận", 'light'))
+    if state['staff_waiting']:
+        tasks.append((OCR_PAGE, f"{state['staff_waiting']} báo cáo chốt ca nhân viên gửi chờ duyệt", 'ghost'))
     if state['plans_waiting']:
         tasks.append((CHAT_PAGE, f"{state['plans_waiting']} kế hoạch sơ chế/nhập hàng chờ duyệt", 'ghost'))
     if state['stock_waiting']:
         tasks.append(('Báo cáo & kho', f"{state['stock_waiting']} lệnh kho chờ duyệt", 'ghost'))
     if can_access_page(user_role, OCR_PAGE):
         tasks.append((OCR_PAGE, 'Chốt ca từ ảnh sổ', 'ghost'))
-    count = sum(1 for _, _, tone in tasks if tone == 'light') + state['plans_waiting'] + state['stock_waiting']
+    count = (sum(1 for _, _, tone in tasks if tone == 'light') + state['plans_waiting'] + state['stock_waiting']
+             + state['staff_waiting'])
     headline = (f'Chào {part}, {first}! Còn {count} việc cần bạn xử lý trước khi chốt ngày.' if count
                 else f'Chào {part}, {first}! Mọi phê duyệt đã xong, chỉ còn chốt ca.')
     if state['draft']:
@@ -440,7 +449,7 @@ def render_pillars(user_role):
             else:
                 icon, heading = ui_icon('chat'), 'Tuyết Vương AI · LangGraph Agent'
                 pending = state.get('pending_approval')
-                waiting = (1 if pending else 0) + state.get('plans_waiting', 0)
+                waiting = (1 if pending else 0) + state.get('plans_waiting', 0) + state.get('staff_waiting', 0)
                 stats = [('Phê duyệt đang chờ', str(waiting), waiting),
                          ('Công cụ được phép', str(state.get('tools_allowed', '—')), state.get('tools_allowed')),
                          ('Chế độ', 'AI Online' if state.get('online') else 'Offline', None)]
@@ -903,7 +912,9 @@ def render_approval_card(agent, pending, clean_role, user_name, is_admin, key_su
             draft = pending.get('plan') or {}
             fields = draft.get('fields', {})
             st.markdown(f"#### ⏸️ LangGraph `interrupt()` · Phê duyệt lưu chốt ca `{pending['plan_id']}`")
-            st.caption(f"Yêu cầu bởi `{pending.get('requested_by')}` · Ngày `{fields.get('report_date')}` · Ca `{fields.get('shift_code')}` · "
+            submitter = ((draft.get('meta') or {}).get('submitted_by_name') or '')
+            sent_by = f"Nhân viên gửi `{submitter}` · " if submitter else ''
+            st.caption(f"{sent_by}Yêu cầu bởi `{pending.get('requested_by')}` · Ngày `{fields.get('report_date')}` · Ca `{fields.get('shift_code')}` · "
                        "Chưa có số nào được ghi vào sổ doanh thu cho tới khi Quản lý bấm Phê duyệt.")
             vocr.install_css()
             st.markdown(vocr.document_badge(draft.get('document_type')), unsafe_allow_html=True)

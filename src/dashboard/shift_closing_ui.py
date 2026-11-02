@@ -10,6 +10,7 @@ Hỗ trợ:
 
 import hashlib
 import json
+import re
 from datetime import date
 import time
 from pathlib import Path
@@ -111,7 +112,8 @@ def _render_day_images(day_images, chosen_d_str, chosen_date, shift_code, covera
                 if not has_shift:
                     tags += f' <small>· không có {SHIFT_SHORT[shift_code]}</small>'
             name_col, rm_col = st.columns([4, 1], vertical_alignment='center')
-            name_col.markdown(f'<small>Ảnh {idx + 1} · {escape(Path(p).name[:28])}</small><br>{tags or "—"}',
+            shown_name = '' if re.fullmatch(r'[0-9a-f]{64}', Path(p).stem) else f' · {escape(Path(p).name[:28])}'
+            name_col.markdown(f'<small>Ảnh {idx + 1}{shown_name}</small><br>{tags or "—"}',
                               unsafe_allow_html=True)
             rm_col.button('✕', key=f'ocr_rm_{idx}_{sha[:8]}', help='Bỏ ảnh này khỏi ngày',
                           on_click=remove_image, args=(p,))
@@ -362,8 +364,10 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                             st.error(f"⚠️ {disc.get('message')}")
                     elif consistency:
                         st.success('⚖️ Đối soát số học: các khoản đã đọc khớp nhau.')
-                    for warning in extracted.get('warnings', []):
-                        if not any(warning == d.get('message') for d in consistency.get('discrepancies', [])):
+                    shown = {d.get('message') for d in consistency.get('discrepancies', [])}
+                    for warning in dict.fromkeys(extracted.get('warnings', [])):
+                        # Per-field notes ("Trường cash_vnd: …") are already in the table's reason column.
+                        if warning not in shown and not warning.startswith('Trường '):
                             st.warning(warning)
                     with st.expander('Xem chuỗi đọc thô theo từng ảnh và từng vùng chứng từ'):
                         for index, image_result in enumerate(extracted.get('image_results', []), 1):

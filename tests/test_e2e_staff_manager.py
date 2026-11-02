@@ -68,12 +68,15 @@ def test_staff_to_manager_to_ledger_across_separate_sessions(monkeypatch):
     assert not staff.exception
 
     manager = _open('quick_login_manager')  # another browser, on the home page
+    assert manager.session_state['_home_state']['staff_waiting'] == 1
     assert any(b.key == 'open_staff_inbox' for b in manager.button), 'manager is not told a report is waiting'
     manager.button(key='open_staff_inbox').click().run()
     assert manager.session_state['main_navigation'] == OCR_PAGE
     next(b for b in manager.button if (b.key or '').startswith('open_sub_')).click().run()
     pending = manager.session_state['agent_pending_approval']
     assert pending['plan_type'] == 'SHIFT_OCR_DRAFT' and pending['plan']['fields']['report_date'] == day
+    assert (pending['plan'].get('meta') or {}).get('submitted_by_name'), 'card cannot say which staff sent it'
+    assert any('Nhân viên gửi' in c.value for c in manager.caption)
     before = len(_saved(day))
     manager.button(key='approve_agent_page').click().run()
     assert not manager.exception
