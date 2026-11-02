@@ -24,11 +24,9 @@ def test_pillars_come_right_after_home_for_every_role():
     assert get_allowed_pages('STAFF_PROBATION')[1] == '💬 Tuyết Vương AI'
 
 
-def test_home_pillar_button_opens_ocr_page_and_benchmark_runs():
+def test_ocr_page_benchmark_runs():
     app = _login()
-    app.button(key='pillar_open_ocr').click().run()
-    assert not app.exception
-    assert app.session_state['main_navigation'] == '📸 Chốt ca & OCR'
+    app.radio(key='main_navigation').set_value('📸 Chốt ca & OCR').run()
     app.button(key='run_ocr_benchmark').click().run()
     assert not app.exception
     report = app.session_state['ocr_benchmark_report']
@@ -115,81 +113,79 @@ def test_chat_draft_and_interrupt_cards_render(monkeypatch):
     assert not app.session_state['agent_pending_approval']
 
 
-def test_ocr_page_submission_goes_through_interrupt_before_any_write(monkeypatch):
-    writes = []
-    monkeypatch.setattr('src.dashboard.shift_closing_ui.extract_shift_data_from_image', _scripted_extract(1))
+def _fill_and_send(app, values, label='📨 Gửi yêu cầu Quản lý duyệt'):
+    for item in app.number_input:
+        if item.label in values:
+            item.set_value(values[item.label])
+    for box in app.checkbox:
+        if not (box.key or '').startswith('apv_'):
+            box.check()
+    next(b for b in app.button if b.label == label).click().run()
+    assert not app.exception
+
+
+def _ledger_mocks(monkeypatch, writes):
     monkeypatch.setattr('src.engine.shift_service.upsert_shift_report',
                         lambda payload, actor_role=None, actor_username=None: (writes.append(payload) or True, '', payload))
     monkeypatch.setattr('src.engine.shift_service.record_ocr_user_edits',
                         lambda **kwargs: {'corrected_fields': [], 'manual_fields': [], 'field_edits': {},
                                           'review_seconds': kwargs.get('review_seconds')})
+
+
+FULL_VALUES = {'Tiền mặt thu tại quầy (đ)': 653000, 'Chênh lệch tiền mặt dư/thiếu (đ)': 0, 'Chuyển khoản ngân hàng (đ)': 1591000,
+               'Tiền cố định két (đ)': 1000000, 'ShopeeFood (đ)': 16000, 'GrabFood (đ)': 30000, 'BeFood (đ)': 0,
+               'Khoản chi trong ca (đ)': 0, 'Tổng thu về thực tế (đ)': 2290000}
+
+
+def test_manager_submission_waits_in_queue_and_is_written_only_on_approval(monkeypatch):
+    writes = []
+    monkeypatch.setattr('src.dashboard.shift_closing_ui.extract_shift_data_from_image', _scripted_extract(1))
+    _ledger_mocks(monkeypatch, writes)
     app = _login()
     app.radio(key='main_navigation').set_value('📸 Chốt ca & OCR').run()
     next(b for b in app.button if b.label == '📷 Sổ Ca Sáng').click().run()
     app.button(key='run_shift_ocr').click().run()
-    values = {'Tiền mặt thu tại quầy (đ)': 653000, 'Chênh lệch tiền mặt dư/thiếu (đ)': 0, 'Chuyển khoản ngân hàng (đ)': 1591000,
-              'Tiền cố định két (đ)': 1000000, 'ShopeeFood (đ)': 16000, 'GrabFood (đ)': 30000, 'BeFood (đ)': 0,
-              'Khoản chi trong ca (đ)': 0, 'Tổng thu về thực tế (đ)': 2290000}
-    for item in app.number_input:
-        if item.label in values:
-            item.set_value(values[item.label])
-    for box in app.checkbox:
-        box.check()
-    next(b for b in app.button if b.label.startswith('📨 Gửi phê duyệt')).click().run()
-    assert not app.exception
-    assert writes == []  # paused at interrupt(): nothing written yet
-    assert app.session_state['agent_pending_approval']['plan_type'] == 'SHIFT_OCR_DRAFT'
-    app.button(key='approve_agent_page').click().run()
-    assert not app.exception
-    assert len(writes) == 1
+    _fill_and_send(app, FULL_VALUES)
+    assert writes == []  # queued: nothing written yet
+    assert not app.session_state['agent_pending_approval']
+    approve = next(b for b in app.button if (b.key or '').startswith('apv_y_ocr_shift_'))
+    approve.click().run()
+    assert not app.exception and len(writes) == 1
     saved = writes[0]
     assert saved['cash_vnd'] == 653000 and saved['bank_transfer_vnd'] == 1591000
     assert saved['ocr_review']['mode'] == 'ocr_page'
     assert saved.get('image_path')
+    assert not any((b.key or '').startswith('apv_y_ocr_shift_') for b in app.button)
 
 
 def test_staff_checks_prefilled_form_and_manager_approves_it(monkeypatch):
     writes = []
     monkeypatch.setattr('src.dashboard.shift_closing_ui.extract_shift_data_from_image', _scripted_extract(1))
-    monkeypatch.setattr('src.engine.shift_service.upsert_shift_report',
-                        lambda payload, actor_role=None, actor_username=None: (writes.append(payload) or True, '', payload))
-    monkeypatch.setattr('src.engine.shift_service.record_ocr_user_edits',
-                        lambda **kwargs: {'corrected_fields': [], 'manual_fields': [], 'field_edits': {},
-                                          'review_seconds': kwargs.get('review_seconds')})
+    _ledger_mocks(monkeypatch, writes)
     app = _login('quick_login_staff')
     app.radio(key='main_navigation').set_value('📸 Chốt ca & OCR').run()
     next(b for b in app.button if b.label == '📷 Sổ Ca Sáng').click().run()
     app.button(key='run_shift_ocr').click().run()
-    submit = next(b for b in app.button if b.label == '📨 Gửi Quản lý duyệt')
+    submit = next(b for b in app.button if b.label == '📨 Gửi yêu cầu Quản lý duyệt')
     assert not submit.disabled
     # Without ticking the yellow-field check the form refuses to send.
     app.checkbox[0].check()
     submit.click().run()
     assert any('ô tô vàng' in e.value for e in app.error)
-    values = {'Chênh lệch tiền mặt dư/thiếu (đ)': 0, 'Khoản chi trong ca (đ)': 0, 'Tổng thu về thực tế (đ)': 2290000}
-    for item in app.number_input:
-        if item.label in values:
-            item.set_value(values[item.label])
-    for box in app.checkbox:
-        box.check()
-    next(b for b in app.button if b.label == '📨 Gửi Quản lý duyệt').click().run()
-    assert not app.exception and writes == []
-    assert not app.session_state['agent_pending_approval']
-    assert any('Đã gửi' in str(m.value) for m in [*app.info, *app.success, *app.markdown]), [e.value for e in app.error]
+    _fill_and_send(app, {'Chênh lệch tiền mặt dư/thiếu (đ)': 0, 'Khoản chi trong ca (đ)': 0, 'Tổng thu về thực tế (đ)': 2290000})
+    assert writes == []
+    assert any('danh sách chờ duyệt' in str(m.value) for m in [*app.info, *app.success, *app.markdown])
+    assert any('Chờ duyệt' in m.value for m in app.markdown)  # the staff member sees the status
 
     app.button(key='btn_logout').click().run()
     app.button(key='quick_login_manager').click().run()
+    assert any((b.key or '').startswith('apv_y_home_shift_') for b in app.button)  # waiting on the home page
     app.radio(key='main_navigation').set_value('📸 Chốt ca & OCR').run()
-    opener = next(b for b in app.button if (b.key or '').startswith('open_sub_'))
-    opener.click().run()
-    assert not app.exception and writes == []  # manager now sees interrupt(); nothing written yet
-    assert app.session_state['agent_pending_approval']['plan_type'] == 'SHIFT_OCR_DRAFT'
-    app.button(key='approve_agent_page').click().run()
+    next(b for b in app.button if (b.key or '').startswith('apv_y_ocr_shift_')).click().run()
     assert not app.exception and len(writes) == 1
     saved = writes[0]
     assert saved['cash_vnd'] == 653000 and saved['bank_transfer_vnd'] == 1591000 and saved['total_collected_vnd'] == 2290000
     assert 'gửi' in saved.get('notes', '')
-    assert not any((b.key or '').startswith('open_sub_') for b in app.button)
 
 
 def test_real_photo_benchmark_tab_renders_without_saved_readings():
@@ -202,16 +198,16 @@ def test_real_photo_benchmark_tab_renders_without_saved_readings():
     assert report['mode'] == 'real_replay' and len(report['cases']) == 4
 
 
-def test_home_greeting_and_pillars_show_live_numbers_not_invented_ones():
-    app = _login()
-    html = ' '.join(m.value for m in app.markdown)
-    assert 'px-greet' in html and 'Tuyết Vương' in html
-    assert 'mx-hero' not in html  # the old hero is replaced on the home page
-    assert 'px-pillar' in html and 'data-count' in html
-    state = app.session_state['_home_state']
-    assert f"{state['bench_raw']} → {state['bench_verified']}" in html
-    assert state['bench_verified'] == 0 and state['bench_raw'] > 0
-    assert all(node in html for node in ('guard', 'authorize', 'approval'))
+def test_home_greeting_by_role_and_no_thesis_blocks():
+    expected = {'quick_login_manager': 'chờ phê duyệt', 'quick_login_staff': 'ca làm việc hiệu quả tại quầy Mixue'}
+    for key, phrase in expected.items():
+        app = _login(key)
+        html = ' '.join(m.value for m in app.markdown)
+        assert 'px-greet' in html and phrase in html
+        assert 'Mọi phê duyệt đã xong' not in html
+        assert 'px-pillar' not in html and 'TRỤ CỘT' not in html.upper()
+    staff_html = ' '.join(m.value for m in _login('quick_login_staff').markdown)
+    assert 'home_revenue_card' not in staff_html and 'Xem doanh thu theo ngày' not in staff_html
 
 
 def test_chat_page_has_langgraph_rail_with_rbac_counts():

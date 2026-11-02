@@ -1,6 +1,6 @@
 """Dịch vụ Quản lý Sổ Xuất - Nhập - Tồn Kho Hàng Ngày (Mixue Daily Stock Matrix - 31 Ngày).
 
-Mô phỏng đầy đủ 31 ngày của tháng 10/2026 chuẩn theo mẫu ảnh Google Sheets của quán Mixue 39 Tôn Quang Phiệt.
+Sổ kho theo tháng (đủ số ngày thực của tháng), theo mẫu Google Sheets của quán Mixue 39 Tôn Quang Phiệt.
 Tích hợp quy trình phê duyệt lệnh kho (Maker-Checker):
 - Nhân viên chính thức: Tạo yêu cầu lệnh xuất/nhập -> Trạng thái PENDING_APPROVAL.
 - Quản lý / Chủ quán: Kiểm duyệt và phê duyệt -> Ghi nhận vào file/sổ kho và ma trận.
@@ -247,7 +247,8 @@ def init_sample_daily_stock(force: bool = False):
         db.close()
 
 
-init_sample_daily_stock()
+# No sample movements are written on import: the stock book shows only what the shop recorded.
+# Seed explicitly for a demo: `python -c "from src.engine.daily_stock_service import init_sample_daily_stock as f; f(True)"`.
 
 
 @_serialize_stock_write
@@ -482,44 +483,7 @@ def get_user_requests(username: str | None = None, limit: int = 50) -> list[dict
         db.close()
 
 
-COLUMN_TO_MOVEMENT_MAP: dict[str, tuple[str, str]] = {
-    "Tồn T9": ("2026-09-30", "INITIAL"),
-    "Nhập 1/10": ("2026-10-01", "IN"),
-    "T5 1/10": ("2026-10-01", "OUT"),
-    "T6 2/10": ("2026-10-02", "OUT"),
-    "T7 3/10": ("2026-10-03", "OUT"),
-    "CN 4/10": ("2026-10-04", "OUT"),
-    "T2 5/10": ("2026-10-05", "OUT"),
-    "T3 6/10": ("2026-10-06", "OUT"),
-    "T4 7/10": ("2026-10-07", "OUT"),
-    "T5 8/10": ("2026-10-08", "OUT"),
-    "T6 9/10": ("2026-10-09", "OUT"),
-    "T7 10/10": ("2026-10-10", "OUT"),
-    "CN 11/10": ("2026-10-11", "OUT"),
-    "Nhập 12/10": ("2026-10-12", "IN"),
-    "T2 12/10": ("2026-10-12", "OUT"),
-    "T3 13/10": ("2026-10-13", "OUT"),
-    "T4 14/10": ("2026-10-14", "OUT"),
-    "T5 15/10": ("2026-10-15", "OUT"),
-    "T6 16/10": ("2026-10-16", "OUT"),
-    "T7 17/10": ("2026-10-17", "OUT"),
-    "CN 18/10": ("2026-10-18", "OUT"),
-    "Nhập 19/10": ("2026-10-19", "IN"),
-    "T2 19/10": ("2026-10-19", "OUT"),
-    "T3 20/10": ("2026-10-20", "OUT"),
-    "T4 21/10": ("2026-10-21", "OUT"),
-    "T5 22/10": ("2026-10-22", "OUT"),
-    "T6 23/10": ("2026-10-23", "OUT"),
-    "T7 24/10": ("2026-10-24", "OUT"),
-    "CN 25/10": ("2026-10-25", "OUT"),
-    "T2 26/10": ("2026-10-26", "OUT"),
-    "T3 27/10": ("2026-10-27", "OUT"),
-    "T4 28/10": ("2026-10-28", "OUT"),
-    "T5 29/10": ("2026-10-29", "OUT"),
-    "T6 30/10": ("2026-10-30", "OUT"),
-    "T7 31/10": ("2026-10-31", "OUT"),
-    "Tồn thực tế": ("2026-10-31", "ACTUAL_COUNT"),
-}
+# Column → (date, movement type) is built per month by stock_matrix.column_map_for_period(year, month).
 
 
 @_serialize_stock_write
@@ -592,8 +556,11 @@ def update_stock_movement(
         db.close()
 
 
-def get_cell_value(ingredient_id: str, column_name: str, *, year=2026, month=10) -> float | None:
+def get_cell_value(ingredient_id: str, column_name: str, *, year=None, month=None) -> float | None:
     """Lấy số lượng hiện tại được duyệt trong cơ sở dữ liệu của một ô cụ thể."""
+    if year is None or month is None:
+        from src.engine.stock_matrix import current_period
+        year, month = current_period()
     mapping = column_map_for_period(year, month)
     if column_name not in mapping:
         return None
@@ -659,9 +626,12 @@ def update_stock_cell_manually(
     column_name: str,
     new_value: Any,
     updated_by: str = "admin",
-    *, year: int = 2026, month: int = 10
+    *, year: int | None = None, month: int | None = None
 ) -> tuple[bool, str]:
     """Cập nhật hoặc xóa giá trị một ô bằng tay (Manual Cell Update / Delete)."""
+    if year is None or month is None:
+        from src.engine.stock_matrix import current_period
+        year, month = current_period()
     mapping = column_map_for_period(year, month)
     if column_name not in mapping:
         return False, f"Cột '{column_name}' là cột công thức tự động, không thể sửa trực tiếp."
@@ -752,12 +722,15 @@ def update_stock_matrix_from_editor(
     original_df: pd.DataFrame,
     updated_by: str = "admin",
     editor_session_data: dict[str, Any] | None = None,
-    *, year: int = 2026, month: int = 10
+    *, year: int | None = None, month: int | None = None
 ) -> dict[str, Any]:
     """Cập nhật hàng loạt các thay đổi từ bảng chỉnh sửa trực tiếp (st.data_editor).
     Hỗ trợ đọc trực tiếp delta từ st.session_state[editor_key]['edited_rows'] và so sánh DataFrame.
     """
     updated_count = 0
+    if year is None or month is None:
+        from src.engine.stock_matrix import current_period
+        year, month = current_period()
     column_mapping = column_map_for_period(year, month)
     errors = []
 
@@ -833,16 +806,21 @@ def update_stock_matrix_from_editor(
     }
 
 
-def get_stock_matrix_df(year: int = 2026, month: int = 10) -> pd.DataFrame:
-    """Approved movements within the requested calendar month, with an explicit opening balance."""
-    from src.engine.stock_matrix import build_stock_matrix
+def get_stock_matrix_df(year: int | None = None, month: int | None = None) -> pd.DataFrame:
+    """Approved movements within the requested calendar month (default: this month, Vietnam time)."""
+    from src.engine.stock_matrix import build_stock_matrix, current_period
+    if year is None or month is None:
+        year, month = current_period()
     with SessionLocal() as db:
         return build_stock_matrix(db, year, month)
 
 
 
-def generate_excel_export(year: int = 2026, month: int = 10) -> bytes:
-    """Tạo file Excel ĐẦY ĐỦ 31 NGÀY THÁNG 10/2026 chuẩn màu sắc Google Sheets."""
+def generate_excel_export(year: int | None = None, month: int | None = None) -> bytes:
+    """File kho Excel của tháng được chọn (mặc định tháng hiện tại), đủ số ngày thực của tháng."""
+    from src.engine.stock_matrix import current_period
+    if year is None or month is None:
+        year, month = current_period()
     df = get_stock_matrix_df(year, month)
 
     wb = Workbook()

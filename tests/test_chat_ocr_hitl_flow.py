@@ -252,6 +252,8 @@ def test_approval_card_checks_the_numbers_staff_confirmed(offline_agent):
     result = offline_agent.submit_shift_review_for_approval(
         extracted={'document_type': 'handwritten_ledger', 'consistency': stale, 'field_readings': {}},
         reviewed_values=reviewed, report_date='2026-11-01', shift_code='CA_SANG', signed_by='Hà', **MANAGER)
-    plan = result['pending_approval']['plan']
+    assert result['pending_approval'] is None  # queued first
+    opened = offline_agent.open_staff_submission(result['draft']['draft_id'], **MANAGER)
+    plan = opened['pending_approval']['plan']
     assert plan['consistency']['discrepancies'] == []
     assert plan['consistency']['shift_check']['cash_expected_vnd'] == 1_178_000

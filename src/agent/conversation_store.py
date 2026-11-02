@@ -649,6 +649,28 @@ class ConversationStore:
             ).fetchall()
         return [self._deserialize_draft(row) for row in rows]
 
+    def list_ocr_submissions_by_user(self, store_id: str, user_id: str, limit: int = 20) -> list[dict[str, Any]]:
+        """Reports one person sent from the OCR page, newest first, whatever their status now."""
+        with self.connect() as db:
+            db.row_factory = sqlite3.Row
+            rows = db.execute(
+                "SELECT * FROM ocr_shift_drafts WHERE store_id=? AND user_id=? AND status IN "
+                "('SUBMITTED','APPROVED','REJECTED','SUPERSEDED','FORWARDED') ORDER BY created_at DESC LIMIT ?",
+                (store_id, user_id, limit),
+            ).fetchall()
+        return [self._deserialize_draft(row) for row in rows]
+
+    def supersede_submitted(self, store_id: str, business_date: str, shift_code: str, keep: str) -> list[str]:
+        """A newer report for the same day and shift replaces the one still waiting; other shifts are untouched."""
+        stamp = datetime.now(timezone.utc).isoformat()
+        with self.connect() as db:
+            ids = [row[0] for row in db.execute(
+                "SELECT draft_id FROM ocr_shift_drafts WHERE status='SUBMITTED' AND store_id=? AND business_date=? "
+                "AND shift_code=? AND draft_id<>?", (store_id, business_date, shift_code, keep))]
+            for draft_id in ids:
+                db.execute("UPDATE ocr_shift_drafts SET status='SUPERSEDED', updated_at=? WHERE draft_id=?", (stamp, draft_id))
+        return ids
+
     def get_ocr_draft_by_id(self, draft_id: str) -> dict[str, Any] | None:
         with self.connect() as db:
             db.row_factory = sqlite3.Row

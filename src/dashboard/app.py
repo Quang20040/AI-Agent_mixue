@@ -4,6 +4,7 @@ Thiết kế nhận diện thương hiệu Tuyết Vương (Snow King / 雪王) 
 Đồng bộ 100% tiếng Việt chuyên ngành F&B, tối ưu hiệu năng và kiểm soát lỗi toàn diện.
 """
 
+import calendar
 import os
 import sys
 import time
@@ -19,7 +20,7 @@ import streamlit as st
 from src.agent.mixue_agent import MixueOperationsAgent
 from src.agent.config import AgentSettings
 from src.engine.weather import VN
-from src.engine.stock_matrix import matrix_views
+from src.engine.stock_matrix import find_opening_column, matrix_views
 from src.dashboard.forecast_context_ui import render_forecast_context
 from src.auth import (
     CHAT_PAGE,
@@ -40,12 +41,12 @@ from src.dashboard.brand_ui import (
     nav_group_css,
     nav_label,
     render_chat,
+    render_mascot_chat,
     render_force_change_password_screen,
     render_home,
     render_login_screen,
     render_mobile_navigation,
     render_page_hero,
-    render_pillars,
     render_home_greeting,
     render_sidebar_bottom,
     render_sidebar_top,
@@ -56,7 +57,6 @@ from src.database import SessionLocal
 from src.engine.bom_engine import BOMEngine
 from src.engine.daily_stock_service import (
     column_map_for_period,
-    approve_stock_request,
     create_stock_request,
     delete_stock_movement,
     generate_excel_export,
@@ -65,7 +65,6 @@ from src.engine.daily_stock_service import (
     get_pending_requests,
     get_stock_matrix_df,
     get_user_requests,
-    reject_stock_request,
     update_stock_cell_manually,
     update_stock_matrix_from_editor,
     update_stock_movement,
@@ -193,14 +192,6 @@ def get_cached_reconciliation_data():
     eng.close()
     return df
 
-@st.cache_data
-def get_cached_daily_revenue():
-    eng = BOMEngine()
-    df = eng.get_daily_revenue_breakdown()
-    eng.close()
-    return df
-
-
 @st.cache_data(ttl=900, show_spinner=False)
 def cached_backtest(_engine, as_of_iso):
     """The model comparison only changes once a day; it took most of the Dự báo page's run time."""
@@ -266,24 +257,32 @@ if section not in (CHAT_PAGE, OCR_PAGE, "Trang chủ"):
     render_page_hero(section, user_name)
 render_mobile_navigation(allowed_tabs, section)
 
-if is_admin and section != OCR_PAGE:
-    # Staff submissions wait on the OCR page; say so wherever the manager is.
-    _waiting = agent.list_staff_submissions(user_role, user_name, user_id=st.session_state.get("username", user_name))
+if is_admin and section not in (OCR_PAGE, "Trang chủ"):
+    # Everything waiting for a manager is on the home page; say so wherever the manager is.
+    from src.dashboard.approval_center import pending_items
+    _waiting = pending_items(agent, user_role, user_name, st.session_state.get("username", user_name))
     if _waiting:
         def _open_inbox():
-            st.session_state.main_navigation = OCR_PAGE
+            st.session_state.main_navigation = "Trang chủ"
         with st.container(key="staff_inbox_banner"):
             _msg, _btn = st.columns([4, 1.3], vertical_alignment="center")
-            _msg.warning(f"📥 Có **{len(_waiting)}** báo cáo chốt ca nhân viên gửi đang chờ bạn duyệt.")
+            _msg.warning(f"📥 Có **{len(_waiting)}** yêu cầu đang chờ bạn phê duyệt.")
             _btn.button("Mở & duyệt", key="open_staff_inbox", type="primary", on_click=_open_inbox, use_container_width=True)
 
 with st.container(key="workspace"):
     if not can_access_page(user_role, section):
         st.error("🔒 **Truy cập bị từ chối:** Bạn không có quyền truy cập trang này. Chức năng chỉ dành riêng cho Quản lý và Chủ cửa hàng (Admin).")
     elif section == "Trang chủ":
-        # Outside the auto-refresh fragment so the pillar buttons trigger a full rerun (page switch).
+        # Home is the role's dashboard: managers see revenue and the approval queue, staff their own reports.
+        from src.auth import normalize_role
+        from src.dashboard.approval_center import render_approval_center, render_my_submissions
         render_home_greeting(agent, user_role, user_name)
-        render_pillars(user_role)
+        if is_admin:
+            from src.dashboard.revenue_ui import render_day_revenue_viewer
+            render_day_revenue_viewer()
+            render_approval_center(agent, user_role, user_name, key="home")
+        elif normalize_role(user_role) == "STAFF_OFFICIAL":
+            render_my_submissions(agent, user_role, user_name)
         render_live_home()
 
     elif section == OCR_PAGE:
@@ -293,6 +292,7 @@ with st.container(key="workspace"):
         stock_period = st.date_input('Tháng xem sổ kho', value=datetime.now(VN).date().replace(day=1), key='stock_period')
         stock_year, stock_month = stock_period.year, stock_period.month
         stock_column_map = column_map_for_period(stock_year, stock_month)
+        stock_days = calendar.monthrange(stock_year, stock_month)[1]
         stock_views = matrix_views(stock_year, stock_month)
         # Hiển thị thông báo trạng thái thao tác kho (Flash alert) nếu có
         if "stock_flash_msg" in st.session_state:
@@ -398,48 +398,17 @@ with st.container(key="workspace"):
 
             tab_inbox, tab_matrix, tab_sales, tab_recon = st.tabs([
                 inbox_tab_label,
-                "📦 Sổ Thẻ Kho Ma Trận (31 Ngày Tháng 10/2026)",
+                f"📦 File kho (Tháng {stock_month:02d}/{stock_year})",
                 "📊 Báo Cáo Doanh Thu & Bán Hàng POS",
                 "🔍 Đối Soát Thất Thoát Kho Chi Tiết"
             ])
 
-            # TAB 1: DUYỆT LỆNH KHO (MAKER - CHECKER INBOX)
+            # Duyệt phiếu nhập / xuất kho: tick several slips and approve or reject them together.
             with tab_inbox:
-                st.subheader("📋 Hòm Thư Phê Duyệt Lệnh Xuất / Nhập Kho (Maker - Checker)")
-                st.caption("Kiểm duyệt các đề xuất lệnh kho từ nhân viên pha chế quầy bar trước khi ghi nhận chính thức vào sổ thẻ kho 31 ngày.")
-
-                if pending_count == 0:
-                    st.success("🎉 Tất cả các yêu cầu từ nhân viên đều đã được xử lý xong! Không còn lệnh nào đang chờ duyệt.")
-                else:
-                    st.info(f"Đang có **{pending_count}** đề xuất lệnh kho từ nhân viên quầy bar cần bạn kiểm duyệt:")
-                    for req in pending_list:
-                        with st.container(border=True):
-                            c_info, c_action = st.columns([2.7, 1.3])
-                            with c_info:
-                                st.markdown(f"**Lệnh #{req['id']} — {req['type_vi']}** | Ngày phát sinh: `{req['business_date']}`")
-                                st.write(f"• **Mặt hàng:** `{req['ingredient_name']}` (Mã: `{req['ingredient_id']}`)")
-                                st.write(f"• **Số lượng:** **{req['quantity']}** (Thùng/Kiện/Bình/Dây) | **Nhân viên tạo:** `{req['recorded_by']}` ({req['created_at']})")
-                                if req['notes'] and req['notes'] != "—":
-                                    st.caption(f"📝 *Ghi chú:* {req['notes']}")
-                            with c_action:
-                                st.write("")
-                                btn_col1, btn_col2, btn_col3 = st.columns(3)
-                                with btn_col1:
-                                    if st.button("✅ Duyệt", key=f"btn_app_{req['id']}", type="primary", use_container_width=True):
-                                        ok, msg = approve_stock_request(req["id"], admin_username=st.session_state.get("username", "admin"))
-                                        st.session_state["stock_flash_msg"] = {"type": "success" if ok else "error", "text": msg}
-                                        st.rerun()
-                                with btn_col2:
-                                    if st.button("❌ Từ chối", key=f"btn_rej_{req['id']}", use_container_width=True):
-                                        ok, msg = reject_stock_request(req["id"], admin_username=st.session_state.get("username", "admin"), reason="Quản lý từ chối")
-                                        st.session_state["stock_flash_msg"] = {"type": "info" if ok else "error", "text": msg}
-                                        st.rerun()
-                                with btn_col3:
-                                    if st.button("🗑️ Xóa", key=f"btn_del_req_{req['id']}", use_container_width=True):
-                                        ok, msg = delete_stock_movement(req["id"], admin_username=st.session_state.get("username", "admin"))
-                                        st.session_state["stock_flash_msg"] = {"type": "success" if ok else "error", "text": msg}
-                                        st.rerun()
-
+                from src.dashboard.approval_center import render_approval_center
+                st.subheader("📋 Duyệt phiếu nhập / xuất kho")
+                st.caption("Phiếu nhân viên gửi chỉ được ghi vào file kho sau khi Quản lý duyệt.")
+                render_approval_center(agent, user_role, user_name, kinds=("stock",), key="stock")
                 st.divider()
                 with st.expander("🕒 Lịch Sử Các Lệnh Đề Xuất Của Toàn Bộ Nhân Viên (Sửa & Xóa Lệnh)", expanded=False):
                     all_reqs = get_user_requests(username=None, limit=50)
@@ -461,12 +430,19 @@ with st.container(key="workspace"):
                     else:
                         st.caption("Chưa có lịch sử lệnh kho nào.")
 
-            # TAB 2: SỔ THẺ KHO MA TRẬN 31 NGÀY (THÁNG 10/2026)
+            # File kho của tháng đang chọn (đủ số ngày thực của tháng)
             with tab_matrix:
-                st.subheader(f"📦 Sổ kho tháng {stock_month}/{stock_year}")
-                st.caption("Chi nhánh Mixue 39 Tôn Quang Phiệt · Sổ kho chuẩn hóa theo quy cách đóng gói F&B (Thùng/Kiện/Dây/Bình).")
+                st.subheader(f"📦 File kho (Tháng {stock_month:02d}/{stock_year}) · {stock_days} ngày")
+                st.caption("Tính theo thùng / kiện / dây / bình. Chỉ ghi nhận phiếu nhập, xuất, kiểm kho đã được duyệt.")
 
                 matrix_df = get_stock_matrix_df(stock_year, stock_month)
+                _moved = (pd.to_numeric(matrix_df.get("Tổng nhập"), errors="coerce").fillna(0).sum()
+                          + pd.to_numeric(matrix_df.get("Tổng xuất"), errors="coerce").fillna(0).sum())
+                _opening = find_opening_column(matrix_df.columns)
+                if not _moved:
+                    carried = bool(_opening and (matrix_df[_opening] != "—").any())
+                    st.info(f"ℹ️ Kỳ Tháng {stock_month:02d}/{stock_year} hiện chưa có giao dịch thực tế phát sinh."
+                            + (" Cột tồn đầu kỳ là số chuyển sang từ tháng trước." if carried else ""))
 
                 # Top KPI metrics
                 kpi1, kpi2, kpi3, kpi4 = st.columns(4, gap="medium")
@@ -715,108 +691,12 @@ with st.container(key="workspace"):
                     else:
                         st.caption("Chưa có lệnh kho nào.")
 
-            # TAB 4: BÁO CÁO DOANH THU & BÁN HÀNG POS
+            # Thống kê doanh thu: approved shift closings + POS item sales, never added twice.
             with tab_sales:
-                st.subheader("📊 Báo cáo Doanh thu Hoạt động Chi nhánh Mixue 39 Tôn Quang Phiệt")
-                st.caption("Dữ liệu kinh doanh thực tế tích lũy 30 ngày qua tại quầy POS và hệ thống kiểm kê kho cửa hàng 2132.")
-
-                sales_df = get_cached_sales()
-
-                if not sales_df.empty:
-                    col1, col2, col3, col4 = st.columns(4, gap="medium")
-                    total_rev = sales_df["revenue_vnd"].sum()
-                    total_cups = sales_df["quantity_sold"].sum()
-                    avg_cups_day = total_cups / sales_df["business_date"].nunique()
-                    num_skus = sales_df["sku_id"].nunique()
-
-                    with col1:
-                        st.metric("Tổng doanh thu tích lũy", f"{total_rev:,.0f} đ", help="Doanh thu tích lũy trong 30 ngày qua")
-                    with col2:
-                        st.metric("Tổng sản lượng phục vụ", f"{total_cups:,.0f} ly", help="Tổng số ly phục vụ thành công")
-                    with col3:
-                        st.metric("Sản lượng trung bình", f"{avg_cups_day:.1f} ly/ngày", help="Bình quân mỗi ngày")
-                    with col4:
-                        st.metric("Quy mô thực đơn", f"{num_skus} món", help="Số lượng mặt hàng trên menu quán")
-
-                    st.divider()
-
-                    c1, c2 = st.columns([3, 2], gap="medium")
-                    with c1:
-                        with st.container(border=True):
-                            st.write("#### 📅 Xu hướng Sản lượng Bán theo Ngày (Mixue 39 Tôn Quang Phiệt)")
-                            daily_agg = sales_df.groupby("business_date")["quantity_sold"].sum().reset_index()
-                            daily_agg.columns = ["Ngày kinh doanh", "Số ly bán"]
-                            daily_agg["Ngày kinh doanh"] = pd.to_datetime(daily_agg["Ngày kinh doanh"])
-                            quick_chart(daily_agg, "Ngày kinh doanh", "Số ly bán", "line", "#E60012")
-
-                    with c2:
-                        with st.container(border=True):
-                            st.write("#### 🏆 Top 10 Món Bán Chạy Nhất Tại Quán")
-                            top10 = sales_df.groupby(["sku_id", "sku_name"])["quantity_sold"].sum().reset_index()
-                            top10.columns = ["Mã món", "Tên món", "Tổng số ly bán"]
-                            top10 = top10.sort_values(by="Tổng số ly bán", ascending=False).head(10)
-                            st.dataframe(top10, use_container_width=True, hide_index=True)
-
-                    st.divider()
-
-                    # --- BÁO CÁO DOANH THU THEO TỪNG NGÀY ---
-                    st.write("### 💰 Báo cáo Chi tiết Doanh thu theo Ngày (30 Ngày Gần Nhất)")
-                    st.caption("Bảng kê tổng hợp doanh số thực thu, số ly bán, giá bình quân mỗi ly và món bán chạy nhất theo từng ngày kinh doanh.")
-
-                    daily_rev_df = get_cached_daily_revenue()
-                    if not daily_rev_df.empty:
-                        r_max_row = daily_rev_df.loc[daily_rev_df["revenue_vnd"].idxmax()]
-                        r_min_row = daily_rev_df.loc[daily_rev_df["revenue_vnd"].idxmin()]
-                        avg_daily_rev = daily_rev_df["revenue_vnd"].mean()
-                        overall_aov = daily_rev_df["revenue_vnd"].sum() / daily_rev_df["quantity_sold"].sum()
-
-                        c_rev1, c_rev2, c_rev3, c_rev4 = st.columns(4, gap="medium")
-                        with c_rev1:
-                            st.metric("🏆 Doanh thu cao nhất", f"{r_max_row['revenue_vnd']:,.0f} đ", f"{r_max_row['business_date']} ({r_max_row['day_of_week']})")
-                        with c_rev2:
-                            st.metric("📉 Doanh thu thấp nhất", f"{r_min_row['revenue_vnd']:,.0f} đ", f"{r_min_row['business_date']} ({r_min_row['day_of_week']})")
-                        with c_rev3:
-                            st.metric("💵 Doanh thu bình quân", f"{avg_daily_rev:,.0f} đ/ngày", help="Doanh thu bình quân mỗi ngày")
-                        with c_rev4:
-                            st.metric("🥤 Giá bán trung bình / ly", f"{overall_aov:,.0f} đ", help="Doanh thu tích lũy / Tổng ly bán")
-
-                        c_chart1, c_chart2 = st.columns([3, 2], gap="medium")
-                        with c_chart1:
-                            with st.container(border=True):
-                                st.write("##### 📊 Biểu đồ Doanh thu Từng Ngày (VND)")
-                                chart_rev = daily_rev_df.copy()
-                                chart_rev["Ngày"] = pd.to_datetime(chart_rev["business_date"])
-                                chart_rev = chart_rev.rename(columns={"revenue_vnd": "Doanh thu (VND)"})
-                                quick_chart(chart_rev, "Ngày", "Doanh thu (VND)", "bar", "#E60012")
-
-                        with c_chart2:
-                            with st.container(border=True):
-                                st.write("##### 📈 Tăng trưởng Doanh số so với Hôm trước (% DoD)")
-                                dod_df = daily_rev_df.copy()
-                                dod_df["Ngày"] = pd.to_datetime(dod_df["business_date"])
-                                dod_df = dod_df.rename(columns={"dod_growth_pct": "Tăng trưởng (%)"})
-                                quick_chart(dod_df, "Ngày", "Tăng trưởng (%)", "line", "#FFB800")
-
-                        # Bảng kê chi tiết 30 ngày
-                        st.write("##### 📋 Bảng Kê Doanh Thu & Món Bán Chạy Từng Ngày")
-                        table_display = daily_rev_df.copy()
-                        table_display["Ngày kinh doanh"] = table_display["business_date"]
-                        table_display["Thứ"] = table_display["day_of_week"]
-                        table_display["Doanh thu (đ)"] = table_display["revenue_vnd"].map(lambda x: f"{x:,.0f} đ")
-                        table_display["Số ly bán"] = table_display["quantity_sold"].map(lambda x: f"{x:,.0f} ly")
-                        table_display["Giá TB/ly"] = table_display["avg_price_per_cup"].map(lambda x: f"{x:,.0f} đ")
-                        table_display["Tăng trưởng (DoD)"] = table_display["dod_growth_pct"].map(
-                            lambda x: f"+{x:.1f}%" if x > 0 else (f"{x:.1f}%" if x < 0 else "0.0%")
-                        )
-                        table_display["Món bán chạy nhất ngày"] = table_display["top_seller"]
-
-                        st.dataframe(
-                            table_display[["Ngày kinh doanh", "Thứ", "Doanh thu (đ)", "Số ly bán", "Giá TB/ly", "Tăng trưởng (DoD)", "Món bán chạy nhất ngày"]].sort_values(by="Ngày kinh doanh", ascending=False),
-                            use_container_width=True,
-                            hide_index=True
-                        )
-                else:
-                    st.warning("Chưa tìm thấy dữ liệu bán hàng trong cơ sở dữ liệu của quán.")
+                from src.dashboard.revenue_ui import render_revenue_report
+                st.subheader("📊 Thống kê doanh thu")
+                st.caption("Số liệu từ các ca đã được duyệt và file bán hàng của máy POS (nếu có). Không có số thì báo chưa có dữ liệu.")
+                render_revenue_report()
 
             # TAB 4: ĐỐI SOÁT THẤT THOÁT KHO CHI TIẾT
             with tab_recon:
@@ -1363,7 +1243,10 @@ with st.container(key="workspace"):
                 st.info("Hiện không có tài khoản nhân viên nào khác để reset.")
 
     # Render Chatbot (Dedicated Fullscreen Tab when section == "💬 Tuyết Vương AI", or Floating Bottom-Right Button otherwise).
-    render_chat(agent, role_key, user_name)
+    if section == CHAT_PAGE:
+        render_chat(agent, role_key, user_name)
+    else:
+        render_mascot_chat(agent, role_key, user_name)
 
 # Server time of this run, in the server log (Render → Logs), to tell slow code from a slow network/phone.
 _run_ms = (time.perf_counter() - _RUN_STARTED) * 1000

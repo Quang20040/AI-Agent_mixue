@@ -219,8 +219,12 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                 'Gửi lại sẽ tạo bản cập nhật và vẫn phải được Quản lý phê duyệt.')
 
     # Manager work first: staff submissions and the pending interrupt sit above the form, not below it.
+    from src.dashboard.approval_center import render_approval_center, render_my_submissions
+    agent_now = st.session_state.get('operations_agent')
     if is_admin:
-        render_staff_submissions(user_role, user_name)
+        render_approval_center(agent_now, user_role, user_name, kinds=('shift',), key='ocr')
+    elif normalize_role(user_role) == 'STAFF_OFFICIAL':
+        render_my_submissions(agent_now, user_role, user_name)
     render_page_approval(user_role, user_name, is_admin)
 
     # 3. KHU VỰC TẢI ẢNH CHỐT CA & AI OCR EXTRACTOR
@@ -491,15 +495,12 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                                            if suggested_open else True)
                     can_submit = is_admin or normalize_role(user_role) == 'STAFF_OFFICIAL'
                     btn_save_shift = st.form_submit_button(
-                        "📨 Gửi phê duyệt lưu báo cáo (LangGraph interrupt)" if is_admin else "📨 Gửi Quản lý duyệt",
+                        "📨 Gửi yêu cầu Quản lý duyệt",
                         type="primary",
                         use_container_width=True,
                         disabled=not can_submit,
-                        help=("Tạo dự thảo DRAFT_OCR_… rồi gọi request_shift_draft_confirmation; chỉ ghi sổ khi Quản lý bấm Phê duyệt."
-                              if is_admin else "Gửi bản đã kiểm tra cho Quản lý; chỉ ghi sổ khi Quản lý phê duyệt."),
+                        help="Báo cáo vào danh sách chờ duyệt; gửi được nhiều ca liên tiếp. Chỉ ghi sổ khi Quản lý duyệt.",
                     )
-                    if not is_admin:
-                        st.caption("Nhân viên kiểm tra số điền sẵn rồi gửi; Quản lý/Chủ quán xem lại và phê duyệt mới ghi sổ doanh thu.")
 
                     if btn_save_shift:
                         amounts = [in_cash, in_cash_diff, in_bank, in_shopee, in_grab, in_be, in_petty, in_expenses, in_total]

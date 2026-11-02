@@ -148,7 +148,7 @@ def test_agent_admin_deep_queries(agent):
     # 2. Admin queries October stock ledger
     res_stock = agent.process_query("Tình hình xuất nhập tồn tháng 10", user_role="ADMIN", user_name="Nguyễn Hạnh Chi")
     assert res_stock["tool_called"] == "get_daily_stock_matrix_info"
-    assert "Tháng 10/2026" in res_stock["text"]
+    assert "tháng 10/2026" in res_stock["text"].lower()
 
     # 3. Admin queries sales analytics (highest, lowest, AOV)
     res_analytics = agent.process_query("Ngày nào doanh thu cao nhất và thấp nhất?", user_role="ADMIN", user_name="Nguyễn Hạnh Chi")

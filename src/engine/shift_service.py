@@ -16,7 +16,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 from src.engine.storage_lock import FileTransactionLock
-from src.runtime_settings import demo_enabled, resolve_store_id, setting
+from src.runtime_settings import resolve_store_id, setting
 
 ROOT = Path(__file__).resolve().parents[2]
 # Paths can be redirected by environment (tests use temporary copies of the tracked data).
@@ -76,7 +76,7 @@ def _load_raw_shift_data() -> list[dict[str, Any]]:
     """Đọc toàn bộ báo cáo ca từ file JSON persistent."""
     with _SHIFT_LOCK:
         if not SHIFT_DATA_FILE.exists():
-            initial_data = _get_seed_shift_reports() if demo_enabled() else []
+            initial_data = []  # no sample reports: only what the shop actually closes and approves
             _save_raw_shift_data(initial_data)
             return initial_data
         try:

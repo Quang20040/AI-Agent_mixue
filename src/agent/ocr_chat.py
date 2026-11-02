@@ -969,21 +969,25 @@ class OcrChatMixin:
                 "meta": {"origin": "ocr_page", "review_seconds": review_seconds, **(review_meta or {})},
             },
         )
-        from src.auth import is_admin_role
-        if not is_admin_role(actor.role):
-            # Staff hand the checked form to a manager; only a manager's request reaches interrupt().
+        if not (review_meta or {}).get("from_staff_draft"):
+            # Every report sent from the OCR page waits in the store's approval queue, so several shifts
+            # (or days) can wait side by side. A newer report for the same day and shift replaces the older
+            # one still waiting. A manager approves from the queue; that is when interrupt() is reached.
             store.mark_ocr_draft(draft["draft_id"], "SUBMITTED", {
                 "submitted_by": actor.user_id, "submitted_by_name": user_name,
                 "submitted_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             })
-            text = (f"📨 Đã gửi báo cáo {shift_code} ngày {report_date} ({draft['draft_id']}) cho Quản lý. "
-                    "Chưa có số nào được ghi sổ; Quản lý sẽ kiểm tra và phê duyệt.")
+            replaced = store.supersede_submitted(actor.store_id, report_date, shift_code, draft["draft_id"])
+            shift_name = {"CA_SANG": "Ca sáng", "CA_CHIEU": "Ca chiều", "CA_TOI": "Ca tối"}.get(shift_code, shift_code)
+            text = (f"📨 Đã gửi báo cáo {shift_name} ngày {report_date} vào danh sách chờ duyệt. "
+                    "Chưa có số nào được ghi sổ; Quản lý kiểm tra và duyệt."
+                    + (" Bản gửi trước của cùng ca này đã được thay bằng bản mới." if replaced else ""))
             store.append(owner, self._conversation_id, "user",
                          f"[Trang Chốt ca & OCR] Gửi Quản lý duyệt báo cáo {shift_code} ngày {report_date} ({draft['draft_id']})",
                          [f"ocr_draft:{draft['draft_id']}"])
             store.append(owner, self._conversation_id, "assistant", text, [f"ocr_draft:{draft['draft_id']}"])
-            return {"text": text, "raw_result": {"status": "SUBMITTED_TO_MANAGER"}, "pending_approval": None,
-                    "draft": {**draft, "status": "SUBMITTED"}}
+            return {"text": text, "raw_result": {"status": "SUBMITTED_TO_MANAGER", "replaced": replaced},
+                    "pending_approval": None, "draft": {**draft, "status": "SUBMITTED"}}
         store.append(owner, self._conversation_id, "user",
                      f"[Trang Chốt ca & OCR] Gửi phê duyệt báo cáo {shift_code} ngày {report_date} ({draft['draft_id']})",
                      [f"ocr_draft:{draft['draft_id']}"])
@@ -1037,6 +1041,53 @@ class OcrChatMixin:
         store.mark_ocr_draft(draft_id, "FORWARDED", {"forwarded_to": (result.get("draft") or {}).get("draft_id"),
                                                      "forwarded_by": actor.user_id})
         return result
+
+    def list_my_submissions(self, user_role, user_name, *, user_id=None, limit: int = 12) -> list[dict[str, Any]]:
+        """What this person sent and where each report stands (waiting, approved, rejected, replaced)."""
+        actor = self._actor(user_role, user_name, user_id)
+        return self._ensure_store().list_ocr_submissions_by_user(actor.store_id, actor.user_id, limit)
+
+    def decide_submissions(self, draft_ids, approve: bool, user_role, user_name, *, user_id=None,
+                           reason: str = "") -> list[dict[str, Any]]:
+        """Approve or reject several queued shift reports at once.
+
+        Each approval still takes the governed path, one report at a time: queued draft → manager's draft →
+        request_shift_draft_confirmation → interrupt() → the manager's decision (this call) → write.
+        A rejection writes nothing; the report is marked REJECTED so the sender sees it.
+        """
+        from src.auth import is_admin_role
+        actor = self._actor(user_role, user_name, user_id)
+        if not is_admin_role(actor.role):
+            return [{"draft_id": d, "ok": False, "text": "🔒 Chỉ Quản lý/Chủ quán được duyệt."} for d in draft_ids]
+        store = self._ensure_store()
+        results = []
+        for draft_id in draft_ids:
+            sub = store.get_ocr_draft_by_id(draft_id)
+            if not sub or sub.get("status") != "SUBMITTED" or sub.get("store_id") != actor.store_id:
+                results.append({"draft_id": draft_id, "ok": False, "text": "Báo cáo này không còn chờ duyệt."})
+                continue
+            label = f"{sub.get('shift_code')} {sub.get('business_date')}"
+            if not approve:
+                store.mark_ocr_draft(draft_id, "REJECTED", {"rejected_by": actor.user_id, "rejection_reason": reason,
+                                                            "decided_at": datetime.now(timezone.utc).isoformat(timespec="seconds")})
+                results.append({"draft_id": draft_id, "ok": True, "text": f"Đã từ chối {label}."})
+                continue
+            existing = self.conversation_history(user_role, user_name, user_id=user_id).get("pending_approval")
+            if existing:
+                results.append({"draft_id": draft_id, "ok": False,
+                                "text": "Đang có một yêu cầu khác chờ bạn trả lời trong Trợ lý Tuyết Vương; xử lý nó trước."})
+                break
+            opened = self.open_staff_submission(draft_id, user_role, user_name, user_id=user_id)
+            if not opened.get("pending_approval"):
+                results.append({"draft_id": draft_id, "ok": False, "text": opened.get("text", "Không mở được báo cáo.")})
+                continue
+            decided = self.resume_approval(True, user_role, user_name, user_id=user_id)
+            ok = "ĐÃ XÁC NHẬN" in (decided.get("text") or "")
+            store.mark_ocr_draft(draft_id, "APPROVED" if ok else "FORWARDED",
+                                 {"approved_by": actor.user_id,
+                                  "decided_at": datetime.now(timezone.utc).isoformat(timespec="seconds")})
+            results.append({"draft_id": draft_id, "ok": ok, "text": f"Đã duyệt và ghi sổ {label}." if ok else decided.get("text", "")})
+        return results
 
     _OCR_CONFIRM_PHRASES = (
         "xac nhan luu", "luu chot ca", "xac nhan chot ca", "dong y luu", "duyet chot ca",

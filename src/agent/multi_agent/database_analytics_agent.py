@@ -165,7 +165,7 @@ class DatabaseAnalyticsAgent:
         }
 
     def query_daily_stock_matrix(self, ingredient_query: str | None = None) -> dict[str, Any]:
-        """Truy vấn ma trận xuất nhập tồn kho tháng 10/2026."""
+        """File kho tháng hiện tại (giờ Việt Nam)."""
         matrix_df = get_stock_matrix_df()
         if matrix_df.empty:
             return {"status": "NO_DATA", "message": "Ma trận kho chưa có số liệu."}
@@ -202,7 +202,7 @@ class DatabaseAnalyticsAgent:
                 "stt": row.get("STT"),
                 "ing_id": row.get("Mã NL"),
                 "name": row.get("Tên mặt hàng (Quy cách)"),
-                "initial_stock": row.get("Tồn T9"),
+                "initial_stock": next((v for k, v in row.items() if str(k).startswith("Tồn cuối T")), None),
                 "total_in": row.get("Tổng nhập"),
                 "total_out": row.get("Tổng xuất"),
                 "book_stock": row.get("Tồn sổ sách"),

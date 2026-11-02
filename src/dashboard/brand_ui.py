@@ -342,7 +342,7 @@ def _home_state(agent, user_role, user_name):
     from src.auth import is_admin_role
     from src.engine.plan_service import list_plans
     from src.engine.shift_service import get_all_shift_reports, get_daily_closing_summary, latest_shift_report_date
-    state = {'pending_approval': None, 'draft': None, 'plans_waiting': 0, 'stock_waiting': 0, 'staff_waiting': 0}
+    state = {'pending_approval': None, 'draft': None, 'plans_waiting': 0, 'stock_waiting': 0, 'staff_waiting': 0, 'my_pending': 0}
     if agent is not None:
         try:
             history = agent.conversation_history(user_role, user_name, user_id=st.session_state.get('username', user_name))
@@ -352,6 +352,15 @@ def _home_state(agent, user_role, user_name):
         rt = agent._runtime()
         state['tools_allowed'] = sum(1 for spec in rt.tools.values() if spec.allowed(user_role))
         state['online'] = bool(getattr(agent, 'is_llm_online', lambda: False)())
+    if agent is not None and not is_admin_role(user_role):
+        try:
+            from src.engine.daily_stock_service import get_user_requests
+            me = st.session_state.get('username', user_name)
+            shifts = sum(1 for sub in agent.list_my_submissions(user_role, user_name, user_id=me) if sub.get('status') == 'SUBMITTED')
+            stock = sum(1 for req in get_user_requests(username=me, limit=50) if 'Chờ' in str(req.get('Trạng thái', '')))
+            state['my_pending'] = shifts + stock
+        except Exception:  # noqa: BLE001
+            pass
     if is_admin_role(user_role):
         from src.engine.daily_stock_service import get_pending_requests
         today = business_today().isoformat()
@@ -374,37 +383,50 @@ def _home_state(agent, user_role, user_name):
     return state
 
 
+def greeting_for(user_role, part, first, state, can_ocr=True):
+    """Headline, sub-line, Tuyết Vương's bubble and quick links for the home band, by role."""
+    from src.auth import CHAT_PAGE, OCR_PAGE, is_admin_role, normalize_role
+    role = normalize_role(user_role)
+    tasks = []
+    if is_admin_role(user_role):
+        total = state['staff_waiting'] + state['stock_waiting'] + state['plans_waiting'] + (1 if state['pending_approval'] else 0)
+        if total:
+            tasks.append(('Trang chủ', f'{total} yêu cầu chờ duyệt', 'light'))
+        if state['pending_approval']:
+            tasks.append((CHAT_PAGE, 'Yêu cầu đang chờ trong Trợ lý', 'ghost'))
+        if can_ocr:
+            tasks.append((OCR_PAGE, 'Chốt ca từ ảnh sổ', 'ghost'))
+        headline = (f'Chào {part}, {first}! Hiện có {total} yêu cầu đang chờ bạn phê duyệt.' if total
+                    else f'Chào {part}, {first}! Hiện chưa có yêu cầu nào chờ phê duyệt.')
+        sub = 'Theo dõi doanh thu thực tế, đối chiếu chốt ca và duyệt các việc vận hành của quán.'
+        bubble = ('Danh sách chờ duyệt ở ngay bên dưới — tích chọn nhiều khoản để duyệt một lần.' if total
+                  else 'Chọn ngày ở mục Xem doanh thu để xem quán thu được bao nhiêu.')
+    elif role == 'STAFF_OFFICIAL':
+        mine = state.get('my_pending', 0)
+        tasks.append((OCR_PAGE, 'Chốt ca từ ảnh sổ', 'light'))
+        tasks.append(('Tem & công thức', 'Tra công thức', 'ghost'))
+        headline = f'Chào {part}, {first}! Chúc bạn một ca làm việc hiệu quả tại quầy Mixue.'
+        sub = (f'Bạn có {mine} phiếu đề xuất đang chờ Quản lý xác nhận.' if mine
+               else 'Hết ca thì chụp sổ giao ca, kiểm tra ô vàng rồi gửi Quản lý duyệt.')
+        bubble = 'Số nào chưa chắc mình điền gợi ý và tô vàng để bạn kiểm tra trước khi gửi.'
+    else:
+        tasks.append(('Tem & công thức', 'Tra công thức pha chế', 'light'))
+        tasks.append((CHAT_PAGE, 'Hỏi Tuyết Vương', 'ghost'))
+        headline = f'Chào {part}, {first}! Sẵn sàng tra cứu công thức pha chế & quy chuẩn SOP quầy bar.'
+        sub = 'Tra định lượng từng món, hạn dùng topping và giải mã tem dán ly 5 chữ số.'
+        bubble = 'Hỏi mình công thức món nào cũng được, ví dụ “Công thức TS1”.'
+    return tasks, headline, sub, bubble
+
+
 def render_home_greeting(agent, user_role, user_name):
     """Compact red band: greeting, what needs the user now, and Tuyết Vương."""
-    from src.auth import OCR_PAGE, CHAT_PAGE, can_access_page
+    from src.auth import OCR_PAGE, can_access_page
     state = _home_state(agent, user_role, user_name)
     st.session_state['_home_state'] = state
     now = datetime.now(timezone(timedelta(hours=7)))
     part = 'buổi sáng' if now.hour < 11 else 'buổi trưa' if now.hour < 14 else 'buổi chiều' if now.hour < 18 else 'buổi tối'
     first = (user_name or 'bạn').split()[-1]
-    tasks = []
-    if state['pending_approval']:
-        tasks.append((CHAT_PAGE, f"Duyệt {state['pending_approval'].get('plan_id', 'yêu cầu')}", 'light'))
-    if state['draft']:
-        tasks.append((CHAT_PAGE, f"Dự thảo OCR còn {len(state['draft'].get('missing_fields') or [])} trường chờ xác nhận", 'light'))
-    if state['staff_waiting']:
-        tasks.append((OCR_PAGE, f"{state['staff_waiting']} báo cáo chốt ca nhân viên gửi chờ duyệt", 'ghost'))
-    if state['plans_waiting']:
-        tasks.append((CHAT_PAGE, f"{state['plans_waiting']} kế hoạch sơ chế/nhập hàng chờ duyệt", 'ghost'))
-    if state['stock_waiting']:
-        tasks.append(('Báo cáo & kho', f"{state['stock_waiting']} lệnh kho chờ duyệt", 'ghost'))
-    if can_access_page(user_role, OCR_PAGE):
-        tasks.append((OCR_PAGE, 'Chốt ca từ ảnh sổ', 'ghost'))
-    count = (sum(1 for _, _, tone in tasks if tone == 'light') + state['plans_waiting'] + state['stock_waiting']
-             + state['staff_waiting'])
-    headline = (f'Chào {part}, {first}! Còn {count} việc cần bạn xử lý trước khi chốt ngày.' if count
-                else f'Chào {part}, {first}! Mọi phê duyệt đã xong, chỉ còn chốt ca.')
-    if state['draft']:
-        bubble = f"Dự thảo <b>{escape(state['draft']['draft_id'])}</b> còn số chưa rõ đơn vị — mình để trống chờ bạn xác nhận nhé."
-    elif state['pending_approval']:
-        bubble = 'Luồng đang dừng ở bước phê duyệt. Bạn xem và bấm <b>Phê duyệt</b> giúp mình nhé.'
-    else:
-        bubble = 'Hết ca thì chụp sổ chốt ca gửi mình. Số nào chưa chắc mình điền gợi ý và tô vàng để bạn kiểm tra.'
+    tasks, headline, sub, bubble = greeting_for(user_role, part, first, state, can_access_page(user_role, OCR_PAGE))
     tasks = tasks[:4]
     if tasks:  # the most urgent task is the white primary action, as in the design
         tasks[0] = (tasks[0][0], tasks[0][1], 'light')
@@ -414,7 +436,7 @@ def render_home_greeting(agent, user_role, user_name):
                      for left, top in ((8, 18), (22, 72), (47, 12), (58, 78), (71, 30), (90, 64)))
     st.markdown(f'''<section class="px-greet" aria-label="Lời chào và việc cần làm">{flakes}
     <div class="px-greet-copy"><span class="px-eyebrow">MIXUE ICE CREAM &amp; TEA · CỬA HÀNG 2132 · {now:%d/%m/%Y}</span>
-    <h2>{escape(headline)}</h2><div class="px-greet-tasks">{buttons}</div></div>
+    <h2>{escape(headline)}</h2><p class="px-greet-sub">{escape(sub)}</p><div class="px-greet-tasks">{buttons}</div></div>
     <div class="px-greet-art"><div class="px-bubble">{bubble}</div>
     <img class="px-mascot" src="{asset('snow-king-cutout.png')}" alt="Linh vật Tuyết Vương"></div></section>''', unsafe_allow_html=True)
 
@@ -652,9 +674,7 @@ def render_home(menu, sales, user_role="STAFF"):
     from src.auth import is_admin_role
     is_admin = is_admin_role(user_role)
 
-    if is_admin:
-        render_home_kpis(sales, menu)
-    else:
+    if not is_admin:
         # Nhân viên KHÔNG được phép xem Doanh thu và Sản lượng
         render_kpi_cards([
             ('⭐', 'Quy mô thực đơn', f'{len(menu)} món', '<em>Tra cứu công thức từng món</em>'),
@@ -1210,6 +1230,52 @@ ACTION_CHIPS = (
     ('chip_sticker_sop', '🏷️ Giải mã tem ly 24101 & tra cứu SOP nấu trân châu', 'Giải mã tem ly 24101 & tra cứu SOP nấu trân châu', False),
     ('chip_governance', '🛡️ Kiểm tra quyền hạn & lịch sử phê duyệt (HITL)', 'Kiểm tra quyền hạn & lịch sử phê duyệt (HITL)', False),
 )
+
+
+def render_mascot_chat(agent, role, user_name):
+    """Every page except the assistant's own: a small Tuyết Vương button in the corner that opens a quick chat."""
+    from src.auth import CHAT_PAGE
+    clean_role = (role or "STAFF").strip().upper()
+
+    def ask(question=None):
+        question = (question or st.session_state.get('mascot_q') or '').strip()
+        if not question:
+            return
+        st.session_state.setdefault('chat_history_vi', [])
+        try:
+            response = agent.process_query(question, user_role=clean_role, user_name=user_name,
+                                           user_id=st.session_state.get('username', user_name),
+                                           chat_history=st.session_state.chat_history_vi)
+            answer = response['text']
+            st.session_state.agent_pending_approval = response.get('pending_approval')
+        except Exception:  # noqa: BLE001 - a quick question must never break the page
+            answer = 'Mình chưa trả lời được lúc này. Bạn thử lại hoặc mở trang Trợ lý Tuyết Vương.'
+        st.session_state.chat_history_vi += [{'role': 'user', 'content': question},
+                                             {'role': 'assistant', 'content': answer,
+                                              'evidence': response.get('evidence_refs', []) if 'response' in locals() else []}]
+        st.session_state.mascot_last = (question, answer)
+        st.session_state.mascot_q = ''
+
+    # A question queued by another control (e.g. a menu card's "Công thức") is answered here.
+    if queued := st.session_state.pop('chat_input_val', None):
+        ask(queued)
+
+    def open_full():
+        st.session_state.main_navigation = CHAT_PAGE
+
+    with st.container(key='mascot_dock'):
+        with st.popover('Hỏi Tuyết Vương', help='Hỏi nhanh Tuyết Vương'):
+            st.markdown(f'<div class="px-chat-head"><img src="{asset("snow-king-cutout.png")}" alt="">'
+                        '<div><span class="px-eyebrow">TRỢ LÝ VẬN HÀNH CỬA HÀNG</span><h3>Tuyết Vương</h3></div></div>',
+                        unsafe_allow_html=True)
+            if last := st.session_state.get('mascot_last'):
+                st.markdown(f'**Bạn:** {last[0]}')
+                with st.container(height=220, border=False):
+                    st.markdown(last[1])
+            st.text_input('Câu hỏi', key='mascot_q', placeholder='Ví dụ: Công thức TS1', label_visibility='collapsed')
+            send, full = st.columns(2)
+            send.button('Gửi', key='mascot_send', type='primary', use_container_width=True, on_click=ask)
+            full.button('Mở toàn màn hình ↗', key='mascot_full', use_container_width=True, on_click=open_full)
 
 
 def render_chat(agent, role, user_name, mode="auto"):

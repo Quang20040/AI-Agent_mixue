@@ -95,7 +95,7 @@ class NLPSynthesizer:
             elif "items" in db_results:
                 evidence_refs.append(db_results.get("evidence_ref", "daily_stock_matrix"))
                 items = db_results["items"]
-                sec = f"### 📦 Sổ Kho Hàng Ngày Tháng 10/2026 ({db_results['total_items']} mặt hàng chính)\n\n"
+                sec = f"### 📦 File kho tháng này ({db_results['total_items']} mặt hàng chính)\n\n"
                 sec += f"- **Lệnh kho chờ Quản lý duyệt:** **{db_results['pending_requests_count']} lệnh**\n\n"
                 sec += "| Mã NL | Tên mặt hàng | Tồn đầu | Tổng nhập | Tổng xuất | Tồn sổ sách | Tồn thực tế |\n"
                 sec += "| :---: | :--- | :---: | :---: | :---: | :---: | :---: |\n"
@@ -109,7 +109,7 @@ class NLPSynthesizer:
                 sec = "### 📦 Chi Tiết Tồn Kho Mặt Hàng Yêu Cầu\n\n"
                 for r in rows:
                     sec += f"**Mặt hàng:** {r.get('Tên mặt hàng (Quy cách)')} (Mã: `{r.get('Mã NL')}`)\n"
-                    sec += f"- Tồn đầu kỳ: `{r.get('Tồn T9')}` | Tổng nhập: `{r.get('Tổng nhập')}` | Tổng xuất: `{r.get('Tổng xuất')}`\n"
+                    sec += f"- Tồn đầu kỳ: `{r.get('initial_stock', next((v for k, v in r.items() if str(k).startswith('Tồn cuối T')), '—'))}` | Tổng nhập: `{r.get('Tổng nhập')}` | Tổng xuất: `{r.get('Tổng xuất')}`\n"
                     sec += f"- **Tồn sổ sách hiện tại:** **{r.get('Tồn sổ sách')}** đơn vị\n"
                     sec += f"- Tồn thực tế kiểm kê: `{r.get('Tồn thực tế')}` (Chênh lệch: `{r.get('Chênh lệch')}`)\n\n"
                 sections.append(sec)

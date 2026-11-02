@@ -183,7 +183,7 @@ def test_stock_pending_transitions_and_authorization(store):
     assert not stock.approve_stock_request(ident, "audit_admin")[0]
     assert not stock.delete_stock_movement(ident, "audit_staff")[0]
     assert not stock.update_stock_movement(ident, 3, "audit_staff")[0]
-    assert not stock.update_stock_cell_manually("1", "T5 1/10", 3, "audit_staff")[0]
+    assert not stock.update_stock_cell_manually("1", "T5 1/10", 3, "audit_staff", year=2026, month=10)[0]
 
 
 def test_stock_duplicate_does_not_write_twice(store):
@@ -221,11 +221,11 @@ def test_monthly_ledger_opening_period_zero_count_and_batch_queries(store):
         event.remove(stock.engine, "before_cursor_execute", count)
     row = frame.iloc[0]
     assert row["Tổng nhập"] == 11 and row["Tổng xuất"] == 0
-    assert row["Tồn cuối 10/2026"] == 105 and row["Tồn sổ sách"] == 116
+    assert row["Tồn cuối T10/2026"] == 105 and row["Tồn sổ sách"] == 116
     assert row["Tồn thực tế"] == 0 and row["Chênh lệch"] == -116
     assert "T5 1/10" not in frame.columns and len(queries) <= 4
     feb = stock.get_stock_matrix_df(2027, 2)
-    assert "Tồn cuối 1/2027" in feb and not any("/2" in c and "29/" in c for c in feb)
+    assert "Tồn cuối T1/2027" in feb and not any("/2" in c and "29/" in c for c in feb)
 
 
 def test_new_catalog_item_and_missing_opening_are_not_fabricated(store):

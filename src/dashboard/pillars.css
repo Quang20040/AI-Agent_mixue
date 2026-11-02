@@ -311,3 +311,17 @@ html.mixue-motion-paused .vocr-badge, html.mixue-motion-paused .px-trace .dot { 
 @media (max-width: 760px) { [class*="st-key-ocr_img_"] [data-testid="stImage"] img { max-height: 140px; } }
 /* Motion paused (default on phones): looping CSS animations play once and stop, entrances still finish. */
 html.mixue-motion-paused *, html.mixue-motion-paused *::before, html.mixue-motion-paused *::after { animation-iteration-count: 1 !important; }
+/* ---------- Tuyết Vương mascot: small corner button on every page except the assistant ---------- */
+.st-key-mascot_dock { position: fixed !important; right: 22px; bottom: 22px; z-index: 9999; width: auto !important; }
+.st-key-mascot_dock [data-testid="stPopover"] > div > button, .st-key-mascot_dock [data-testid="stPopoverButton"] {
+  width: 58px; height: 58px; min-height: 58px; padding: 0 !important; border-radius: 50% !important; border: 2px solid #fff !important;
+  background: #fff url("/app/static/snow-king-cutout.webp") center 60% / 46px no-repeat !important;
+  box-shadow: 0 8px 24px #e6001240, 0 2px 6px #0000001f; color: transparent !important; overflow: hidden; }
+.st-key-mascot_dock [data-testid="stPopover"] button p, .st-key-mascot_dock [data-testid="stPopoverButton"] p,
+.st-key-mascot_dock [data-testid="stPopover"] button svg, .st-key-mascot_dock [data-testid="stPopoverButton"] svg { display: none !important; }
+[data-testid="stPopoverBody"]:has(.st-key-mascot_send) { width: min(380px, 92vw) !important; }
+@media (max-width: 760px) { .st-key-mascot_dock { bottom: 84px; right: 14px; } }
+.px-greet-sub { margin: 6px 0 10px; opacity: .92; font-size: 15px; }
+.px-sub-list { list-style: none; padding: 0; margin: 0; } .px-sub-list li { padding: 6px 0; border-bottom: 1px solid var(--px-line); }
+.vocr-bad { background: #fee2e2 !important; color: #991b1b !important; }
+.px-shift-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }

@@ -59,9 +59,12 @@ def test_dashboard_admin_full_access():
     for page in ['📸 Chốt ca & OCR', 'Báo cáo & kho', 'Dự báo', 'Sơ chế', 'Nhập hàng', 'Tem & công thức', '👥 Quản lý nhân viên']:
         app.radio(key='main_navigation').set_value(page).run()
         assert not app.exception, page
-        assert app.chat_input
+        assert not app.chat_input  # the full chat lives only on the assistant page
+        assert any(t.key == 'mascot_q' for t in app.text_input)  # small Tuyết Vương corner button instead
 
-    # Kiểm tra xóa lịch sử chat
+    # Kiểm tra xóa lịch sử chat (trang Trợ lý Tuyết Vương)
+    app.radio(key='main_navigation').set_value('💬 Tuyết Vương AI').run()
+    assert app.chat_input
     app.button(key='clear_chat').click().run()
     assert len(app.session_state['chat_history_vi']) == 1
 
@@ -94,7 +97,7 @@ def test_dashboard_staff_restricted_access():
     # Kiểm tra tab Tem & công thức
     app.radio(key='main_navigation').set_value('Tem & công thức').run()
     assert not app.exception
-    assert len(app.text_input) > 0 or app.chat_input
+    assert len(app.text_input) > 0
 
 
 def test_dashboard_logout_flow():

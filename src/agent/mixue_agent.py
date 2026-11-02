@@ -154,7 +154,7 @@ def _parse_query_date_range(query: str, reference_date=None, latest_date=None) -
     if latest_date and any(w in q for w in ["gần nhất", "gan nhat", "mới nhất", "moi nhat"]):
         return latest_date.isoformat(), latest_date.isoformat()
 
-    # 5. Ngày DD (ngầm định tháng 10/2026 nếu có 'ngày DD' riêng lẻ)
+    # 5. Ngày DD riêng lẻ: tháng hiện tại
     just_day = re.search(r'(?:ngày|ngay)\s*(\d{1,2})\b', q)
     if just_day:
         d = int(just_day.group(1))
@@ -166,6 +166,20 @@ def _parse_query_date_range(query: str, reference_date=None, latest_date=None) -
                 pass
 
     return None, None
+
+
+def _parse_query_month(query: str, reference_date=None) -> tuple[int, int]:
+    """'tháng 9', 'tháng 10/2026', '11/2026' → (year, month); otherwise this month (Vietnam time)."""
+    from src.engine.weather import VN
+    today = reference_date or datetime.now(VN).date()
+    q = (query or '').lower()
+    match = re.search(r'(?:tháng|thang)\s*(\d{1,2})(?:\s*[/-]\s*(\d{4}))?', q) or re.search(r'\b(\d{1,2})\s*/\s*(\d{4})\b', q)
+    if match:
+        month = int(match.group(1))
+        year = int(match.group(2)) if match.group(2) else today.year
+        if 1 <= month <= 12:
+            return year, month
+    return today.year, today.month
 
 
 class MixueOperationsAgent(OcrChatMixin):
@@ -191,7 +205,7 @@ Bạn được trang bị 8 công cụ vận hành:
 3. tool_optimize_topping_prep: Tối ưu mẻ nấu trân châu/thạch theo hạn dùng 4 giờ.
 4. tool_optimize_replenishment: Lập dự thảo đơn nhập hàng PO dựa trên Lead Time 2 ngày.
 5. tool_decode_recipe_or_sticker: Giải mã tem ly và tra cứu công thức định lượng chuẩn SOP.
-6. tool_get_daily_stock_matrix_info: Tra cứu sổ thẻ kho điện tử 31 ngày (tháng 10/2026).
+6. tool_get_daily_stock_matrix_info: Tra cứu file kho theo tháng (mặc định tháng hiện tại; nói rõ khi chưa có dữ liệu).
 7. tool_get_employees_overview: Quản trị nhân sự và phân quyền tài khoản chi nhánh.
 8. tool_approve_plan: Cổng phê duyệt kế hoạch Human-in-the-Loop.
 
@@ -855,7 +869,7 @@ Bạn được trang bị 8 công cụ vận hành:
         }
 
     def tool_get_daily_stock_matrix_info(self, query: str = "") -> dict[str, Any]:
-        """Tool: Tra cứu số liệu Sổ thẻ kho điện tử 31 ngày (Tháng 10/2026) và các lệnh kho chờ duyệt."""
+        """Tool: Tra cứu file kho của tháng được hỏi (mặc định tháng hiện tại) và các phiếu kho chờ duyệt."""
         q_norm = _normalize_vn(query)
 
         # 1. Nếu hỏi về lệnh kho chờ duyệt (pending requests)
@@ -877,8 +891,23 @@ Bạn được trang bị 8 công cụ vận hành:
                 "evidence_refs": ["table:daily_stock_movements", "filter:status=PENDING"]
             }
 
-        # 2. Tra cứu ma trận sổ kho tháng 10
-        matrix_df = get_stock_matrix_df(2026, 10)
+        # 2. File kho của tháng được hỏi (mặc định tháng hiện tại theo giờ Việt Nam)
+        from src.engine.stock_matrix import find_opening_column
+        year, month = _parse_query_month(query)
+        matrix_df = get_stock_matrix_df(year, month)
+        period = f"{month:02d}/{year}"
+        opening_col = find_opening_column(matrix_df.columns)
+        moved = pd.to_numeric(matrix_df.get("Tổng nhập"), errors="coerce").fillna(0).sum() + \
+            pd.to_numeric(matrix_df.get("Tổng xuất"), errors="coerce").fillna(0).sum()
+        has_opening = opening_col is not None and (matrix_df[opening_col] != "—").any()
+        if matrix_df.empty or (not moved and not has_opening):
+            return {
+                "text": f"### 📦 File kho tháng {period}\n\nChưa có dữ liệu sổ kho thực tế cho kỳ này "
+                        "(chưa có tồn đầu kỳ, phiếu nhập hay xuất nào được duyệt).",
+                "tool_called": "get_daily_stock_matrix_info",
+                "raw_result": {"period": period, "status": "NO_DATA"},
+                "evidence_refs": ["table:daily_stock_movements", f"period:{year}-{month:02d}"],
+            }
 
         # Kiểm tra xem có hỏi cụ thể một mặt hàng nào trong 12 mặt hàng không
         matched_row = None
@@ -894,7 +923,7 @@ Bạn được trang bị 8 công cụ vận hành:
 
         if matched_row is not None:
             name = matched_row["Tên mặt hàng (Quy cách)"]
-            ton_t9 = matched_row["Tồn T9"]
+            ton_t9 = matched_row[opening_col] if opening_col else "—"
             tong_nhap = matched_row["Tổng nhập"]
             tong_xuat = matched_row["Tổng xuất"]
             ton_so_sach = matched_row["Tồn sổ sách"]
@@ -902,9 +931,9 @@ Bạn được trang bị 8 công cụ vận hành:
             chenh_lech = matched_row["Chênh lệch"]
 
             msg = (
-                f"### 📦 Thẻ Kho Chi Tiết (Tháng 10/2026): {name}\n\n"
+                f"### 📦 Kho tháng {period}: {name}\n\n"
                 f"- **Mã nguyên liệu:** `{matched_row['Mã NL']}`\n"
-                f"- **Tồn đầu kỳ (Tồn T9):** **{ton_t9}**\n"
+                f"- **Tồn đầu kỳ ({opening_col or 'chưa có'}):** **{ton_t9}**\n"
                 f"- **Tổng nhập trong tháng:** **{tong_nhap}**\n"
                 f"- **Tổng xuất dùng quầy:** **{tong_xuat}**\n"
                 f"- **Tồn sổ sách hiện tại:** **{ton_so_sach}**\n"
@@ -916,10 +945,10 @@ Bạn được trang bị 8 công cụ vận hành:
                 "text": msg,
                 "tool_called": "get_daily_stock_matrix_info",
                 "raw_result": matched_row.to_dict(),
-                "evidence_refs": ["ledger:Mixue_October_2026", f"ingredient:{matched_row['Mã NL']}"]
+                "evidence_refs": [f"period:{year}-{month:02d}", f"ingredient:{matched_row['Mã NL']}"]
             }
 
-        # Tổng hợp chung sổ kho tháng 10
+        # Tổng hợp chung file kho của tháng
         total_items = len(matrix_df)
         total_in = pd.to_numeric(matrix_df["Tổng nhập"], errors="coerce").fillna(0).sum()
         total_out = pd.to_numeric(matrix_df["Tổng xuất"], errors="coerce").fillna(0).sum()
@@ -933,19 +962,19 @@ Bạn được trang bị 8 công cụ vận hành:
         stock_lines = [f"- **{r['Tên mặt hàng (Quy cách)']}**: Tồn {r['Tồn sổ sách']} (Nhập: {r['Tổng nhập']} | Xuất: {r['Tổng xuất']})" for _, r in top_stocks.iterrows()]
 
         msg = (
-            f"### 📦 Báo Cáo Sổ Thẻ Kho Điện Tử Tháng 10/2026 (Mixue 39 Tôn Quang Phiệt)\n\n"
+            f"### 📦 File kho tháng {period} (Mixue 39 Tôn Quang Phiệt)\n\n"
             f"- **Quy mô theo dõi:** **{total_items} mặt hàng trọng yếu** (chuẩn quy cách Google Sheets: Thùng/Kiện/Bình/Dây)\n"
             f"- **Tổng nhập trong tháng:** **{total_in:,.1f} kiện/thùng**\n"
             f"- **Tổng xuất dùng quầy:** **{total_out:,.1f} kiện/thùng**\n"
             f"- **Tổng tồn kho lũy kế:** **{total_stock:,.1f} kiện/thùng**\n\n"
             f"**Top mặt hàng có lượng tồn lớn nhất:**\n" + "\n".join(stock_lines) +
-            "\n\n*👉 Quản lý có thể xem toàn bộ bảng ma trận 31 ngày, sửa xóa ô bằng tay hoặc tải file Excel tại tab 'Báo cáo & kho'.*"
+            "\n\n*👉 Xem đủ từng ngày, sửa ô hoặc tải file Excel ở mục 'Doanh thu & Kho hàng'.*"
         )
         return {
             "text": msg,
             "tool_called": "get_daily_stock_matrix_info",
             "raw_result": {"total_items": total_items, "total_in": total_in, "total_out": total_out, "total_stock": total_stock},
-            "evidence_refs": ["table:daily_stock_movements", "ledger:Mixue_October_2026"]
+            "evidence_refs": ["table:daily_stock_movements", f"period:{year}-{month:02d}"]
         }
 
     def tool_get_store_and_project_info(self) -> dict[str, Any]:
@@ -961,7 +990,7 @@ Bạn được trang bị 8 công cụ vận hành:
             "1. **BOM & Analytics Engine:** Quy đổi 39 SKU bán hàng qua định lượng nguyên liệu lý thuyết.\n"
             "2. **Forecasting Engine:** Dự báo nhu cầu bán ngày mai (D+1); sai số và mô hình phải lấy từ kết quả backtest hiện tại, không dùng mức chính xác cố định.\n"
             "3. **Optimization Engine:** Tối ưu hóa số mẻ nấu trân châu/thạch theo hạn sử dụng 4 giờ và lập dự thảo đơn nhập hàng (PO).\n"
-            "4. **Daily Stock Matrix:** Sổ thẻ kho điện tử ma trận đầy đủ 31 ngày tháng 10/2026, hỗ trợ Maker-Checker 2 bước và sửa xóa thủ công.\n"
+            "4. **File kho theo tháng:** đủ số ngày thực của tháng đang xem, phiếu nhập/xuất phải được Quản lý duyệt, sửa xóa thủ công.\n"
             "5. **Tác tử Tuyết Vương AI:** Hỗ trợ điều phối vận hành dựa trên bằng chứng (Evidence-Driven) và giám sát con người (Human-in-the-Loop)."
         )
         return {
@@ -1039,7 +1068,8 @@ Bạn được trang bị 8 công cụ vận hành:
         q = (query or "").lower()
         q_norm = _normalize_vn(q)
         start_d, end_d = _parse_query_date_range(query)
-        target_date = start_d or self.memory.get("last_target_date") or "2026-10-14"
+        from src.engine.weather import VN
+        target_date = start_d or self.memory.get("last_target_date") or datetime.now(VN).date().isoformat()
         self.memory["last_target_date"] = target_date
 
         summary = get_daily_closing_summary(target_date)

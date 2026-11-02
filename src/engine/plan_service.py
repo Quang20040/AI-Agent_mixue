@@ -40,3 +40,15 @@ def list_plans(plan_type=None):
             _CACHE["plans"] = [row.payload for row in db.query(OperationPlan).order_by(OperationPlan.created_at.desc()).all()]
         _CACHE["at"] = time.monotonic()
     return [deepcopy(p) for p in _CACHE["plans"] if not plan_type or p["plan_type"] == plan_type]
+
+
+def reject_plan(plan_id, rejected_by, reason=""):
+    """A manager turns down a pending plan; nothing in it is applied."""
+    from datetime import datetime
+    plan = get_plan(plan_id)
+    if not plan or plan.get("status") != "PENDING_APPROVAL":
+        return False, "Kế hoạch này không còn chờ duyệt."
+    plan.update(status="REJECTED", rejected_by=rejected_by, rejected_at=datetime.now().isoformat(timespec="seconds"),
+                rejection_reason=reason)
+    save_plan(plan)
+    return True, f"Đã từ chối {plan_id}."

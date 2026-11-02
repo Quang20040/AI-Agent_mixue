@@ -8,6 +8,29 @@ import pandas as pd
 from src.models import DailyStockMovement, Ingredient
 
 
+VN_OFFSET_HOURS = 7
+
+
+def today_vn():
+    from datetime import datetime, timezone
+    return datetime.now(timezone(timedelta(hours=VN_OFFSET_HOURS))).date()
+
+
+def current_period():
+    today = today_vn()
+    return today.year, today.month
+
+
+def opening_label(year, month):
+    """Opening balance column: the closing stock of the previous month, e.g. 'Tồn cuối T10/2026'."""
+    previous = date(year, month, 1) - timedelta(days=1)
+    return f"Tồn cuối T{previous.month}/{previous.year}"
+
+
+def find_opening_column(columns):
+    return next((c for c in columns if str(c).startswith("Tồn cuối T")), None)
+
+
 def day_label(day):
     return f"{'CN' if day.weekday() == 6 else 'T' + str(day.weekday() + 2)} {day.day}/{day.month}"
 
@@ -19,12 +42,12 @@ def column_map_for_period(year, month):
         result[f"Nhập {day.day}/{month}"] = (day.isoformat(), "IN")
         result[day_label(day)] = (day.isoformat(), "OUT")
     result["Tồn thực tế"] = (days[-1].isoformat(), "ACTUAL_COUNT")
+    result[opening_label(year, month)] = ((date(year, month, 1) - timedelta(days=1)).isoformat(), "INITIAL")
     return result
 
 
 def matrix_views(year, month):
-    previous = date(year, month, 1) - timedelta(days=1)
-    opening = "Tồn T9" if month == 10 else f"Tồn cuối {previous.month}/{previous.year}"
+    opening = opening_label(year, month)
     base = ["STT", "Tên mặt hàng (Quy cách)"]
     weeks = calendar.monthcalendar(year, month)
     result = {f"Toàn bộ tháng {month}/{year}": None}
@@ -42,7 +65,6 @@ def matrix_views(year, month):
 def build_stock_matrix(db, year, month):
     first = date(year, month, 1)
     last = date(year, month, calendar.monthrange(year, month)[1])
-    previous = first - timedelta(days=1)
     catalog = db.query(Ingredient).order_by(Ingredient.ingredient_id).all()
     movements = (
         db.query(DailyStockMovement)
@@ -74,12 +96,12 @@ def build_stock_matrix(db, year, month):
             bucket = ins if movement.movement_type == "IN" else outs if movement.movement_type == "OUT" else None
             if bucket is not None:
                 bucket[movement.business_date] = bucket.get(movement.business_date, 0.0) + float(movement.quantity)
-        opening_label = "Tồn T9" if month == 10 else f"Tồn cuối {previous.month}/{previous.year}"
+        opening_column = opening_label(year, month)
         row = {
             "STT": index,
             "Mã NL": ingredient.ingredient_id,
             "Tên mặt hàng (Quy cách)": ingredient.ingredient_name,
-            opening_label: opening if initial else "—",
+            opening_column: opening if initial else "—",
         }
         balance = opening
         week = 1
@@ -115,7 +137,7 @@ def build_stock_matrix(db, year, month):
                 "STT",
                 "Mã NL",
                 "Tên mặt hàng (Quy cách)",
-                "Tồn T9" if month == 10 else f"Tồn cuối {previous.month}/{previous.year}",
+                opening_label(year, month),
                 *column_map_for_period(year, month),
                 "Tổng nhập",
                 "Tổng xuất",

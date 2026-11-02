@@ -64,28 +64,26 @@ def test_staff_to_manager_to_ledger_across_separate_sessions(monkeypatch):
             item.set_value(VALUES[item.label])
     for box in staff.checkbox:
         box.check()
-    next(b for b in staff.button if b.label == '📨 Gửi Quản lý duyệt').click().run()
+    next(b for b in staff.button if b.label == '📨 Gửi yêu cầu Quản lý duyệt').click().run()
     assert not staff.exception
+    staff_token = _token(staff)
 
     manager = _open('quick_login_manager')  # another browser, on the home page
     assert manager.session_state['_home_state']['staff_waiting'] == 1
-    assert any(b.key == 'open_staff_inbox' for b in manager.button), 'manager is not told a report is waiting'
-    manager.button(key='open_staff_inbox').click().run()
-    assert manager.session_state['main_navigation'] == OCR_PAGE
-    next(b for b in manager.button if (b.key or '').startswith('open_sub_')).click().run()
-    pending = manager.session_state['agent_pending_approval']
-    assert pending['plan_type'] == 'SHIFT_OCR_DRAFT' and pending['plan']['fields']['report_date'] == day
-    assert (pending['plan'].get('meta') or {}).get('submitted_by_name'), 'card cannot say which staff sent it'
-    assert any('Nhân viên gửi' in c.value for c in manager.caption)
-    before = len(_saved(day))
-    manager.button(key='approve_agent_page').click().run()
+    row = next(b for b in manager.button if (b.key or '').startswith('apv_y_home_shift_'))
+    before = {r['shift_code']: r.get('updated_at') for r in _saved(day)}
+    row.click().run()  # approve from the home queue: draft → approval step → write
     assert not manager.exception
-    assert len(_saved(day)) == before + 1, 'approved report not written to the ledger'
-    assert manager.session_state['shift_chosen_date_picker'].isoformat() == day
-    assert not any((b.key or '').startswith('open_sub_') for b in manager.button)
+    after = {r['shift_code']: r.get('updated_at') for r in _saved(day)}
+    assert after.get('CA_SANG') and after['CA_SANG'] != before.get('CA_SANG'), 'approved report not written to the ledger'
+    assert not any((b.key or '').startswith('apv_y_home_shift_') for b in manager.button)
+    assert any('Đã duyệt và ghi sổ' in a.value for a in manager.success)
 
     reloaded = _open(token=_token(manager))  # F5 after approving: still signed in, report still there
-    reloaded.radio(key='main_navigation').set_value(OCR_PAGE).run()
-    reloaded.session_state['shift_chosen_date_picker']  # noqa: B018 - exists
-    assert len(_saved(day)) == before + 1
-    assert not any(b.key == 'open_staff_inbox' for b in reloaded.button)
+    assert reloaded.session_state['authenticated']
+    assert {r['shift_code'] for r in _saved(day)} >= {'CA_SANG'}
+
+    # The staff member sees the decision.
+    staff = _open(token=staff_token)
+    staff.radio(key='main_navigation').set_value(OCR_PAGE).run()
+    assert any('Đã duyệt' in m.value for m in staff.markdown)

@@ -20,11 +20,19 @@ fi
 if [ -n "${PERSIST_DIR:-}" ]; then
   mkdir -p "$PERSIST_DIR/agent_private" "$PERSIST_DIR/chat_attachments" "$PERSIST_DIR/shift_uploads"
   # Seed once from the image; never overwrite data the shop has already written.
+  FRESH=""
   if [ -z "${DATABASE_URL:-}" ] && [ ! -f "$PERSIST_DIR/beverageops.db" ] && [ -f /opt/seed_data/beverageops.db ]; then
     cp /opt/seed_data/beverageops.db "$PERSIST_DIR/beverageops.db"
+    FRESH=1
   fi
   if [ ! -f "$PERSIST_DIR/shift_reports.json" ] && [ -f /opt/seed_data/shift_reports.json ]; then
     cp /opt/seed_data/shift_reports.json "$PERSIST_DIR/shift_reports.json"
+  fi
+  # A new store starts with master data only (accounts, menu, ingredients, recipes): no sample sales,
+  # stock or shift reports. KEEP_SAMPLE_DATA=true keeps the bundled history for a classroom demo.
+  if [ -n "$FRESH" ] && [ "${KEEP_SAMPLE_DATA:-false}" != "true" ]; then
+    python scripts/clean_demo_transactions.py --apply --db "sqlite:///$PERSIST_DIR/beverageops.db" \
+      --shift-file "$PERSIST_DIR/shift_reports.json"
   fi
   export DATABASE_URL="${DATABASE_URL:-sqlite:///$PERSIST_DIR/beverageops.db}"
   export SHIFT_DATA_FILE="${SHIFT_DATA_FILE:-$PERSIST_DIR/shift_reports.json}"
@@ -35,11 +43,17 @@ if [ -n "${PERSIST_DIR:-}" ]; then
   export SHIFT_UPLOADS_DIR="${SHIFT_UPLOADS_DIR:-$PERSIST_DIR/shift_uploads}"
 else
   mkdir -p /app/data
+  FRESH=""
   if [ ! -f /app/data/beverageops.db ] && [ -f /opt/seed_data/beverageops.db ]; then
     cp /opt/seed_data/beverageops.db /app/data/beverageops.db
+    FRESH=1
   fi
   if [ ! -f /app/data/shift_reports.json ] && [ -f /opt/seed_data/shift_reports.json ]; then
     cp /opt/seed_data/shift_reports.json /app/data/shift_reports.json
+  fi
+  if [ -n "$FRESH" ] && [ "${KEEP_SAMPLE_DATA:-false}" != "true" ]; then
+    python scripts/clean_demo_transactions.py --apply --db "sqlite:////app/data/beverageops.db" \
+      --shift-file /app/data/shift_reports.json
   fi
 fi
 

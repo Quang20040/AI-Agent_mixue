@@ -135,7 +135,7 @@ def test_daily_stock_matrix_and_export():
     df = get_stock_matrix_df(2026, 10)
     assert len(df) >= 10
     assert "Tên mặt hàng (Quy cách)" in df.columns
-    assert "Tồn T9" in df.columns
+    assert "Tồn cuối T9/2026" in df.columns
     # Kiểm tra các cột 31 ngày và các tuần
     assert "T5 1/10" in df.columns
     assert "CN 4/10" in df.columns
@@ -149,7 +149,7 @@ def test_daily_stock_matrix_and_export():
     assert "Tồn sổ sách" in df.columns
 
     # Xuất Excel
-    excel_bytes = generate_excel_export()
+    excel_bytes = generate_excel_export(2026, 10)
     assert len(excel_bytes) > 1000
 
 
@@ -240,7 +240,8 @@ def test_manual_stock_editing_and_batch_editor():
         ingredient_id="1",
         column_name="T5 1/10",
         new_value="3",
-        updated_by="quanly"
+        updated_by="quanly",
+        year=2026, month=10
     )
     assert ok is True
     assert "3" in msg
@@ -255,7 +256,8 @@ def test_manual_stock_editing_and_batch_editor():
         ingredient_id="1",
         column_name="Tồn thực tế",
         new_value="5",
-        updated_by="quanly"
+        updated_by="quanly",
+        year=2026, month=10
     )
     assert ok_count is True
     df_count = get_stock_matrix_df(2026, 10)
@@ -270,7 +272,7 @@ def test_manual_stock_editing_and_batch_editor():
     row_idx = df_edited[df_edited["Mã NL"] == "3"].index[0]
     df_edited.at[row_idx, "T3 13/10"] = 2
 
-    res_batch = update_stock_matrix_from_editor(df_edited, df_original, updated_by="chucuahang")
+    res_batch = update_stock_matrix_from_editor(df_edited, df_original, updated_by="chucuahang", year=2026, month=10)
     assert res_batch["status"] == "SUCCESS"
     assert res_batch["updated_count"] >= 1
 
@@ -280,7 +282,7 @@ def test_manual_stock_editing_and_batch_editor():
     assert row_trasua["T3 13/10"] == 2
 
     # 4. Trả lại giá trị ban đầu cho Ốc quế và Bột trà sữa
-    update_stock_cell_manually("1", "T5 1/10", "1", "quanly")
-    update_stock_cell_manually("1", "Tồn thực tế", "", "quanly")
-    update_stock_cell_manually("3", "T3 13/10", "1", "quanly")
+    update_stock_cell_manually("1", "T5 1/10", "1", "quanly", year=2026, month=10)
+    update_stock_cell_manually("1", "Tồn thực tế", "", "quanly", year=2026, month=10)
+    update_stock_cell_manually("3", "T3 13/10", "1", "quanly", year=2026, month=10)
 

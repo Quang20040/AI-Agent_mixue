@@ -18,10 +18,11 @@ def test_cell_manual_update_and_delete():
         ingredient_id="1",
         column_name="T5 1/10",
         new_value=4.5,
-        updated_by="quanly"
+        updated_by="quanly",
+        year=2026, month=10
     )
     assert ok is True
-    val = get_cell_value("1", "T5 1/10")
+    val = get_cell_value("1", "T5 1/10", year=2026, month=10)
     assert val == 4.5
 
     # 2. Xóa ô này bằng cách truyền giá trị rỗng
@@ -29,15 +30,16 @@ def test_cell_manual_update_and_delete():
         ingredient_id="1",
         column_name="T5 1/10",
         new_value="",
-        updated_by="quanly"
+        updated_by="quanly",
+        year=2026, month=10
     )
     assert ok_del is True
-    val_after = get_cell_value("1", "T5 1/10")
+    val_after = get_cell_value("1", "T5 1/10", year=2026, month=10)
     assert val_after is None
 
     # Khôi phục lại giá trị 1.0 chuẩn ban đầu
-    update_stock_cell_manually("1", "T5 1/10", 1.0, "quanly")
-    assert get_cell_value("1", "T5 1/10") == 1.0
+    update_stock_cell_manually("1", "T5 1/10", 1.0, "quanly", year=2026, month=10)
+    assert get_cell_value("1", "T5 1/10", year=2026, month=10) == 1.0
 
 
 def test_movement_create_update_delete():
@@ -74,7 +76,7 @@ def test_matrix_calculation_reflects_changes():
     """Kiểm tra ma trận sổ kho 31 ngày tự động tính lại tồn sổ sách khi sửa/xóa."""
     df_before = get_stock_matrix_df(2026, 10)
     row_ocque = df_before[df_before["Mã NL"] == "1"].iloc[0]
-    ton_dau = float(row_ocque["Tồn T9"])
+    ton_dau = float(row_ocque["Tồn cuối T9/2026"])
     assert ton_dau == 6.0
 
 
