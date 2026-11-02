@@ -148,7 +148,7 @@ def build_day_sheet_prompt(target_date: str | None) -> str:
 
 # --- Deterministic interpretation of a transcribed cell ---------------------------------------------
 
-_ANNOTATION = re.compile(r'\(\s*(dư|du|thừa|thua|thiếu|thieu)\s*([\d.,\s]+)\s*(k|nghìn|nghin|ngàn|ngan|đ|d)?\s*\)', re.IGNORECASE)
+_ANNOTATION = re.compile(r'\(\s*(dư|du|thừa|thua|thiếu|thieu|\+|-|−)\s*([\d.,\s]+)\s*(k|nghìn|nghin|ngàn|ngan|đ|d)?\s*\)', re.IGNORECASE)
 
 
 def _number(term: str, *, handwritten: bool) -> tuple[int, bool, bool] | None:
@@ -177,7 +177,7 @@ def parse_cell(text: str, *, handwritten: bool, expenses: bool = False) -> dict[
     if not raw:
         return out
     if m := _ANNOTATION.search(raw):
-        sign = -1 if m.group(1).lower().startswith('thi') else 1
+        sign = -1 if m.group(1).lower().startswith('thi') or m.group(1) in '-−' else 1
         unit = (m.group(3) or 'k').lower()
         digits = re.sub(r'\D', '', m.group(2))
         if digits:

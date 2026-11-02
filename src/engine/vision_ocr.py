@@ -454,11 +454,13 @@ def check_ocr_consistency(result: ShiftReading) -> dict[str, Any]:
 
     shift_check: dict[str, Any] = {'checked': False, 'is_consistent': True}
     if shift_total is not None and shift_components:
-        comp_sum = sum(shift_components.values()) - expenses_val
-        shift_diff = comp_sum - shift_total
         surplus = result.fields['cash_diff_vnd'].value or 0
-        # This shop counts the cash surplus inside "Tiền mặt" but leaves it out of "Tổng thu về".
-        surplus_excluded = bool(surplus) and shift_diff == surplus
+        # Shop rule: "Tiền mặt" is the cash actually counted; "(dư 15k)" means 15k more than expected, so the cash
+        # that should have been there is cash − dư (cash + thiếu), and "Tổng thu về" is built on that amount.
+        expected_cash = shift_components['cash_vnd'] - surplus if 'cash_vnd' in shift_components else None
+        comp_sum = sum(shift_components.values()) - expenses_val - (surplus if expected_cash is not None else 0)
+        shift_diff = comp_sum - shift_total
+        surplus_excluded = False
         shift_check = {
             'checked': True,
             'total_collected_vnd': shift_total,
@@ -466,12 +468,26 @@ def check_ocr_consistency(result: ShiftReading) -> dict[str, Any]:
             'expenses_vnd': expenses_val,
             'difference_vnd': shift_diff,
             'components': shift_components,
-            'is_consistent': shift_diff == 0 or surplus_excluded,
-            'surplus_excluded_vnd': surplus if surplus_excluded else 0,
+            'is_consistent': shift_diff == 0,
+            'cash_counted_vnd': shift_components.get('cash_vnd'),
+            'cash_expected_vnd': expected_cash,
+            'cash_diff_vnd': surplus,
         }
+        if surplus and expected_cash is not None:
+            word = 'dư' if surplus > 0 else 'thiếu'
+            shift_check['cash_explanation'] = (
+                f'Tiền mặt thực nhận {shift_components["cash_vnd"]:,}đ, {word} {abs(surplus):,}đ '
+                f'→ tiền mặt đáng lẽ {expected_cash:,}đ; Tổng thu về được đối chiếu theo số đáng lẽ này.')
+            if shift_diff == surplus:
+                shift_check['note'] = 'Tổng thu về đang cộng cả tiền ' + word
         if shift_diff != 0 and not surplus_excluded:
+            cash_part = ''
+            if surplus and expected_cash is not None:
+                cash_part = f' (tiền mặt tính theo số đáng lẽ {expected_cash:,} = thực nhận − {"dư" if surplus > 0 else "thiếu"})'
+                if shift_diff == surplus:
+                    cash_part += '; Tổng thu về trên sổ có vẻ đã cộng cả tiền ' + ('dư' if surplus > 0 else 'thiếu')
             msg = (
-                f'Chênh lệch cộng ngang sổ ca: Tổng các khoản ({comp_sum:,}) '
+                f'Chênh lệch cộng ngang sổ ca: Tổng các khoản{cash_part} ({comp_sum:,}) '
                 f'lệch {shift_diff:+,} so với Tổng thu về ghi trên ảnh ({shift_total:,}). '
                 'Hệ thống giữ nguyên số đọc được và yêu cầu bạn kiểm tra, không tự sửa số để khớp.'
             )

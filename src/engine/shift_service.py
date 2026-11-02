@@ -454,7 +454,9 @@ def save_or_update_shift_report(
             grab = float(report_dict.get("grab_food_vnd", 0) or 0)
             be = float(report_dict.get("be_food_vnd", 0) or 0)
             exp = float(report_dict.get("expenses_vnd", 0) or 0)
-            report_dict["total_collected_vnd"] = cash + bank + shopee + grab + be - exp
+            diff = float(report_dict.get("cash_diff_vnd", 0) or 0)
+            # cash_vnd is the cash counted; the total is built on the cash that should have been there.
+            report_dict["total_collected_vnd"] = cash - diff + bank + shopee + grab + be - exp
         if report_dict.get('cash_vnd') is None or report_dict.get('total_collected_vnd') is None:
             return False, 'Cần xác nhận tiền mặt và tổng thu về; không có phát sinh thì nhập 0.', report_dict
         valid, err_msg = validate_shift_report_payload(report_dict, actor_role=actor_role, require_admin_for_approval=True)

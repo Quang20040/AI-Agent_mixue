@@ -64,3 +64,20 @@ def test_comma_total_is_thousands():
     assert parse_cell('10,662', handwritten=True)['value'] == 10_662_000
     assert parse_cell('1.000.000đ', handwritten=True)['value'] == 1_000_000
     assert parse_cell('2093 1193 (dư 15k)', handwritten=True)['value'] == 1_193_000
+
+
+def test_surplus_means_counted_cash_minus_expected():
+    """'1193 (dư 15k)': counted 1,193,000, should have been 1,178,000; Tổng thu về is built on 1,178,000."""
+    result = extract_image(image_paths=PHOTOS, shift_hint='CA_SANG', target_date=SPEC['business_date'], model=_reader('clean'))
+    check = result['consistency']['shift_check']
+    assert check['cash_counted_vnd'] == 1_193_000
+    assert check['cash_diff_vnd'] == 15_000
+    assert check['cash_expected_vnd'] == 1_178_000
+    assert check['is_consistent'] and check['component_sum_vnd'] == SPEC['truth']['CA_SANG']['total_collected_vnd']
+    assert '1,178,000' in check['cash_explanation']
+
+
+def test_shortage_annotations():
+    assert parse_cell('1163 (thiếu 15k)', handwritten=True)['diff'] == -15_000
+    assert parse_cell('1163 (-15k)', handwritten=True)['value'] == 1_163_000
+    assert parse_cell('1193 (+15k)', handwritten=True)['diff'] == 15_000

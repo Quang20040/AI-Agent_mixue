@@ -144,6 +144,9 @@ class OcrChatMixin:
                 lines.append(f"- **{label}:** ⚠️ **[Để trống chờ xác nhận]** *(đọc thô: `{raw_t or '—'}`{norm_hint} — {reason})*")
 
         discrepancies = consistency.get("discrepancies", [])
+        cash_note = (consistency.get("shift_check") or {}).get("cash_explanation")
+        if cash_note:
+            lines.append(f"\n💵 {cash_note}")
         if discrepancies:
             lines.append("\n**2. ⚠️ Cảnh báo đối soát nhất quán (Hệ thống giữ nguyên số gốc, không tự sửa số):**")
             for d in discrepancies:

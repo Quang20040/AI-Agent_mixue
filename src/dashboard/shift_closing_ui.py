@@ -305,6 +305,9 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                     form_values = {name: extracted.get(name) for name in vocr.FIELD_LABELS}
                     vocr.render_field_table(extracted.get('field_readings', {}), form_values, extracted.get('suggestions'))
                     consistency = extracted.get('consistency', {})
+                    cash_note = (consistency.get('shift_check') or {}).get('cash_explanation')
+                    if cash_note:
+                        st.info('💵 ' + cash_note)
                     if consistency and not consistency.get('is_consistent', True):
                         st.markdown('**⚖️ Đối soát số học (giữ nguyên số đọc, không tự sửa):**')
                         for disc in consistency.get('discrepancies', []):
@@ -367,7 +370,8 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                             "Chênh lệch tiền mặt dư/thiếu (đ)",
                             value=prefill("cash_diff_vnd"),
                             key=field_key("cash_diff_vnd"),
-                            help=(suggestions.get("cash_diff_vnd") or {}).get("basis") or "Nhập dương nếu dư (VD 20000), nhập âm nếu thiếu",
+                            help=((suggestions.get("cash_diff_vnd") or {}).get("basis") or "")
+                            + " Tiền mặt ở trên là số thực nhận; dư nhập dương, thiếu nhập âm. Tiền mặt đáng lẽ = thực nhận − dư.",
                             step=5000,
                             format="%d"
                         )
