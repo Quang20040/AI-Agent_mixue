@@ -93,6 +93,8 @@
 [class*="st-key-approval_card"] [data-testid="stCaptionContainer"] { color: #fff !important; }
 [class*="st-key-approval_card"] .vocr-table { background: #fff; border-radius: 14px; overflow: hidden; color: var(--px-ink); }
 [class*="st-key-approval_card"] [data-testid="stCaptionContainer"] *, [class*="st-key-approval_card"] h4 * { color: #fff !important; }
+[class*="st-key-approval_card"] [data-testid*="Caption"], [class*="st-key-approval_card"] [data-testid*="Caption"] *,
+[class*="st-key-approval_card"] .stCaption, [class*="st-key-approval_card"] .stCaption * { color: #fff !important; opacity: 1 !important; font-size: 14px !important; }
 [class*="st-key-approval_card"] code { background: rgba(255,255,255,.18) !important; color: #fff !important; border-radius: 6px; padding: 1px 6px; }
 [class*="st-key-approval_card"] h4 code { background: #fff !important; color: var(--px-red-dark) !important; }
 [class*="st-key-approval_card"] button[kind="primary"] { background: #fff !important; border: 0 !important; }
