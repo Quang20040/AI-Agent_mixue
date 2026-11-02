@@ -9,8 +9,11 @@
   const controls = new Map();
   const fine = window.matchMedia('(hover: hover) and (pointer: fine)');
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
-  // Continuous motion is the user's explicit preference; pause remains available.
-  let enabled = !reduce.matches;
+  // Phones and small/low-power devices start paused: dozens of looping 3D tweens kept their main thread busy and
+  // made page switches feel stuck. The "Bật chuyển động" button still turns everything on.
+  const lite = !fine.matches || window.innerWidth < 900 || (navigator.deviceMemory || 8) <= 4
+    || (navigator.hardwareConcurrency || 8) <= 4;
+  let enabled = !reduce.matches && !lite;
   document.documentElement.dataset.mixueMotion = enabled ? 'running' : 'paused';
   document.documentElement.classList.toggle('mixue-motion-active', enabled);
   document.documentElement.classList.toggle('mixue-motion-paused', !enabled);
@@ -83,11 +86,8 @@
           gsap.to(node.querySelector('.stage-gallery'), {y: 35, ease: 'none', scrollTrigger: {trigger: node, scroller, start: 'top top', end: 'bottom top', scrub: 1}});
         }
       } else if (node.matches('.menu-card')) {
-        gsap.from(node.querySelector('.menu-copy'), {y: 12, opacity: 0, duration: .5});
-        loop(node.querySelector('.menu-photo img'), {y: -6, rotationZ: 1.8, scale: 1.075, duration: 2.2 + Math.random() * .8});
-        loop(node.querySelector('.product-halo'), {opacity: .7, scale: 1.3, duration: 1.8});
-        loop(node.querySelector('.product-shine'), {xPercent: 480, duration: 3, repeatDelay: 1, yoyo: false, ease: 'power1.inOut'});
-        loop(node.querySelector('.menu-arrow'), {rotationY: 25, y: -3, duration: 1.5, transformPerspective: 300});
+        // Menu cards only fade in: endless loops on every card were the heaviest motion on the page.
+        gsap.from(node.querySelector('.menu-copy'), {y: 12, opacity: 0, duration: .4});
       } else if (node.matches('.snowking-authentic, .brand-logo')) {
         const image = node.matches('img') ? node : node.querySelector('img');
         loop(image, {y: -5, rotationZ: 7, rotationY: 15, duration: 1.3, transformPerspective: 500});

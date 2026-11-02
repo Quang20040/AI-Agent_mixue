@@ -273,8 +273,8 @@
 @keyframes px-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes px-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 
-[data-testid="stChatMessage"] { animation: px-msg-in .45s var(--px-ease) both; }
-[class*="st-key-approval_card"] { animation: px-rise .5s var(--px-ease) both, px-pulse-ring 2.4s ease-out .6s infinite; }
+[data-testid="stChatMessage"] { animation: px-msg-in .3s var(--px-ease) both; }
+[class*="st-key-approval_card"] { animation: px-rise .4s var(--px-ease) both, px-pulse-ring 2.4s ease-out .6s 2; }
 .vocr-bar { animation: px-grow .9s var(--px-ease) both; }
 .vocr-bars .vocr-bar-row:nth-child(2) .vocr-bar { animation-delay: .06s; } .vocr-bars .vocr-bar-row:nth-child(3) .vocr-bar { animation-delay: .12s; }
 .vocr-bars .vocr-bar-row:nth-child(4) .vocr-bar { animation-delay: .18s; } .vocr-bars .vocr-bar-row:nth-child(5) .vocr-bar { animation-delay: .24s; }
@@ -283,7 +283,7 @@
 .vocr-step:nth-child(2) .fill { animation-delay: .15s; } .vocr-step:nth-child(3) .fill { animation-delay: .3s; }
 .vocr-step:nth-child(4) .fill { animation-delay: .45s; } .vocr-step:nth-child(5) .fill { animation-delay: .6s; }
 .vocr-step.active .dot { animation: px-breathe 1.6s ease-in-out infinite; }
-.vocr-badge.vocr-warn { background-image: linear-gradient(100deg, transparent 0 35%, #ffffffb3 50%, transparent 65% 100%); background-size: 160px 100%; background-repeat: no-repeat; animation: px-shimmer 2.8s ease-in-out infinite; }
+.vocr-badge.vocr-warn { background-image: linear-gradient(100deg, transparent 0 35%, #ffffffb3 50%, transparent 65% 100%); background-size: 160px 100%; background-repeat: no-repeat; animation: px-shimmer 2.8s ease-in-out 1; }
 .px-trace .dot.pause { animation: px-breathe 1.4s ease-in-out infinite; }
 
 html.mixue-motion-paused [data-testid="stChatMessage"], html.mixue-motion-paused [class*="st-key-approval_card"],
@@ -309,3 +309,5 @@ html.mixue-motion-paused .vocr-badge, html.mixue-motion-paused .px-trace .dot { 
 /* Day photos: small previews; the full photo is in the evidence popup and the image itself. */
 [class*="st-key-ocr_img_"] [data-testid="stImage"] img { max-height: 190px; object-fit: cover; object-position: top; border-radius: 10px; }
 @media (max-width: 760px) { [class*="st-key-ocr_img_"] [data-testid="stImage"] img { max-height: 140px; } }
+/* Motion paused (default on phones): looping CSS animations play once and stop, entrances still finish. */
+html.mixue-motion-paused *, html.mixue-motion-paused *::before, html.mixue-motion-paused *::after { animation-iteration-count: 1 !important; }

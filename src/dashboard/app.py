@@ -6,6 +6,8 @@ Thiết kế nhận diện thương hiệu Tuyết Vương (Snow King / 雪王) 
 
 import os
 import sys
+import time
+_RUN_STARTED = time.perf_counter()
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
@@ -1336,3 +1338,8 @@ with st.container(key="workspace"):
 
     # Render Chatbot (Dedicated Fullscreen Tab when section == "💬 Tuyết Vương AI", or Floating Bottom-Right Button otherwise).
     render_chat(agent, role_key, user_name)
+
+# Server time of this run, in the server log (Render → Logs), to tell slow code from a slow network/phone.
+_run_ms = (time.perf_counter() - _RUN_STARTED) * 1000
+if _run_ms > 700:
+    print(f"[timing] page={st.session_state.get('main_navigation', '?')} server={_run_ms:.0f}ms", flush=True)
