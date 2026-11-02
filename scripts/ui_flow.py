@@ -118,7 +118,10 @@ def main():
                 idle(staff)
             if staff.locator('.st-key-ocr_move_day button').count():
                 click(staff, '.st-key-ocr_move_day button', 'move to photo day')
-                if staff.locator('.st-key-run_shift_ocr button').is_enabled():
+                read_buttons = staff.locator('.st-key-run_shift_ocr button:visible')
+                if read_buttons.count() > 1:
+                    problems.append(f'{read_buttons.count()} "Đọc ảnh" buttons visible at once')
+                if read_buttons.first.is_enabled():
                     click(staff, '.st-key-run_shift_ocr button', 'read again')
                 snap(staff, 'staff_moved_to_photo_day', 'chuyển sang ngày trên ảnh')
             staff.get_by_text('Tôi đã đối chiếu ảnh, ngày').first.click()
