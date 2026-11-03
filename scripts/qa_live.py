@@ -87,6 +87,8 @@ def open_site(page):
     t = time.time()
     page.goto(BASE, wait_until='domcontentloaded', timeout=120000)
     page.locator('[data-testid="stApp"]').wait_for(timeout=120000)
+    # The login card or the menu appears once the first script run has rendered.
+    page.locator('.st-key-login_card, .st-key-main_navigation').first.wait_for(timeout=120000)
     idle(page, 1000)
     return round(time.time() - t, 2)
 
@@ -94,7 +96,7 @@ def open_site(page):
 def quick_login(page, key):
     open_site(page)
     if not page.locator(f'.st-key-{key} button').count():
-        page.get_by_text('Tài khoản dùng thử').first.click()
+        page.locator('[data-testid="stExpander"] summary').filter(has_text='Tài khoản dùng thử').first.click(timeout=60000)
         page.wait_for_timeout(600)
     t = time.time()
     page.locator(f'.st-key-{key} button').first.click()
@@ -121,6 +123,16 @@ def chat_messages(page):
 
 
 def send_chat(page, message, tag, wait_limit=150):
+    try:
+        return _send_chat(page, message, tag, wait_limit)
+    except Exception as exc:  # noqa: BLE001
+        row = {'tag': tag, 'message': message[:200], 'reply': f'(lỗi khi gửi: {type(exc).__name__})', 'latency_s': None,
+               'new_messages': 0, 'exceptions': []}
+        chats.append(row)
+        return row
+
+
+def _send_chat(page, message, tag, wait_limit):
     box = page.locator('[data-testid="stChatInputTextArea"]').first
     before = chat_messages(page).count()
     box.click()
@@ -149,6 +161,17 @@ def send_chat(page, message, tag, wait_limit=150):
 
 
 def main():
+    try:
+        run()
+    finally:
+        (OUT / 'results.json').write_text(json.dumps(results, ensure_ascii=False, indent=1), encoding='utf-8')
+        (OUT / 'chat.json').write_text(json.dumps(chats, ensure_ascii=False, indent=1), encoding='utf-8')
+        (OUT / 'perf.json').write_text(json.dumps({'perf': perf, 'console_errors': console_errors,
+                                                   'failed_requests': failed_requests}, ensure_ascii=False, indent=1), encoding='utf-8')
+        print(f'{sum(r["status"] == "PASS" for r in results)}/{len(results)} PASS')
+
+
+def run():
     with sync_playwright() as p:
         browser = p.chromium.launch()
 
@@ -194,7 +217,7 @@ def main():
         @case('TC-SEC-01', 'Bảo mật', 'Trang công khai có lộ tài khoản quản trị không', '1. Mở URL khi chưa đăng nhập 2. Mở mục tài khoản dùng thử',
               'Môi trường thật không cho đăng nhập Admin bằng 1 cú bấm, không in mật khẩu ra trang')
         def _():
-            page.get_by_text('Tài khoản dùng thử').first.click()
+            page.locator('[data-testid="stExpander"] summary').filter(has_text='Tài khoản dùng thử').first.click(timeout=60000)
             page.wait_for_timeout(700)
             body = text(page)
             exposed = 'Pass: 123' in body and page.locator('.st-key-quick_login_owner').count() > 0
@@ -502,12 +525,6 @@ def main():
                    'FAIL' if overflow else 'PASS', 'Medium' if overflow else '', f'resp_{name}_home.png')
             pg.context.close()
         browser.close()
-
-    (OUT / 'results.json').write_text(json.dumps(results, ensure_ascii=False, indent=1), encoding='utf-8')
-    (OUT / 'chat.json').write_text(json.dumps(chats, ensure_ascii=False, indent=1), encoding='utf-8')
-    (OUT / 'perf.json').write_text(json.dumps({'perf': perf, 'console_errors': console_errors,
-                                               'failed_requests': failed_requests}, ensure_ascii=False, indent=1), encoding='utf-8')
-    print(f'{sum(r["status"] == "PASS" for r in results)}/{len(results)} PASS')
 
 
 if __name__ == '__main__':
