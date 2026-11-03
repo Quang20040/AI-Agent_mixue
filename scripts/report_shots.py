@@ -21,10 +21,21 @@ q.OUT = OUT
 done = []
 
 
+HEIGHT = """() => Math.max(...['[data-testid="stMain"]', '[data-testid="stAppViewContainer"]', '[data-testid="stMainBlockContainer"]']
+    .map(s => document.querySelector(s)?.scrollHeight || 0), document.body.scrollHeight)"""
+
+
 def snap(page, name, full=True):
     try:
         q.idle(page, 1200)
-        page.screenshot(path=str(OUT / f'{name}.png'), full_page=full, timeout=60000)
+        width = page.viewport_size['width']
+        base = page.viewport_size['height']
+        if full:  # the page scrolls inside Streamlit's container, so grow the window to the content instead
+            height = min(max(int(page.evaluate(HEIGHT)), base), 5000)
+            page.set_viewport_size({'width': width, 'height': height})
+            page.wait_for_timeout(900)
+        page.screenshot(path=str(OUT / f'{name}.png'), timeout=60000)
+        page.set_viewport_size({'width': width, 'height': base})
         done.append(name)
         print('shot', name, flush=True)
     except Exception as exc:  # noqa: BLE001
@@ -45,9 +56,11 @@ def main():
         for width, height, suffix in ((1440, 900, ''), (390, 844, '_mobile')):
             page = q.new_page(browser, width, height, 'login')
             q.open_site(page)
+            page.locator('.st-key-login_card').first.wait_for(state='visible', timeout=60000)
+            page.wait_for_timeout(4000)  # the card fades in
             snap(page, f'01_login{suffix}', full=False)
             page.locator('[data-testid="stExpander"] summary').filter(has_text='Tài khoản dùng thử').first.click()
-            page.wait_for_timeout(800)
+            page.wait_for_timeout(1500)
             snap(page, f'02_login_demo{suffix}', full=False)
             page.context.close()
 
@@ -88,7 +101,7 @@ def main():
                 snap(mgr, '07_ocr_evidence', full=False)
                 mgr.keyboard.press('Escape')
                 q.idle(mgr)
-        step(ocr)
+        # step(ocr): the replayed 01/11 read in scripts/ui_flow.py gives the same screens without calling the model
 
         def benchmark():
             """Accuracy of reading the shop's real photos with the live model (answers = approved reports)."""
@@ -107,7 +120,7 @@ def main():
                 card.scroll_into_view_if_needed()
                 card.screenshot(path=str(OUT / f'19_benchmark_{dataset}.png'))
                 print('benchmark', dataset, 'saved', flush=True)
-        step(benchmark)
+        # step(benchmark): run on demand only (it spends the model quota)
 
         def stock():
             q.nav(mgr, 'Doanh thu & Kho')
