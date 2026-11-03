@@ -37,6 +37,7 @@ from src.agent.config import AgentSettings
 from src.agent.graph_tools import build_tool_registry
 from src.agent.response_policy import (
     conversational_reply,
+    everyday_reply,
     grounded_result_reply,
     missing_evidence_groups,
     normalized_query,
@@ -337,7 +338,8 @@ Không tiết lộ suy luận nội bộ.'''
             try:
                 if model is None:
                     model = self.settings.model_copy(update={'model': name}).build_model()
-                answer = model.bind_tools(allowed, **binding).invoke(messages)
+                # Small talk is answered without tools so the model cannot drag shop data into it.
+                answer = (model if allowed is None else model.bind_tools(allowed, **binding)).invoke(messages)
                 if not isinstance(answer, AIMessage):
                     raise TypeError('Expected AIMessage')
                 if model is not self.model:
@@ -355,6 +357,10 @@ Không tiết lộ suy luận nội bộ.'''
         if self._expired(actor) or state['model_count'] >= self.settings.max_model_calls:
             return {'response': self._response('Mình đã dừng vì tác vụ vượt giới hạn xử lý. Bạn có thể hỏi gọn hơn hoặc thử lại.', 'RUN_LIMIT')}
         allowed = [tool.as_tool() for tool in self.tools.values() if tool.allowed(actor.role)]
+        everyday = everyday_reply(state['query']) if not state['results'] else None
+        small_talk = bool(everyday) and everyday['tool_called'] != 'everyday_why'
+        if small_talk:
+            allowed = None
         evidence_query = state['query']
         if re.fullmatch(r'(?:con |the |vay )?(?:hom nay|ngay mai|ngay kia|hom qua)(?: thi sao)?[ .?]*', normalized_query(evidence_query)):
             prior = [message.content for message in state['messages'][:-1] if isinstance(message, HumanMessage)]
@@ -365,8 +371,12 @@ Không tiết lộ suy luận nội bộ.'''
         missing = missing_evidence_groups(evidence_query, state['results'])
         attempted = {entry['tool'] for entry in state['results']}
         unattempted = [group for group in missing if not group & attempted]
-        binding = {'tool_choice': 'required'} if unattempted else {}
+        binding = {'tool_choice': 'required'} if unattempted and allowed is not None else {}
         instructions = self._prompt(actor)
+        if small_talk:
+            instructions += ('\nTin nhắn này là chuyện đời thường, không phải câu hỏi về cửa hàng. Trả lời 1–2 câu, ấm áp, '
+                             'đúng cảm xúc và ngữ cảnh cuộc trò chuyện; nếu là việc ngoài khả năng thì nói nhẹ nhàng mình là trợ lý '
+                             'cửa hàng Mixue và gợi ý một việc mình làm được. Không đưa dữ liệu kho, SOP hay số liệu.')
         if missing:
             instructions += '\nCâu hỏi này còn thiếu nguồn: ' + '; '.join(' hoặc '.join(sorted(group)) for group in missing)
             instructions += '. Hãy tra đủ từng nhóm trước khi kết luận. Nếu công cụ thất bại, báo giới hạn cụ thể.'
@@ -380,6 +390,9 @@ Không tiết lộ suy luận nội bộ.'''
                 return {'response': grounded, 'messages': [AIMessage(content=grounded['text'])],
                         'model_count': state['model_count'] + 1,
                         'trace': [*state['trace'], {'node': 'grounded_response', 'reason': 'model_unavailable_after_tools'}]}
+            if small_talk:
+                return {'response': everyday, 'messages': [AIMessage(content=everyday['text'])],
+                        'model_count': state['model_count'] + 1}
             # Provider exceptions may contain authorization headers or user content.
             return {'response': self._response('Mô hình AI chưa phản hồi được. Bạn hãy thử lại sau một chút.', 'MODEL_ERROR'),
                     'model_count': state['model_count'] + 1}

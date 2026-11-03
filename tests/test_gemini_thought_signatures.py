@@ -102,3 +102,31 @@ def test_chat_switches_to_fallback_model_when_primary_fails(monkeypatch, tmp_pat
     monkeypatch.delenv('LLM_FALLBACK_MODELS', raising=False)
     assert graph._invoke_with_fallback([], {}, []).content == 'ok'
     assert graph.settings.model == 'gemini-3.8-flash'
+
+
+def test_small_talk_goes_to_model_without_tools(tmp_path):
+    from langchain_core.messages import AIMessage
+
+    from src.agent.mixue_agent import MixueOperationsAgent
+
+    class ChatModel:
+        def __init__(self):
+            self.bound, self.seen = False, []
+
+        def bind_tools(self, tools, **kwargs):
+            self.bound = True
+            return self
+
+        def invoke(self, messages):
+            self.seen.append(messages[0].content)
+            return AIMessage(content='Đói thì đi ăn gì đó trước đã nhé! Mình là trợ lý quán Mixue, không đặt đồ ăn giúp được.')
+
+    model = ChatModel()
+    service = MixueOperationsAgent(settings=AgentSettings(audit_path=str(tmp_path / 'audit.jsonl')), model=model,
+                                   checkpointer=InMemorySaver())
+    try:
+        result = service.process_query('đói quá', 'MANAGER', 'Test')
+        assert result['text'].startswith('Đói thì đi ăn')
+        assert not model.bound and 'chuyện đời thường' in model.seen[0]
+    finally:
+        service.close()
