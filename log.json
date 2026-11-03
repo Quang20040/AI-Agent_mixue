@@ -1,0 +1,188 @@
+{
+ "raw_s": 388.84,
+ "final_s": 250.933333,
+ "cuts": [
+  [
+   0.0,
+   40.63456606864929,
+   1
+  ],
+  [
+   40.63456606864929,
+   43.09400653839111,
+   10
+  ],
+  [
+   43.09400653839111,
+   159.57140159606934,
+   1
+  ],
+  [
+   159.57140159606934,
+   164.45981121063232,
+   6
+  ],
+  [
+   164.45981121063232,
+   179.73907232284546,
+   1
+  ],
+  [
+   179.73907232284546,
+   336.3209285736084,
+   6
+  ],
+  [
+   336.3209285736084,
+   352.1126880645752,
+   1
+  ],
+  [
+   352.1126880645752,
+   352.7516462802887,
+   6
+  ],
+  [
+   352.7516462802887,
+   368.12900853157043,
+   1
+  ],
+  [
+   368.12900853157043,
+   368.75143599510193,
+   6
+  ],
+  [
+   368.75143599510193,
+   388.84,
+   1
+  ]
+ ],
+ "log": [
+  [
+   15.2,
+   "ĐĂNG NHẬP",
+   "Phân quyền 3 vai trò · mật khẩu băm <b>PBKDF2</b> · sai 8 lần khóa 60 giây · giữ phiên khi tải lại trang"
+  ],
+  [
+   26.0,
+   "TRỤ CỘT ① · CHỐT CA TỪ ẢNH",
+   "Nhân viên chính thức chụp sổ giao ca viết tay và phiếu POS ngày 01/11 rồi tải lên"
+  ],
+  [
+   35.6,
+   "TRỤ CỘT ① · CHỐT CA TỪ ẢNH",
+   "Ảnh được tự xoay, đổi HEIC → JPEG, nén và lưu theo mã băm · <b>một ảnh có thể chứa cả 3 ca</b>"
+  ],
+  [
+   39.6,
+   "TRỤ CỘT ① · ĐỌC ẢNH",
+   "Gemini chỉ <b>chép nguyên văn từng ô</b> (“653”, “962 + 629”, “2014 (dư 20k)”) — không tự tính"
+  ],
+  [
+   43.1,
+   "KIỂM CHỨNG",
+   "Ngày ghi trên ảnh khác ngày đang chọn → hệ thống đề nghị <b>chuyển sang đúng ngày trên ảnh</b>"
+  ],
+  [
+   50.1,
+   "KIỂM CHỨNG",
+   "Mã tất định quy đổi nghìn đồng, tách biểu thức, bóc ghi chú dư/thiếu, <b>cộng ngang và đối chiếu POS</b>"
+  ],
+  [
+   58.0,
+   "BẰNG CHỨNG TỪNG Ô",
+   "Mỗi ô có chữ đọc từ ảnh, giá trị chuẩn hóa và <b>lý do cần kiểm tra</b>"
+  ],
+  [
+   67.7,
+   "Ô VÀNG = GỢI Ý",
+   "Ô đọc chắc điền thẳng · ô chưa chắc <b>điền gợi ý, tô vàng</b> để nhân viên đối chiếu ảnh"
+  ],
+  [
+   78.0,
+   "TRỤ CỘT ② · NGƯỜI DUYỆT",
+   "Bấm gửi: báo cáo vào <b>hàng đợi duyệt</b> — <b>chưa có số nào được ghi sổ</b>"
+  ],
+  [
+   85.4,
+   "PHÂN QUYỀN",
+   "Nhân viên không có quyền xem doanh thu — kể cả khi hỏi trợ lý"
+  ],
+  [
+   95.5,
+   "reply",
+   "Tài khoản nhân viên không có quyền xem doanh thu, nên mình không xem được giúp bạn. Bạn nhờ Quản lý hoặc Chủ quán xem giúp nhé. Mình vẫn tra được công thức, mã tem ly và cách sơ chế."
+  ],
+  [
+   111.2,
+   "TRỤ CỘT ② · HÀNG ĐỢI DUYỆT",
+   "Quản lý thấy <b>chuông việc chờ duyệt</b> ngay trên trang chủ"
+  ],
+  [
+   118.7,
+   "HUMAN-IN-THE-LOOP",
+   "Duyệt → đồ thị LangGraph dừng ở <b>interrupt()</b> và ghi sổ khi có quyết định · ở đây em <b>Từ chối</b> để demo không làm đổi sổ thật"
+  ],
+  [
+   129.8,
+   "HUMAN-IN-THE-LOOP",
+   "Yêu cầu chuyển <b>REJECTED</b>, nhân viên thấy trạng thái mới · sổ doanh thu giữ nguyên"
+  ],
+  [
+   138.8,
+   "MỘT SỐ MỖI NGÀY",
+   "Doanh thu chỉ lấy từ <b>báo cáo chốt ca đã duyệt</b> (hoặc POS) — hai nguồn không bao giờ cộng dồn"
+  ],
+  [
+   143.8,
+   "TRỤ CỘT ③ · TÁC TỬ LANGGRAPH",
+   "guard → model → authorize → tools → approval · 25 công cụ có phân quyền · mỗi câu trả lời kèm nguồn"
+  ],
+  [
+   166.0,
+   "reply",
+   "Doanh thu chốt ca đã duyệt của hai ngày:\n\nNgày 01/11/2026: 10.662.000 đ\nNgày 02/11/2026: 7.243.000 đ\n\nChênh lệch:\n\nDoanh thu ngày 2/11 giảm 3.419.000 đ so với ngày 1/11 (tương đương giảm khoảng 32,07%)."
+  ],
+  [
+   172.0,
+   "KHÔNG BỊA SỐ",
+   "Số lấy từ công cụ <b>get_daily_sales</b> trên dữ liệu đã duyệt · bấm “Nguồn dữ liệu” để xem bảng gốc"
+  ],
+  [
+   337.9,
+   "reply",
+   "Công thức pha chế: TS1 – Trà sữa trân châu (M)\n\nGiá bán: 25,000 đ\n\nĐường mật: 30 g\nTrân châu nguyên vị đã nấu: 80 g\nkeyboard_arrow_right\n\nNguồn dữ liệu"
+  ],
+  [
+   342.9,
+   "ĐỊNH TUYẾN TẤT ĐỊNH",
+   "Hỏi viết tắt “ct TS1” → công thức lấy thẳng từ bảng định lượng, không để mô hình tự nhớ"
+  ],
+  [
+   354.3,
+   "reply",
+   "Dự báo ngày 2026-11-05: 1,018 ly (ước tính).\n\nThời tiết trong giờ bán: ngày trước ước tính 28.6°C, 0.9 mm mưa; ngày cần bán dự báo 28.2°C, 3.3 mm mưa.\n\nNguồn khu vực: Hà Nội · điểm tham chiếu thành phố.\n\nĐã dùng doanh thu chốt ca đã duyệt ngày 28/10/2026, 01/11/2026, 02/11/2026, 03/11/2026. Máy POS "
+  ],
+  [
+   360.3,
+   "DỰ BÁO",
+   "Trung bình trượt (WAPE 22,41%) · hiệu chỉnh bằng doanh thu chốt ca đã duyệt và thời tiết Open-Meteo"
+  ],
+  [
+   370.3,
+   "reply",
+   "Đi kiếm gì ăn chút đi bạn ơi, nhớ giữ gìn sức khỏe nhé! Mình là trợ lý cửa hàng Mixue, nếu cần tra cứu công thức hay số liệu gì cứ bảo mình nha."
+  ],
+  [
+   374.3,
+   "TỰ NHIÊN, ĐÚNG NGỮ CẢNH",
+   "Chuyện ngoài lề được trả lời ngắn, không gọi công cụ, rồi gợi ý việc trợ lý làm được"
+  ],
+  [
+   377.3,
+   "",
+   ""
+  ]
+ ]
+}
