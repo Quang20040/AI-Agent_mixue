@@ -95,7 +95,7 @@ def open_site(page):
 
 def quick_login(page, key):
     open_site(page)
-    if not page.locator(f'.st-key-{key} button').count():
+    if not page.locator(f'.st-key-{key} button').first.is_visible():
         page.locator('[data-testid="stExpander"] summary').filter(has_text='Tài khoản dùng thử').first.click(timeout=60000)
         page.wait_for_timeout(600)
     t = time.time()
