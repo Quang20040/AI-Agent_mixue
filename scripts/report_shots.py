@@ -90,6 +90,25 @@ def main():
                 q.idle(mgr)
         step(ocr)
 
+        def benchmark():
+            """Accuracy of reading the shop's real photos with the live model (answers = approved reports)."""
+            q.nav(mgr, 'Chốt ca')
+            mgr.locator('[data-testid="stExpander"] summary').filter(has_text='Kiểm tra độ chính xác').first.click()
+            q.idle(mgr, 800)
+            for dataset, label in (('synthetic', '4 ảnh mẫu có đáp án'), ('real', 'Ảnh thật của quán có đáp án')):
+                mgr.locator('.st-key-ocr_benchmark_card label').filter(has_text=label).first.click()
+                q.idle(mgr, 800)
+                live = mgr.locator('.st-key-run_ocr_benchmark_live button').first
+                if live.is_enabled():
+                    live.click()
+                    q.idle(mgr, 1500, limit=600)
+                card = mgr.locator('.st-key-ocr_benchmark_card').first
+                (OUT / f'benchmark_{dataset}.txt').write_text(card.inner_text(), encoding='utf-8')
+                card.scroll_into_view_if_needed()
+                card.screenshot(path=str(OUT / f'19_benchmark_{dataset}.png'))
+                print('benchmark', dataset, 'saved', flush=True)
+        step(benchmark)
+
         def stock():
             q.nav(mgr, 'Doanh thu & Kho')
             tabs = mgr.get_by_role('tab')
