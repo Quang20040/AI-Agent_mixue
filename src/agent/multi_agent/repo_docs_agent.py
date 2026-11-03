@@ -19,6 +19,7 @@ import hashlib
 import logging
 from pathlib import Path
 import re
+import threading
 from typing import Any
 import unicodedata
 
@@ -175,15 +176,29 @@ class DocumentChunk:
         self.trigrams = _trigrams(f"{self.title_norm} {self.content_norm}")
 
 
+_SHARED_INDEX: dict[str, tuple] = {}
+_SHARED_LOCK = threading.Lock()
+
+
 class RepoDocsAgent:
-    """Agent chuyên gia lục tìm sâu trong toàn bộ repository, docs, dữ liệu và báo cáo."""
+    """Agent chuyên gia lục tìm sâu trong toàn bộ repository, docs, dữ liệu và báo cáo.
+
+    The index (~200 MB of chunks, BM25 and TF-IDF vectors) is built once per process and shared by every
+    instance: each browser session creates its own agent, and rebuilding it per session made a 512 MB
+    server run out of memory with two people logged in. Searching only reads the index.
+    """
 
     def __init__(self, repo_dir: Path | str | None = None):
         self.repo_dir = Path(repo_dir) if repo_dir else REPO_ROOT
-        self.chunks: list[DocumentChunk] = []
-        self.bm25: BM25Okapi | None = None
-        self.idf: dict[str, float] = {}
-        self._index_all_documents()
+        key = str(self.repo_dir.resolve())
+        with _SHARED_LOCK:
+            if key not in _SHARED_INDEX:
+                self.chunks: list[DocumentChunk] = []
+                self.bm25: BM25Okapi | None = None
+                self.idf: dict[str, float] = {}
+                self._index_all_documents()
+                _SHARED_INDEX[key] = (self.chunks, self.bm25, self.idf)
+            self.chunks, self.bm25, self.idf = _SHARED_INDEX[key]
 
     def _index_all_documents(self):
         """Quét và lập chỉ mục toàn bộ tài liệu văn bản, CSV và báo cáo trong repo."""

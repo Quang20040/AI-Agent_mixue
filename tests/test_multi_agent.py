@@ -149,3 +149,10 @@ def test_sop_cooking_guide_typo_chan_trau():
     finally:
         agent.close()
 
+
+
+def test_docs_index_is_built_once_and_shared():
+    """Each browser session creates an agent; rebuilding the ~200 MB index per session ran the server out of memory."""
+    from src.agent.multi_agent.repo_docs_agent import RepoDocsAgent
+    first, second = RepoDocsAgent(), RepoDocsAgent()
+    assert first.chunks is second.chunks and first.bm25 is second.bm25
