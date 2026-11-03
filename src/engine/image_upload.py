@@ -36,6 +36,18 @@ def _looks_heif(data: bytes) -> bool:
     return data[4:12] in {b'ftypheic', b'ftypheix', b'ftyphevc', b'ftypmif1', b'ftypmsf1', b'ftypheim', b'ftypheis'}
 
 
+def _decode_small(image: Image.Image, long_side: int) -> None:
+    """Ask the JPEG decoder for the smallest 1/2, 1/4 or 1/8 scale whose long side stays >= 1800 px."""
+    if image.format != 'JPEG':
+        return
+    width, height = image.size
+    floor = min(long_side, 1800)
+    for k in (8, 4, 2):
+        if max(width, height) // k >= floor:
+            image.draft('RGB', (width // k, height // k))
+            return
+
+
 def normalize_photo(data: bytes, name: str = 'ảnh') -> bytes:
     """Return an upright RGB JPEG no larger than STORE_LONG_SIDE, or raise UploadError with a friendly message."""
     if not data:
@@ -44,6 +56,10 @@ def normalize_photo(data: bytes, name: str = 'ảnh') -> bytes:
         raise UploadError(f"Tệp '{name}' lớn hơn {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.")
     try:
         with Image.open(io.BytesIO(data)) as image:
+            # Keep the peak small on the 512 MB host: a 12 MP phone JPEG decodes at 1/2 or 1/4 scale straight
+            # from the file (draft), and every other format is shrunk before the rotate/convert copies are made.
+            _decode_small(image, STORE_LONG_SIDE)
+            image.thumbnail((STORE_LONG_SIDE, STORE_LONG_SIDE), Image.LANCZOS, reducing_gap=3.0)
             image = ImageOps.exif_transpose(image)
             if image.mode not in ('RGB', 'L'):
                 background = Image.new('RGB', image.size, 'white')

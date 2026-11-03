@@ -17,7 +17,10 @@ def _image(fmt, size=(4000, 3000), mode='RGB', **kwargs):
 def test_any_format_becomes_small_jpeg(fmt, mode):
     out = normalize_photo(_image(fmt, mode=mode), f'photo.{fmt.lower()}')
     with Image.open(io.BytesIO(out)) as image:
-        assert image.format == 'JPEG' and max(image.size) == STORE_LONG_SIDE
+        # Big JPEGs are decoded at 1/2 scale (keeps memory low on the 512 MB host) but stay >= 1800 px.
+        assert image.format == 'JPEG' and 1800 <= max(image.size) <= STORE_LONG_SIDE
+        if fmt != 'JPEG':
+            assert max(image.size) == STORE_LONG_SIDE
 
 
 def test_file_name_does_not_matter_and_exif_rotation_is_applied():
@@ -39,3 +42,9 @@ def test_save_is_content_addressed_and_thumbnail_is_small(tmp_path):
     assert first == second and first.suffix == '.jpg'
     with Image.open(io.BytesIO(thumbnail(first))) as image:
         assert max(image.size) <= 720
+
+
+def test_big_jpeg_is_decoded_small_but_stays_readable():
+    out = normalize_photo(_image('JPEG', size=(4000, 3000)), 'big.jpg')
+    with Image.open(io.BytesIO(out)) as image:
+        assert image.size == (2000, 1500)

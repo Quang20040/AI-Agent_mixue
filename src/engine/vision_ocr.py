@@ -25,6 +25,7 @@ from typing import Any, Literal
 from dotenv import dotenv_values
 from langchain_core.messages import HumanMessage, SystemMessage
 from PIL import Image, ImageFilter, ImageOps, ImageStat
+from src.engine.image_upload import _decode_small
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from src.agent.config import ROOT, AgentSettings
@@ -968,6 +969,8 @@ def _prepare_model_image(data: bytes, mime: str) -> tuple[bytes, str]:
     """Upright, RGB, readable size (small phone photos are upscaled)."""
     try:
         with Image.open(io.BytesIO(data)) as image:
+            _decode_small(image, 2048)
+            image.thumbnail((2048, 2048), Image.LANCZOS, reducing_gap=3.0)
             image = ImageOps.exif_transpose(image).convert('RGB')
             longest = max(image.size)
             target = 2048 if longest > 2048 else (1600 if longest < 1600 else longest)

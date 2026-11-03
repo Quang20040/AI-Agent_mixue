@@ -34,6 +34,7 @@ RUN groupadd -r appgroup && useradd -r -g appgroup -d /app -s /sbin/nologin appu
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH=/opt/venv/bin:$PATH
 ENV PYTHONUNBUFFERED=1
+ENV MALLOC_ARENA_MAX=2
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV TZ=Asia/Ho_Chi_Minh
 
