@@ -1,0 +1,40 @@
+name: QA live site
+
+on:
+  push:
+    branches: [ "qa/**" ]
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Site to test
+        default: https://mixue-beverageops-demo.onrender.com
+
+permissions:
+  contents: write
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: Run QA
+        run: python scripts/qa_live.py "${{ github.event.inputs.url || 'https://mixue-beverageops-demo.onrender.com' }}" qa_live
+      - name: Publish to qa-results branch
+        if: always()
+        run: |
+          [ -d qa_live ] || exit 0
+          cd qa_live
+          git init -q -b qa-results
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          echo "Source commit: ${GITHUB_SHA}" > SOURCE.txt
+          git add -A && git commit -q -m "QA live results for ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" qa-results
