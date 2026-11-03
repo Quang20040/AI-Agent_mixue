@@ -7,7 +7,7 @@ on:
         description: Site to test
         default: https://mixue-beverageops-demo.onrender.com
       mode:
-        description: all | functional | shots | video
+        description: all | functional | shots | video | tts
         default: all
 
 permissions:
@@ -26,6 +26,18 @@ jobs:
         run: |
           pip install playwright
           python -m playwright install --with-deps chromium
+      - name: Narration audio
+        if: github.event.inputs.mode == 'tts'
+        run: |
+          pip install edge-tts
+          python scripts/tts/make_tts.py tts_out
+          cp scripts/tts/narration.json tts_out/
+          cd tts_out
+          git init -q -b tts-audio
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -q -m "Narration audio for ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" HEAD:tts-audio
       - name: Demo video
         if: github.event.inputs.mode == 'video'
         run: |
@@ -57,10 +69,10 @@ jobs:
         if: github.event.inputs.mode == 'shots'
         run: python scripts/report_shots.py "${{ github.event.inputs.url || 'https://mixue-beverageops-demo.onrender.com' }}" qa_live
       - name: Run QA
-        if: github.event.inputs.mode != 'shots' && github.event.inputs.mode != 'video'
+        if: github.event.inputs.mode != 'shots' && github.event.inputs.mode != 'video' && github.event.inputs.mode != 'tts'
         run: python scripts/qa_live.py "${{ github.event.inputs.url || 'https://mixue-beverageops-demo.onrender.com' }}" qa_live "${{ github.event.inputs.mode || 'all' }}"
       - name: Publish to qa-results branch
-        if: always() && github.event.inputs.mode != 'video'
+        if: always() && github.event.inputs.mode != 'video' && github.event.inputs.mode != 'tts'
         run: |
           [ -d qa_live ] || exit 0
           cd qa_live
