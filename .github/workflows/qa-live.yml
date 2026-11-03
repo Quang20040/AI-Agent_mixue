@@ -41,6 +41,18 @@ jobs:
             demo_out/log.json
             demo_out/error.png
           if-no-files-found: ignore
+      - name: Publish demo video to demo-video branch
+        if: always() && github.event.inputs.mode == 'video'
+        run: |
+          [ -d demo_out ] || exit 0
+          cd demo_out
+          rm -rf raw
+          git init -q -b demo-video
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          ls -la > FILES.txt
+          git add -A && git commit -q -m "Demo video for ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" HEAD:demo-video
       - name: Report screenshots
         if: github.event.inputs.mode == 'shots'
         run: python scripts/report_shots.py "${{ github.event.inputs.url || 'https://mixue-beverageops-demo.onrender.com' }}" qa_live
