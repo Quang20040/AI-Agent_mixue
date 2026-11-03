@@ -1,15 +1,13 @@
 name: QA live site
 
 on:
-  push:
-    branches: [ "qa/**" ]
   workflow_dispatch:
     inputs:
       url:
         description: Site to test
         default: https://mixue-beverageops-demo.onrender.com
       mode:
-        description: all | functional
+        description: all | functional | shots
         default: all
 
 permissions:
@@ -28,7 +26,11 @@ jobs:
         run: |
           pip install playwright
           python -m playwright install --with-deps chromium
+      - name: Report screenshots
+        if: github.event.inputs.mode == 'shots'
+        run: python scripts/report_shots.py "${{ github.event.inputs.url || 'https://mixue-beverageops-demo.onrender.com' }}" qa_live
       - name: Run QA
+        if: github.event.inputs.mode != 'shots'
         run: python scripts/qa_live.py "${{ github.event.inputs.url || 'https://mixue-beverageops-demo.onrender.com' }}" qa_live "${{ github.event.inputs.mode || 'all' }}"
       - name: Publish to qa-results branch
         if: always()
@@ -40,4 +42,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           echo "Source commit: ${GITHUB_SHA}" > SOURCE.txt
           git add -A && git commit -q -m "QA live results for ${GITHUB_SHA}"
-          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" qa-results
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" HEAD:${{ github.event.inputs.mode == 'shots' && 'report-shots' || 'qa-results' }}
