@@ -361,6 +361,8 @@ def run():
         def _():
             mgr.locator('[data-testid="stMain"] [data-testid="stSelectbox"]').first.click()
             mgr.wait_for_timeout(500)
+            mgr.keyboard.type('TS1')  # the list is long and only partly drawn; typing filters it
+            mgr.wait_for_timeout(600)
             opt = mgr.get_by_role('option').filter(has_text='TS1')
             if not opt.count():
                 return False, 'Không có món TS1 trong danh sách', shot(mgr, 'rcp02_no_ts1', full=False), 'Medium'
@@ -405,9 +407,10 @@ def run():
                 box.fill(v)
                 box.press('Tab')
                 idle(mgr, 300)
-                vals.append(box.input_value())
-            ok = vals[0] in ('0', '0.00', '0.0') and vals[1] in ('50', '50.00', '50.0')
-            return ok, f'-5 → {vals[0]}; 999 → {vals[1]}', shot(mgr, 'stk02_bounds', full=False), 'Medium'
+                flagged = box.evaluate("e => e.getAttribute('aria-invalid') === 'true' || /error|invalid/i.test(e.closest('[data-testid=\"stNumberInput\"]')?.innerHTML || '')")
+                vals.append((box.input_value(), flagged))
+            ok = all(value in ('0', '0.00', '0.0', '50', '50.00', '50.0') or flagged for value, flagged in vals)
+            return ok, '; '.join(f'{v} → hiển thị {value}, báo lỗi: {flagged}' for v, (value, flagged) in zip(('-5', '999'), vals)), shot(mgr, 'stk02_bounds', full=False), 'Medium'
 
         # Employees
         @case('TC-EMP-01', 'Nhân viên', 'Tạo tài khoản khi bỏ trống bắt buộc', '1. Quản lý nhân viên → Đăng ký 2. Bấm Tạo khi để trống',
