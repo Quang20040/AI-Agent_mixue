@@ -18,6 +18,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 BASE = sys.argv[1].rstrip('/') if len(sys.argv) > 1 else 'http://localhost:8501'
+MODE = sys.argv[3] if len(sys.argv) > 3 else 'all'
 OUT = Path(sys.argv[2] if len(sys.argv) > 2 else 'qa_live')
 OUT.mkdir(parents=True, exist_ok=True)
 ROOT = Path(__file__).resolve().parents[1]
@@ -299,6 +300,8 @@ def run():
             empty = mgr.evaluate("(() => {const e=document.querySelector('.mx-command-empty'); return !!e && !e.hidden})()")
             ev = shot(mgr, 'search02_empty', full=False)
             mgr.keyboard.press('Escape')
+            mgr.evaluate("(() => {const d=document.querySelector('dialog.mx-command'); if (d && d.open) d.close()})()")
+            mgr.wait_for_timeout(300)
             return empty, 'Hiện "Không tìm thấy"' if empty else 'Không có trạng thái rỗng', ev, 'Low'
 
         # Forecast
@@ -483,8 +486,12 @@ def run():
         def _():
             if r['reply'].startswith('(lỗi khi gửi'):
                 raise RuntimeError('Không gửi được tin nhắn: ' + r['reply'])
-            leaked = 'đ' in r['reply'] and any(ch.isdigit() for ch in r['reply']) and 'không' not in r['reply'].lower()
-            return not leaked, r['reply'][:300], shot(staff, 'rbac02_staff_chat'), 'Critical'
+            reply = r['reply'].lower()
+            leaked = 'đ' in r['reply'] and any(ch.isdigit() for ch in r['reply']) and 'không' not in reply
+            explains = any(w in reply for w in ('quyền', 'không được', 'chỉ quản lý', 'không thể'))
+            if leaked:
+                return False, r['reply'][:300], shot(staff, 'rbac02_staff_chat'), 'Critical'
+            return explains and r['latency_s'] < 30, f"{r['latency_s']}s: {r['reply'][:300]}", shot(staff, 'rbac02_staff_chat'), 'Medium'
 
         @case('TC-AUTH-06', 'Đăng nhập', 'Đăng xuất', '1. Bấm Đăng xuất', 'Về màn hình đăng nhập; F5 không vào lại')
         def _():
@@ -504,6 +511,9 @@ def run():
             return out and still_out, f'Về đăng nhập: {out}; sau F5 vẫn ở đăng nhập: {still_out}', shot(staff, 'auth06_logout', full=False), 'High'
         staff.context.close()
 
+        if MODE == 'functional':
+            browser.close()
+            return
         # ---------------- Chatbot deep test (manager)
         bot = new_page(browser, label='chat')
         quick_login(bot, 'quick_login_manager')
@@ -542,11 +552,13 @@ def run():
 
         @case('TC-CHAT-EMPTY', 'Chatbot', 'Gửi tin nhắn rỗng', '1. Để trống ô chat 2. Enter', 'Không gửi, không tạo tin nhắn rỗng')
         def _():
+            idle(bot, 3000)
             before = chat_messages(bot).count()
             box = bot.locator('[data-testid="stChatInputTextArea"]').first
             box.fill('   ')
             box.press('Enter')
-            idle(bot)
+            bot.wait_for_timeout(1500)
+            idle(bot, 2000)
             return chat_messages(bot).count() == before, f'Số tin trước/sau: {before}/{chat_messages(bot).count()}', '', 'Low'
 
         @case('TC-CHAT-HIST', 'Chatbot', 'Lịch sử trò chuyện còn sau khi tải lại', '1. F5 trang Trợ lý', 'Thấy lại các tin nhắn vừa gửi')

@@ -8,6 +8,9 @@ on:
       url:
         description: Site to test
         default: https://mixue-beverageops-demo.onrender.com
+      mode:
+        description: all | functional
+        default: all
 
 permissions:
   contents: write
@@ -26,7 +29,7 @@ jobs:
           pip install playwright
           python -m playwright install --with-deps chromium
       - name: Run QA
-        run: python scripts/qa_live.py "${{ github.event.inputs.url || 'https://mixue-beverageops-demo.onrender.com' }}" qa_live
+        run: python scripts/qa_live.py "${{ github.event.inputs.url || 'https://mixue-beverageops-demo.onrender.com' }}" qa_live "${{ github.event.inputs.mode || 'all' }}"
       - name: Publish to qa-results branch
         if: always()
         run: |
