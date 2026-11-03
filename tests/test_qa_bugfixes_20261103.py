@@ -32,7 +32,7 @@ def test_staff_asking_revenue_gets_a_permission_answer_without_the_model(tmp_pat
     try:
         result = service.process_query('doanh thu hôm qua bao nhiêu', 'STAFF_OFFICIAL', 'Thảo')
         assert result['raw_result']['status'] == 'FORBIDDEN'
-        assert 'không xem được doanh thu' in result['text']
+        assert 'không có quyền xem doanh thu' in result['text'] and 'STAFF' not in result['text']
         assert model.calls == 0
     finally:
         service.close()

@@ -395,7 +395,7 @@ Không tiết lộ suy luận nội bộ.'''
         if forbidden:
             topics = list(dict.fromkeys(_topic_of(group) for group in forbidden))
             if len(forbidden) == len(missing) and not state['results']:
-                text = (f"Tài khoản của bạn ({actor.role}) không xem được {', '.join(topics)}. "
+                text = (f"Tài khoản nhân viên không có quyền xem {', '.join(topics)}, nên mình không xem được giúp bạn. "
                         'Bạn nhờ Quản lý hoặc Chủ quán xem giúp nhé. Mình vẫn tra được công thức, mã tem ly và cách sơ chế.')
                 return {'response': self._response(text, 'FORBIDDEN', tool_called='rbac_restriction'),
                         'messages': [AIMessage(content=text)], 'model_count': state['model_count'] + 1}
