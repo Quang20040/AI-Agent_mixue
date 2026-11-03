@@ -7,7 +7,7 @@ on:
         description: Site to test
         default: https://mixue-beverageops-demo.onrender.com
       mode:
-        description: all | functional | shots
+        description: all | functional | shots | video
         default: all
 
 permissions:
@@ -26,14 +26,29 @@ jobs:
         run: |
           pip install playwright
           python -m playwright install --with-deps chromium
+      - name: Demo video
+        if: github.event.inputs.mode == 'video'
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null
+          python scripts/demo_video.py "${{ github.event.inputs.url || 'https://mixue-beverageops-demo.onrender.com' }}" demo_out
+      - name: Upload demo video
+        if: always() && github.event.inputs.mode == 'video'
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-video
+          path: |
+            demo_out/*.mp4
+            demo_out/log.json
+            demo_out/error.png
+          if-no-files-found: ignore
       - name: Report screenshots
         if: github.event.inputs.mode == 'shots'
         run: python scripts/report_shots.py "${{ github.event.inputs.url || 'https://mixue-beverageops-demo.onrender.com' }}" qa_live
       - name: Run QA
-        if: github.event.inputs.mode != 'shots'
+        if: github.event.inputs.mode != 'shots' && github.event.inputs.mode != 'video'
         run: python scripts/qa_live.py "${{ github.event.inputs.url || 'https://mixue-beverageops-demo.onrender.com' }}" qa_live "${{ github.event.inputs.mode || 'all' }}"
       - name: Publish to qa-results branch
-        if: always()
+        if: always() && github.event.inputs.mode != 'video'
         run: |
           [ -d qa_live ] || exit 0
           cd qa_live
