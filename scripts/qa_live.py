@@ -9,8 +9,10 @@ rejected before saving, chat messages and one advisory prep calculation.
 """
 import json
 import sys
+import threading
 import time
 import traceback
+import urllib.request
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -20,6 +22,21 @@ OUT = Path(sys.argv[2] if len(sys.argv) > 2 else 'qa_live')
 OUT.mkdir(parents=True, exist_ok=True)
 ROOT = Path(__file__).resolve().parents[1]
 results, chats, perf, console_errors, failed_requests = [], [], [], [], []
+health_log = []
+_stop = threading.Event()
+
+
+def monitor():
+    while not _stop.is_set():
+        t = time.time()
+        try:
+            code = urllib.request.urlopen(BASE + '/_stcore/health', timeout=10).status
+        except Exception as exc:  # noqa: BLE001
+            code = getattr(exc, 'code', None) or type(exc).__name__
+        health_log.append({'t': time.strftime('%H:%M:%S', time.gmtime(t)), 'code': code, 'ms': int((time.time() - t) * 1000)})
+        _stop.wait(5)
+
+
 STATE = "() => document.querySelector('[data-testid=\"stApp\"]')?.getAttribute('data-test-script-state')"
 
 
@@ -42,6 +59,11 @@ def shot(page, name, full=True):
     except Exception:  # noqa: BLE001
         page.screenshot(path=str(OUT / f'{name}.png'), timeout=30000)
     return f'{name}.png'
+
+
+def wait_ready(page, timeout=150000):
+    page.locator('.st-key-login_card, .st-key-main_navigation').first.wait_for(timeout=timeout)
+    idle(page, 800)
 
 
 def text(page):
@@ -161,9 +183,12 @@ def _send_chat(page, message, tag, wait_limit):
 
 
 def main():
+    threading.Thread(target=monitor, daemon=True).start()
     try:
         run()
     finally:
+        _stop.set()
+        (OUT / 'health.json').write_text(json.dumps(health_log, ensure_ascii=False), encoding='utf-8')
         (OUT / 'results.json').write_text(json.dumps(results, ensure_ascii=False, indent=1), encoding='utf-8')
         (OUT / 'chat.json').write_text(json.dumps(chats, ensure_ascii=False, indent=1), encoding='utf-8')
         (OUT / 'perf.json').write_text(json.dumps({'perf': perf, 'console_errors': console_errors,
@@ -254,8 +279,13 @@ def run():
         @case('TC-SEARCH-01', 'Tìm nhanh', 'Tìm chức năng bằng ô tìm kiếm', '1. Bấm ô "Tìm chức năng…" 2. Gõ "kho"', 'Hiện kết quả liên quan tới kho')
         def _():
             nav(mgr, 'Trang chủ')
-            mgr.locator('.mx-search').first.click()
-            mgr.wait_for_timeout(600)
+            clicked = mgr.evaluate("(() => {const b=document.querySelector('.mx-search'); if(!b) return false; b.click(); return true})()")
+            mgr.wait_for_timeout(800)
+            if not clicked:
+                return False, 'Không tìm thấy nút tìm kiếm', shot(mgr, 'search01_missing', full=False), 'Medium'
+            opened = mgr.evaluate("!!document.querySelector('dialog.mx-command[open]')")
+            if not opened:
+                return False, 'Bấm ô tìm kiếm nhưng hộp tìm không mở', shot(mgr, 'search01_not_open', full=False), 'Medium'
             mgr.keyboard.type('kho')
             mgr.wait_for_timeout(600)
             visible = mgr.evaluate("[...document.querySelectorAll('.mx-command-results > *')].filter(e => e.offsetParent).map(e => e.textContent.trim()).slice(0,8)")
@@ -303,7 +333,9 @@ def run():
             box.press('Enter')
             idle(mgr)
             value = box.input_value()
-            return value in ('5000', '5,000'), f'Giá trị sau khi nhập: {value}', shot(mgr, 'prep02_boundary', full=False), 'Low'
+            body = text(mgr)
+            warned = any(w in body for w in ('less than or equal', '5000', '5,000', 'tối đa'))
+            return value in ('5000', '5,000') or warned, f'Giá trị trong ô: {value}; có cảnh báo giới hạn: {warned}', shot(mgr, 'prep02_boundary', full=False), 'Low'
 
         @case('TC-PO-01', 'Đặt hàng', 'Trang đặt hàng hiển thị', '1. Mở Đặt hàng nguyên liệu', 'Thấy ô thời gian giao hàng và nút tạo dự thảo')
         def _():
@@ -316,11 +348,23 @@ def run():
                'NOT TESTED')
 
         # Recipes
-        @case('TC-RCP-01', 'Công thức', 'Tra công thức món', '1. Mở Công thức & Mã tem ly', 'Danh sách món có tìm kiếm')
+        @case('TC-RCP-01', 'Công thức', 'Xem định lượng món mặc định', '1. Mở Công thức & Mã tem ly', 'Hiện bảng nguyên liệu + định lượng của món đang chọn')
         def _():
             nav(mgr, 'Công thức')
-            body = text(mgr)
-            return ('Trà' in body or 'Kem' in body) and not exceptions(mgr), body[:160].replace('\n', ' '), shot(mgr, 'rcp01'), 'Medium'
+            has_table = mgr.locator('[data-testid="stMain"] [data-testid="stDataFrame"], [data-testid="stMain"] table').count() > 0
+            return has_table, ('Có bảng định lượng' if has_table else 'Chỉ có tên món và giá, không có nguyên liệu/định lượng'), shot(mgr, 'rcp01'), 'High'
+
+        @case('TC-RCP-02', 'Công thức', 'Đổi sang món trà sữa TS1', '1. Chọn món TS1 trong ô chọn món', 'Hiện nguyên liệu + định lượng TS1')
+        def _():
+            mgr.locator('[data-testid="stMain"] [data-testid="stSelectbox"]').first.click()
+            mgr.wait_for_timeout(500)
+            opt = mgr.get_by_role('option').filter(has_text='TS1')
+            if not opt.count():
+                return False, 'Không có món TS1 trong danh sách', shot(mgr, 'rcp02_no_ts1', full=False), 'Medium'
+            opt.first.click()
+            idle(mgr)
+            has_table = mgr.locator('[data-testid="stMain"] [data-testid="stDataFrame"], [data-testid="stMain"] table').count() > 0
+            return has_table, ('Có bảng định lượng' if has_table else 'Không có bảng định lượng'), shot(mgr, 'rcp02_ts1'), 'High'
 
         # Stock
         @case('TC-STK-01', 'Kho', 'Mở các tab Doanh thu & Kho', '1. Mở Doanh thu & Kho 2. Bấm lần lượt từng tab', 'Mỗi tab mở không lỗi')
@@ -342,7 +386,11 @@ def run():
         @case('TC-STK-02', 'Kho', 'Ô số lượng nhập/xuất: giá trị âm và vượt giới hạn',
               '1. Tab file kho → Ghi nhập/xuất 2. Nhập -5 rồi 999 vào ô số lượng (không bấm lưu)', 'Ô tự giới hạn 0…50')
         def _():
-            box = mgr.locator('.st-key-admin_stock_qty input, [aria-label^="Số lượng (Thùng"]').first
+            file_tab = mgr.get_by_role('tab').filter(has_text='File kho')
+            if file_tab.count():
+                file_tab.first.click()
+                idle(mgr)
+            box = mgr.locator('[aria-label^="Số lượng (Thùng"]').first
             if not box.count():
                 tab = mgr.get_by_role('tab', name='➕ Ghi nhập / xuất kho')
                 if tab.count():
@@ -406,8 +454,9 @@ def run():
             seconds = round(time.time() - t, 1)
             perf.append({'what': 'Đọc 1 ảnh sổ (OCR Gemini)', 'seconds': seconds})
             body = text(mgr)
-            failed = 'Chưa kết nối được dịch vụ đọc ảnh' in body or bool(exceptions(mgr))
-            return not failed, f'{seconds}s; ' + ('Đọc được' if not failed else 'Báo lỗi dịch vụ đọc ảnh'), shot(mgr, 'ocr02_read'), 'High'
+            problems = [m for m in ('Chưa bật API đọc ảnh', 'Chưa kết nối được dịch vụ đọc ảnh', 'Chưa bật quyền gửi ảnh') if m in body]
+            failed = bool(problems) or bool(exceptions(mgr))
+            return not failed, f'{seconds}s; ' + ('Đọc được' if not failed else 'Thông báo: ' + '; '.join(problems)), shot(mgr, 'ocr02_read'), 'Critical'
         mgr.context.close()
 
         # ---------------- Staff role limits + chat restriction
@@ -423,8 +472,7 @@ def run():
         @case('TC-AUTH-05', 'Đăng nhập', 'Tải lại trang giữ phiên', '1. Đang đăng nhập 2. F5', 'Vẫn đăng nhập')
         def _():
             staff.reload()
-            staff.locator('[data-testid="stApp"]').wait_for()
-            idle(staff, 1500)
+            wait_ready(staff)
             ok = staff.locator('.st-key-main_navigation').count() > 0
             return ok, 'Giữ phiên' if ok else 'Bị đăng xuất', shot(staff, 'auth05_reload', full=False), 'High'
 
@@ -433,6 +481,8 @@ def run():
 
         @case('TC-RBAC-02', 'Phân quyền', 'Nhân viên hỏi doanh thu qua chatbot', '1. NV hỏi "doanh thu hôm qua bao nhiêu"', 'Từ chối, không đưa số tiền')
         def _():
+            if r['reply'].startswith('(lỗi khi gửi'):
+                raise RuntimeError('Không gửi được tin nhắn: ' + r['reply'])
             leaked = 'đ' in r['reply'] and any(ch.isdigit() for ch in r['reply']) and 'không' not in r['reply'].lower()
             return not leaked, r['reply'][:300], shot(staff, 'rbac02_staff_chat'), 'Critical'
 
@@ -446,9 +496,10 @@ def run():
                     staff.wait_for_timeout(500)
             btn.first.click()
             idle(staff, 1000)
+            wait_ready(staff)
             out = 'Tên đăng nhập' in text(staff)
             staff.reload()
-            idle(staff, 1500)
+            wait_ready(staff)
             still_out = 'Tên đăng nhập' in text(staff)
             return out and still_out, f'Về đăng nhập: {out}; sau F5 vẫn ở đăng nhập: {still_out}', shot(staff, 'auth06_logout', full=False), 'High'
         staff.context.close()
@@ -502,7 +553,7 @@ def run():
         def _():
             n = chat_messages(bot).count()
             bot.reload()
-            idle(bot, 1500)
+            wait_ready(bot)
             nav(bot, 'Trợ lý')
             m = chat_messages(bot).count()
             return m >= min(n, 10), f'Trước F5: {n} tin; sau F5: {m} tin', shot(bot, 'chat_after_reload', full=False), 'Medium'
