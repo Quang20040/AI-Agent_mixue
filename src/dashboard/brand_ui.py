@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from html import escape
 from pathlib import Path
-from src.runtime_settings import demo_enabled
+from src.runtime_settings import demo_enabled, setting
 from src.dashboard.sales_view import business_today, daily_window
 
 import streamlit as st
@@ -196,8 +196,17 @@ NAV_SVG = {
 }
 
 
+STAFF_NAV_LABELS = {'Báo cáo & kho': 'Phiếu xin nhập / xuất kho'}
+
+
 def nav_label(page):
-    """Plain text label; the line icon is drawn by CSS (see nav_group_css) like in the design."""
+    """Plain text label; the line icon is drawn by CSS (see nav_group_css) like in the design.
+
+    Staff open the stock page only to file stock slips, so it is not called "Doanh thu" for them."""
+    from src.auth import is_admin_role
+    role = st.session_state.get('user_role')
+    if page in STAFF_NAV_LABELS and role and not is_admin_role(role):
+        return STAFF_NAV_LABELS[page]
     return NAV_LABELS.get(page, page)
 
 
@@ -255,7 +264,7 @@ def render_topbar(user_name, notifications=0, page='Trang chủ'):
     pages = get_allowed_pages(st.session_state.get('user_role', 'STAFF'))
     commands = ''.join(f'<button type="button" data-command-page="{escape(nav_label(page))}">{escape(nav_label(page))}<span>↗</span></button>' for page in pages)
     from src.auth import CHAT_PAGE, OCR_PAGE
-    title = '' if page in (CHAT_PAGE, OCR_PAGE) else NAV_LABELS.get(page, page).split(' (')[0]
+    title = '' if page in (CHAT_PAGE, OCR_PAGE) else nav_label(page).split(' (')[0]
     st.markdown(f'''<div class="mx-topbar px-topbar">
     <div class="px-top-title"><small>{WEEKDAYS_VI[now.weekday()]}, {now:%d/%m/%Y} · {shift_of_day(now.hour)}</small>{f'<h1>{escape(title)}</h1>' if title else ''}</div>
     <button class="mx-search" type="button" data-command-open>{ui_icon('search')}<span>Tìm chức năng, món, mã tem…</span><kbd>Ctrl K</kbd></button>
@@ -266,6 +275,8 @@ def render_topbar(user_name, notifications=0, page='Trang chủ'):
 
 def render_page_hero(page, user_name=''):
     title, sub, quote = PAGE_HEROES.get(page, (page, '', ''))
+    if page in STAFF_NAV_LABELS and nav_label(page) == STAFF_NAV_LABELS[page]:
+        title, sub = STAFF_NAV_LABELS[page], 'Gửi phiếu xin xuất / nhập kho để Quản lý duyệt'
     first = ' '.join((user_name or '').split()[-2:]) if '{name}' in title else ''
     title = title.format(name=first or 'bạn')
     bubble = escape(quote).replace('\n', '<br>')
@@ -555,10 +566,12 @@ def render_home_kpis(sales, menu):
 def render_shortcuts(user_role):
     from src.auth import get_allowed_pages
     pages = get_allowed_pages(user_role)
-    features = [('Báo cáo & kho', 'box', 'Doanh thu, file kho'), ('Dự báo', 'trend', 'Số ly bán ngày mai'),
+    from src.auth import is_admin_role
+    stock_desc = 'Doanh thu, file kho' if is_admin_role(user_role) else 'Xin xuất / nhập kho'
+    features = [('Báo cáo & kho', 'box', stock_desc), ('Dự báo', 'trend', 'Số ly bán ngày mai'),
                 ('Sơ chế', 'prep', 'Số mẻ topping cần nấu'), ('Nhập hàng', 'store', 'Phiếu đặt nguyên liệu'),
                 ('Tem & công thức', 'recipe', 'Công thức, mã tem ly')]
-    cards = ''.join(f'<button type="button" class="mx-shortcut tone-{i}" data-command-page="{escape(nav_label(page))}"><span class="mx-shortcut-icon">{ui_icon(icon)}</span><span class="mx-shortcut-arrow">↗</span><b>{escape(NAV_LABELS.get(page, page))}</b><small>{desc}</small></button>'
+    cards = ''.join(f'<button type="button" class="mx-shortcut tone-{i}" data-command-page="{escape(nav_label(page))}"><span class="mx-shortcut-icon">{ui_icon(icon)}</span><span class="mx-shortcut-arrow">↗</span><b>{escape(nav_label(page))}</b><small>{desc}</small></button>'
                     for i, (page, icon, desc) in enumerate(features) if page in pages)
     if cards:
         st.markdown(f'<section class="mx-card mx-shortcuts px-card"><div class="px-section-head"><h2>Truy cập nhanh</h2><span>Truy cập nhanh các chức năng quản lý cửa hàng</span></div><div class="mx-shortcut-grid">{cards}</div></section>', unsafe_allow_html=True)
@@ -844,44 +857,37 @@ def render_login_screen():
         if not demo_enabled():
             st.caption('Dùng tài khoản do quản lý cấp. Liên hệ quản lý nếu bạn chưa có tài khoản hoặc cần đặt lại mật khẩu.')
             return
+        accounts = [  # (key in DEMO_QUICK_LOGIN, button key, label, username, passwords to try)
+            ("owner", "quick_login_owner", "👑 Chủ Quán (Admin)", "chucuahang", ("123",)),
+            ("manager", "quick_login_manager", "🛡️ Quản Lý (Admin)", "quanly", ("123",)),
+            ("staff", "quick_login_staff", "☕ NV Chính Thức", "nhanvien", ("123", "123456")),
+            ("probation", "quick_login_staff_probation", "🌱 NV Thử Việc (Mới)", "nhanvien_moi", ("123456",)),
+        ]
+        # DEMO_QUICK_LOGIN picks which one-click logins a public demo shows (e.g. "staff,probation" hides the
+        # admin accounts). Passwords are never printed on the page: anyone with the link could read them.
+        allowed = {item.strip().lower() for item in setting("DEMO_QUICK_LOGIN", "owner,manager,staff,probation").split(",")}
+        shown = [acc for acc in accounts if acc[0] in allowed]
+        if not shown:
+            return
         with st.expander("🔑 Tài khoản dùng thử & đăng nhập nhanh", expanded=False):
             st.caption("Bấm chọn tài khoản bên dưới để đăng nhập trực tiếp thử nghiệm theo từng phân quyền:")
-            cq1, cq2 = st.columns(2, gap="small")
-            with cq1:
-                if st.button("👑 Chủ Quán (Admin)\nPass: 123", key="quick_login_owner", use_container_width=True):
-                    u = verify_user("chucuahang", "123")
-                    if u:
-                        _apply_login_session(u)
-                        st.rerun()
-            with cq2:
-                if st.button("🛡️ Quản Lý (Admin)\nPass: 123", key="quick_login_manager", use_container_width=True):
-                    u = verify_user("quanly", "123")
-                    if u:
-                        _apply_login_session(u)
-                        st.rerun()
-
-            cq3, cq4 = st.columns(2, gap="small")
-            with cq3:
-                if st.button("☕ NV Chính Thức\nPass: 123", key="quick_login_staff", use_container_width=True):
-                    u = verify_user("nhanvien", "123")
-                    if not u:
-                        u = verify_user("nhanvien", "123456")
-                    if u:
-                        _apply_login_session(u)
-                        st.rerun()
-            with cq4:
-                if st.button("🌱 NV Thử Việc (Mới)\nPass: 123456", key="quick_login_staff_probation", use_container_width=True):
-                    u = verify_user("nhanvien_moi", "123456")
-                    if u:
-                        _apply_login_session(u)
-                        st.rerun()
+            for row_start in range(0, len(shown), 2):
+                for col, (_, key, label, username, passwords) in zip(st.columns(2, gap="small"), shown[row_start:row_start + 2]):
+                    with col:
+                        if st.button(label, key=key, use_container_width=True):
+                            u = next((found for pw in passwords if (found := verify_user(username, pw))), None)
+                            if u:
+                                _apply_login_session(u)
+                                st.rerun()
+                            else:
+                                st.error("Tài khoản dùng thử này đã đổi mật khẩu; hãy đăng nhập bằng form phía trên.")
 
             st.markdown("""
             <div style="font-size: 12px; color: #475569; line-height: 1.6; margin-top: 10px; background: #fff5f5; padding: 10px; border-radius: 8px; border: 1px solid #fed7d7;">
                 <strong>📋 Chi tiết Phân quyền Hệ thống &amp; Quy định Mật khẩu:</strong><br>
-                • <strong>Chủ quán &amp; Quản lý:</strong> Quyền Admin toàn quyền duyệt báo cáo, dự báo, đối soát kho, ký đơn PO và <b>Quản lý nhân viên</b>.<br>
-                • <strong>Nhân viên mới/thử việc:</strong> Mật khẩu mặc định là <code>123456</code>. Khi đăng nhập lần đầu <b>bắt buộc đổi sang mã PIN 6 số</b> trước khi vào xem công thức BOM và Chat Tuyết Vương AI.<br>
-                • <strong>Reset mật khẩu:</strong> Quản lý có quyền reset mật khẩu nhân viên về lại <code>123456</code> bất cứ lúc nào.
+                • <strong>Chủ quán &amp; Quản lý:</strong> Quyền Admin duyệt báo cáo chốt ca, đối soát kho, ký đơn đặt hàng và <b>Quản lý nhân viên</b>.<br>
+                • <strong>Nhân viên mới/thử việc:</strong> Dùng mật khẩu tạm do quản lý cấp. Khi đăng nhập lần đầu <b>bắt buộc đổi sang mã PIN 6 số</b> trước khi vào xem công thức BOM và Chat Tuyết Vương AI.<br>
+                • <strong>Reset mật khẩu:</strong> Quản lý có quyền đặt lại mật khẩu tạm cho nhân viên bất cứ lúc nào.
             </div>
             """, unsafe_allow_html=True)
 
@@ -1018,6 +1024,9 @@ def _render_chat_conversation(agent, role, user_name, history_height=250, key_su
     input_key = f"operations_chat{key_suffix}" if key_suffix else "operations_chat"
     prompt = st.chat_input('Hỏi Tuyết Vương…', key=input_key)
     prompt = st.session_state.pop('chat_input_val', None) or prompt
+    # A message of only spaces or line breaks is not a question: nothing is sent or stored.
+    prompt = prompt.strip() if isinstance(prompt, str) else prompt
+    prompt = prompt or None
 
     avatar_path = HERE / 'assets' / 'snow-king-reference.png'
     assistant_avatar = str(avatar_path) if avatar_path.is_file() else None

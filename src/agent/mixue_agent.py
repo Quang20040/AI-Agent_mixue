@@ -719,16 +719,14 @@ Bạn được trang bị 8 công cụ vận hành:
         ]
         if any(kw in q or kw in q_raw for kw in injection_keywords):
             msg = (
-                "🛡️ **Cảnh Báo An Toàn Hệ Thống (Prompt Injection Guardrail - Ngày 11):**\n\n"
-                "Phát hiện nỗ lực can thiệp hoặc ghi đè chỉ dẫn hệ thống (Jailbreak / Prompt Injection). "
-                "Theo nguyên tắc **Defense in Depth** của kiến trúc AI Thực Chiến, Tuyết Vương AI từ chối thực thi yêu cầu này.\n\n"
-                "Tôi chỉ thực thi các tác vụ hợp lệ liên quan đến điều phối quầy bar và sổ kho Mixue 39 Tôn Quang Phiệt."
+                "🛡️ **Cảnh Báo An Toàn:** Mình không làm theo yêu cầu bỏ qua quy tắc hay tiết lộ hướng dẫn nội bộ. "
+                "Mình hỗ trợ việc ở quán Mixue 39 Tôn Quang Phiệt: công thức, mã tem ly, chốt ca, kho và doanh thu (theo quyền tài khoản)."
             )
             return {
                 "text": msg,
                 "tool_called": "guardrail_prompt_injection",
                 "raw_result": {"status": "GUARDRAIL_TRIGGERED", "category": "PROMPT_INJECTION_DEFENSE"},
-                "evidence_refs": ["policy:Store_2132_Prompt_Safety", "framework:AI_Thuc_Chien_Day_11"]
+                "evidence_refs": []
             }
 
         # 2. Chặn nỗ lực trích xuất Mật khẩu / Hash / Bí mật hệ thống (PII & Secret Exfiltration)
@@ -739,16 +737,14 @@ Bạn được trang bị 8 công cụ vận hành:
         if any(kw in q for kw in secret_keywords) or re.search(
                 r'\b(?:in|cho xem|hien thi|doc|lay|tiet lo)\b.*\b(?:api key|hash mat khau)\b', q):
             msg = (
-                "🛡️ **Cảnh Báo Bảo Mật Thông Tin (Credential & Secret Protection):**\n\n"
-                "Mật khẩu tài khoản, mã băm (password hash) và các khóa bảo mật hệ thống được bảo vệ nghiêm ngặt. "
-                "Tuyết Vương AI không bao giờ trích xuất hoặc cung cấp thông tin xác thực này trong hội thoại.\n\n"
-                "Nếu cần cấp lại mật khẩu cho nhân viên, Quản lý vui lòng thao tác trực tiếp tại tab **'👥 Quản lý nhân viên'**."
+                "🛡️ **Bảo Mật Thông Tin:** Mật khẩu tài khoản, mã băm và khóa hệ thống không bao giờ được đưa ra trong chat. "
+                "Cần cấp lại mật khẩu cho nhân viên thì Quản lý vào mục **Quản lý nhân viên**."
             )
             return {
                 "text": msg,
                 "tool_called": "guardrail_credential_protection",
                 "raw_result": {"status": "GUARDRAIL_TRIGGERED", "category": "CREDENTIAL_EXFILTRATION_DEFENSE"},
-                "evidence_refs": ["policy:Store_2132_Auth_Security", "framework:AI_Thuc_Chien_Day_11"]
+                "evidence_refs": []
             }
 
         # 3. Các chủ đề về tiền lương, thưởng, chế độ tài chính cá nhân (HR Privacy)
@@ -762,18 +758,14 @@ Bạn được trang bị 8 công cụ vận hành:
         requests_private_hr = re.search(r'\b(xem|tra cuu|bao nhieu|tinh|muc|bang|cua|cung cap|lay|ung|tam ung|co thuong|thuong them)\b', salary_query)
         if requests_private_hr and any(re.search(r"\b" + re.escape(kw) + r"\b", salary_query) for kw in salary_keywords):
             msg = (
-                f"🛡️ **Thông Báo Bảo Mật & Ranh Giới Nghiệp Vụ (AI Guardrail - Ngày 11):**\n\n"
-                f"Xin chào **{user_name}**! Tôi là **Trợ lý Vận hành Tuyết Vương AI** chuyên trách điều phối quầy bar và kho chi nhánh Mixue 39 Tôn Quang Phiệt.\n\n"
-                f"Theo quy chế bảo mật thông tin nội bộ của hệ thống:\n"
-                f"- **Tuyết Vương AI không lưu trữ, quản lý hoặc cung cấp dữ liệu về bảng lương, tiền thưởng, hoa hồng hay thông tin tài chính cá nhân** của nhân sự.\n"
-                f"- Hệ thống chỉ tập trung vào: **Công thức pha chế (BOM), quy chuẩn sơ chế (SOP), giải mã mã tem ly, dự báo nhu cầu bán hàng và quản trị sổ thẻ kho**.\n\n"
-                f"👉 **Hướng dẫn:** Để tra cứu ca làm, đối soát công chấm vân tay và nhận bảng lương/thưởng, bạn vui lòng liên hệ trực tiếp với **Quản lý điều hành (Bùi Văn Quang - 0912.345.678)** hoặc **Chủ cửa hàng (Nguyễn Hạnh Chi)** để được giải quyết chính xác theo quy định nhân sự của quán."
+                "🛡️ **Bảo Mật:** Mình không lưu và không cung cấp thông tin lương, thưởng hay thu nhập của ai. "
+                "Bạn hỏi trực tiếp Quản lý (Bùi Văn Quang) hoặc Chủ quán (Nguyễn Hạnh Chi) nhé. Mình vẫn giúp được công thức, chốt ca, kho và dự báo bán hàng."
             )
             return {
                 "text": msg,
                 "tool_called": "guardrail_salary_privacy",
                 "raw_result": {"status": "GUARDRAIL_TRIGGERED", "category": "SALARY_HR_PRIVACY"},
-                "evidence_refs": ["policy:Store_2132_HR_Privacy_Guardrail"]
+                "evidence_refs": []
             }
 
         return None
@@ -1634,6 +1626,30 @@ Bạn được trang bị 8 công cụ vận hành:
     def current_conversation_id(self) -> str:
         return self._conversation_id
 
+    _RECIPE_WORDS = ("cong thuc", "dinh luong", "cach pha", "pha che", "ma tem", "giai ma tem")
+    _NOT_RECIPE = ("so che", "cach nau", "nau bao nhieu", "nau me", "bao quan", "han dung", "doanh thu", "ton kho", "du bao", "nhap hang", "dat hang",
+                   "duyet", "ban duoc", "bao nhieu ly", "nhan vien", "so sanh", " va ", "chot ca", "thoi tiet")
+
+    def _recipe_call(self, user_query: str, q_norm: str) -> dict[str, Any] | None:
+        """A plain recipe / cup-sticker question has one right answer in the recipe table, so it is looked up
+        directly instead of letting the model pick a tool (it sometimes answered "công thức TS1" with the pearl
+        cooking guide, or with no data). Questions that mix in anything else still go to the model."""
+        has_code = re.search(r"\b(?:cf|dk|st|thq|ts)\s?0*\d+\b", q_norm) or re.search(r"\btem\s+\d{4,5}\b", q_norm)
+        asks_recipe = any(word in q_norm for word in self._RECIPE_WORDS)
+        if not (has_code or asks_recipe) or any(re.search(rf"\b{re.escape(word.strip())}\b", q_norm) for word in self._NOT_RECIPE):
+            return None
+        if not has_code and len(q_norm.split()) > 10:
+            return None
+        try:
+            found = self.tool_decode_recipe_or_sticker(user_query)
+        except Exception:  # noqa: BLE001 - fall back to the model
+            return None
+        if found.get("status") != "SUCCESS":
+            return None
+        code = re.search(r"\b(?:cf|dk|st|thq|ts)\s?0*\d+\b|\b\d{4,5}\b", q_norm)
+        arg = code.group(0).replace(" ", "").upper() if code and found.get("type") == "CUP_STICKER_DECODE" else user_query[:200]
+        return {"name": "decode_recipe_or_sticker", "args": {"code": arg}}
+
     def process_query(self, user_query: str, user_role: str = "MANAGER", user_name: str = "Quản lý", chat_history: list[dict[str, Any]] | None = None, *, user_id=None) -> dict[str, Any]:
         """Run the stateful LangGraph. Identity comes only from the authenticated caller."""
         actor = self._actor(user_role, user_name, user_id)
@@ -1666,6 +1682,8 @@ Bạn được trang bị 8 công cụ vận hành:
 
         # Persist the visible transcript independently from the model's bounded context.
         forced = routed.get("forced_call") if routed else None
+        if forced is None:
+            forced = self._recipe_call(user_query, q_norm)
         result = self._runtime().invoke(user_query, actor, self._conversation_id, forced_call=forced)
         if forced:
             raw = result.get("raw_result") or {}

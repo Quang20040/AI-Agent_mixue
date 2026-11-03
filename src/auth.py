@@ -117,9 +117,18 @@ def check_password(plain_password: str, hashed_password: str) -> bool:
     return False
 
 
-def _get_role_metadata(role: str) -> dict[str, str]:
+def _owner_usernames() -> set[str]:
+    """Accounts shown as the shop owner; other ADMIN accounts are shown as managers (same permissions)."""
+    import os
+    names = {"chucuahang", (os.environ.get("OWNER_USERNAME") or "").strip().lower()}
+    return {n for n in names if n}
+
+
+def _get_role_metadata(role: str, username: str | None = None) -> dict[str, str]:
     """Cung cấp metadata chức danh và huy hiệu theo vai trò."""
     r = (role or "").strip().upper()
+    if r == "ADMIN" and username and username.strip().lower() not in _owner_usernames():
+        r = "MANAGER"
     if r in ("ADMIN", "OWNER"):
         return {
             "title": "Chủ quán (Owner / Admin)",
@@ -130,7 +139,7 @@ def _get_role_metadata(role: str) -> dict[str, str]:
         return {
             "title": "Quản lý điều hành (Manager / Admin)",
             "badge": "🛡️ Quản Lý Cửa Hàng (Admin)",
-            "description": "Toàn quyền vận hành: xem báo cáo, dự báo, ký duyệt đơn nhập và kế hoạch sơ chế."
+            "description": "Toàn quyền vận hành: xem báo cáo, dự báo, ký duyệt đơn nhập và phiếu kho."
         }
     if r in ("STAFF_PROBATION", "PROBATION", "TRAINEE"):
         return {
@@ -259,7 +268,7 @@ def verify_user(username: str, password: str) -> dict[str, Any] | None:
                 except Exception:
                     db.rollback()
 
-            meta = _get_role_metadata(user.role)
+            meta = _get_role_metadata(user.role, user.username)
             return {
                 "username": user.username,
                 "name": user.full_name,
@@ -450,7 +459,7 @@ def get_all_employees() -> list[dict[str, Any]]:
         users = db.query(User).order_by(User.created_at.desc()).all()
         result = []
         for u in users:
-            meta = _get_role_metadata(u.role)
+            meta = _get_role_metadata(u.role, u.username)
             result.append({
                 "username": u.username,
                 "full_name": u.full_name,

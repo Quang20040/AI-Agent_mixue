@@ -17,11 +17,13 @@ class AgentSettings(BaseModel):
     api_key: SecretStr = SecretStr('')
     base_url: str = ''
     allow_external_transfer: bool = False
-    model_timeout: float = Field(default=45, gt=0, le=120)
+    # A slow provider call waits at most this long before the next model in the fallback chain is tried;
+    # 45 s with one retry let a single chat message hang for 150 s.
+    model_timeout: float = Field(default=25, gt=0, le=120)
     run_timeout: float = Field(default=120, gt=0, le=300)
     max_tool_calls: int = Field(default=8, ge=1, le=20)
     max_model_calls: int = Field(default=10, ge=1, le=25)
-    max_retries: int = Field(default=1, ge=0, le=3)
+    max_retries: int = Field(default=0, ge=0, le=3)
     max_history_messages: int = Field(default=40, ge=6, le=200)
     max_output_tokens: int = Field(default=1400, ge=128, le=4096)
     # Defaults honour the same environment variables as from_env(), so directly built

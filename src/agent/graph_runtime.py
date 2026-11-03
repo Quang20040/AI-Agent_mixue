@@ -36,6 +36,7 @@ from pydantic import ValidationError
 from src.agent.config import AgentSettings
 from src.agent.graph_tools import build_tool_registry
 from src.agent.response_policy import (
+    recipe_reply_text,
     conversational_reply,
     everyday_reply,
     grounded_result_reply,
@@ -54,6 +55,15 @@ class Actor:
     role: str
     store_id: str = '2132'
     deadline: float = 0
+
+
+_TOPICS = {'get_daily_sales': 'doanh thu', 'get_sales_analytics': 'doanh thu', 'get_shift_revenue': 'doanh thu',
+           'forecast_demand': 'dự báo bán hàng', 'optimize_topping_prep': 'kế hoạch nấu topping',
+           'preview_topping_prep': 'kế hoạch nấu topping', 'get_weather_forecast': 'dự báo thời tiết'}
+
+
+def _topic_of(group):
+    return next((_TOPICS[name] for name in sorted(group) if name in _TOPICS), 'dữ liệu này')
 
 
 class AgentState(TypedDict, total=False):
@@ -149,7 +159,9 @@ class AgentGraph:
         return time.monotonic() >= actor.deadline
 
     def _guard(self, state, runtime: Runtime[Actor]):
-        if not state['query'].strip() or len(state['query']) > 12000:
+        if not state['query'].strip():
+            return {'response': self._response('Bạn chưa nhập câu hỏi. Gõ điều bạn cần, ví dụ "công thức TS1".', 'INVALID_INPUT')}
+        if len(state['query']) > 12000:
             return {'response': self._response('Bạn hãy gửi câu hỏi ngắn hơn nhé.', 'INVALID_INPUT')}
         blocked = self.service.tool_check_guardrail(state['query'], runtime.context.name)
         if blocked:
@@ -228,6 +240,8 @@ class AgentGraph:
                     'ca là CA_SANG/CA_CHIEU/CA_TOI.')
         elif tool == 'request_plan_approval':
             text = result.get('message') or ('Đã phê duyệt kế hoạch.' if result.get('is_approved') else 'Chưa phê duyệt kế hoạch.')
+        elif tool == 'decode_recipe_or_sticker':
+            text = recipe_reply_text(result)
         else:
             text = (result.get('text') or result.get('message')
                     or ('Đã phê duyệt.' if result.get('is_approved') else 'Đã xử lý yêu cầu.'))
@@ -283,6 +297,11 @@ Chỉ mở rộng khi được hỏi. Không chèn định nghĩa, khuyến ngh�
 Nguồn được giao diện hiển thị riêng. Không tuyên bố đã lục tìm toàn bộ repo/database.
 Phân biệt rõ: hỏi thông tin / xin lời khuyên / xem thử kế hoạch (dùng preview_topping_prep hoặc preview_replenishment) với yêu cầu TẠO DỰ THẢO (chỉ gọi optimize_topping_prep / optimize_replenishment khi người dùng yêu cầu rõ ràng lập kế hoạch/tạo dự thảo). Không tạo hoặc lưu dự thảo chỉ vì người dùng hỏi "nên chuẩn bị thế nào".
 Dự thảo không phải đã duyệt. Muốn duyệt phải gọi request_plan_approval và chờ xác nhận bằng nút trên giao diện.
+Dự báo và kế hoạch nấu topping chỉ là gợi ý, không cần duyệt; chỉ phiếu đặt hàng, phiếu kho của nhân viên và báo cáo chốt ca cần Quản lý duyệt.
+Câu hỏi nhiều ý: tra và trả lời từng ý; ý nào không có dữ liệu thì nói rõ ý đó, vẫn trả lời các ý còn lại.
+Câu hỏi so sánh ("so với", "chênh lệch"): tra đủ từng ngày/kỳ rồi nêu cả hai số và mức chênh (số tiền và %).
+Không chép nguyên dòng dữ liệu thô (dạng 'Mã ...: ... | ...'), mã nội bộ hay tên tệp; diễn giải thành câu ngắn hoặc gạch đầu dòng.
+Tên món gõ sai hoặc thiếu dấu: đoán món gần nhất, nói rõ món đã đoán; không chắc thì hỏi lại kèm 2–3 món gần nhất.
 Khi người dùng đính kèm ảnh có mã file_id do máy chủ cấp (dạng FILE_...), gọi inspect_attached_shift_image với đúng file_id; không truyền đường dẫn tệp tùy ý. Nếu người dùng sửa số tiền trên dự thảo OCR, gọi update_shift_ocr_draft. Không nhận là đã đọc ảnh khi OCR thất bại hoặc chưa có kết quả ảnh.
 Với dự thảo OCR: trường status uncertain phải để trống; không tự điền normalized_value, không tự nhân 1.000 khi chữ viết tay chưa ghi đơn vị, không tự cộng biểu thức như 962 + 629. Muốn xem dự thảo dùng get_shift_ocr_draft. Muốn lưu báo cáo chốt ca phải gọi request_shift_draft_confirmation và chờ Quản lý bấm phê duyệt; không bao giờ tự lưu.
 Không thể tự mua hàng, tự sửa kho, hay tự thay đổi quyền. Không đưa lương hoặc bí mật tài khoản.
@@ -369,10 +388,25 @@ Không tiết lộ suy luận nội bộ.'''
                     evidence_query = question + '\nCâu hỏi nối tiếp: ' + state['query']
                     break
         missing = missing_evidence_groups(evidence_query, state['results'])
+        # A part of the question that needs tools this account may not use is answered now, plainly: forcing the
+        # model to "find" it with the tools it does have ended in "cần quá nhiều lượt tra cứu" after a minute.
+        usable = {name for name, spec in self.tools.items() if spec.allowed(actor.role)}
+        forbidden = [group for group in missing if group & set(self.tools) and not group & usable]
+        if forbidden:
+            topics = list(dict.fromkeys(_topic_of(group) for group in forbidden))
+            if len(forbidden) == len(missing) and not state['results']:
+                text = (f"Tài khoản của bạn ({actor.role}) không xem được {', '.join(topics)}. "
+                        'Bạn nhờ Quản lý hoặc Chủ quán xem giúp nhé. Mình vẫn tra được công thức, mã tem ly và cách sơ chế.')
+                return {'response': self._response(text, 'FORBIDDEN', tool_called='rbac_restriction'),
+                        'messages': [AIMessage(content=text)], 'model_count': state['model_count'] + 1}
+            missing = [group for group in missing if group & usable]
         attempted = {entry['tool'] for entry in state['results']}
         unattempted = [group for group in missing if not group & attempted]
         binding = {'tool_choice': 'required'} if unattempted and allowed is not None else {}
         instructions = self._prompt(actor)
+        if forbidden:
+            instructions += ('\nTài khoản này không có quyền xem: ' + ', '.join(topics)
+                             + '. Trả lời phần còn lại và nói rõ phần đó cần Quản lý xem.')
         if small_talk:
             instructions += ('\nTin nhắn này là chuyện đời thường, không phải câu hỏi về cửa hàng. Trả lời 1–2 câu, ấm áp, '
                              'đúng cảm xúc và ngữ cảnh cuộc trò chuyện; nếu là việc ngoài khả năng thì nói nhẹ nhàng mình là trợ lý '

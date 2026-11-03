@@ -66,7 +66,7 @@ def restore(token: str | None) -> dict[str, Any] | None:
         db.execute(text('UPDATE login_sessions SET expires_at = :e WHERE token_hash = :h'),
                    {'e': _now() + LIFETIME, 'h': _digest(token)})
         db.commit()
-        meta = _get_role_metadata(user.role)
+        meta = _get_role_metadata(user.role, user.username)
         return {'username': user.username, 'name': user.full_name, 'phone': user.phone or '', 'role': user.role,
                 'title': meta['title'], 'badge': meta['badge'], 'description': meta['description'],
                 'must_change_password': bool(user.must_change_password), 'is_active': bool(user.is_active)}

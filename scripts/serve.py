@@ -27,8 +27,35 @@ def preload() -> None:
     print(f'[serve] preloaded {len(PRELOAD)} modules in {time.monotonic() - started:.1f}s', flush=True)
 
 
+def log_memory(every=60):
+    """One line a minute in the server log: resident memory and open browser sessions.
+
+    Render restarts the service when it runs out of memory and shows only a 502 to visitors; this line makes
+    the cause visible in Render Logs (a rising number before a restart)."""
+    import threading
+
+    def loop():
+        while True:
+            time.sleep(every)
+            try:
+                with open('/proc/self/status', encoding='ascii') as status:
+                    rss = next(int(line.split()[1]) // 1024 for line in status if line.startswith('VmRSS'))
+                sessions = '?'
+                try:
+                    from streamlit.runtime import Runtime
+                    sessions = len(Runtime.instance()._session_mgr.list_active_sessions())
+                except Exception:  # noqa: BLE001 - Streamlit internals may move between versions
+                    pass
+                print(f'[mem] rss={rss}MB sessions={sessions}', flush=True)
+            except Exception:  # noqa: BLE001 - not on Linux, or /proc unavailable
+                return
+
+    threading.Thread(target=loop, daemon=True, name='memory-log').start()
+
+
 if __name__ == '__main__':
     preload()
+    log_memory()
     from streamlit.web import cli
 
     sys.argv = ['streamlit', 'run', os.path.join(ROOT, 'src', 'dashboard', 'app.py'), *sys.argv[1:]]

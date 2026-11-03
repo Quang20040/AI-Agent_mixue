@@ -155,6 +155,21 @@ def prep_guide_reply(query, guide):
             'evidence_refs': list(dict.fromkeys(guide.get('evidence_refs', [])))}
 
 
+def recipe_reply_text(data):
+    """Drink recipe or cup-sticker decode, written out from the recipe table (no model wording)."""
+    if not isinstance(data, dict) or data.get('status') != 'SUCCESS':
+        return (data or {}).get('message') or 'Không tìm thấy công thức. Bạn thử mã món (ví dụ TS1, DK1) hoặc tên món.'
+    if data.get('type') == 'CUP_STICKER_DECODE':
+        return (f"**Giải mã tem dán ly Mixue: `{data['raw_code']}`**\n\n- Sản phẩm: {data['product']}\n- Đường: {data['sugar']}\n"
+                f"- Đá: {data['ice']}\n- Topping thêm: {data['additional_topping']}\n\n{data['standard_bar_rule']}")
+    lines = '\n'.join(f"- {item['ingredient_name']}: **{item['quantity']:g} {item['unit']}**"
+                      if isinstance(item.get('quantity'), (int, float)) else f"- {item['ingredient_name']}: {item['quantity']} {item['unit']}"
+                      for item in data.get('recipe_lines', []))
+    price = data.get('selling_price_vnd')
+    head = f"**Công thức pha chế: {data['sku_id']} – {data['sku_name']} ({data.get('variant') or 'Chuẩn'})**"
+    return head + (f"\n\nGiá bán: {price:,.0f} đ" if price else '') + '\n\n' + (lines or 'Món này chưa có định lượng chi tiết.')
+
+
 def grounded_result_reply(query, results):
     """Render narrow factual requests from tool data, without generated additions.
 
@@ -250,6 +265,9 @@ def grounded_result_reply(query, results):
     if entry['tool'] != 'get_daily_sales':
         return None
     if any(word in q for word in ('nhan vien', 'ton kho', 'so che', 'du bao', 'cong thuc', 'hao hut')):
+        return None
+    # A comparison ("so với hôm qua", "chênh lệch") needs the model's own wording over both days.
+    if any(word in q for word in ('so voi', 'so sanh', 'chenh lech', 'tang hay giam', 'hon hay kem', 'khac gi')):
         return None
     if data.get('status') == 'NO_DATA':
         return {'text': data['message'], 'raw_result': data, 'evidence_refs': []}
@@ -348,8 +366,10 @@ def required_evidence_groups(query):
 
 
 def missing_evidence_groups(query, results):
+    # NO_DATA is an answer too ("no POS rows for 02/11, approved shift revenue was X"): the group was looked up.
+    # Treating it as missing made a two-part question end in "chưa tra đủ dữ liệu" whenever one part had no rows.
     successful = {entry['tool'] for entry in results if isinstance(entry['result'], dict)
-                  and entry['result'].get('status', 'SUCCESS') == 'SUCCESS'}
+                  and entry['result'].get('status', 'SUCCESS') in ('SUCCESS', 'NO_DATA')}
     return [group for group in required_evidence_groups(query) if not group & successful]
 
 

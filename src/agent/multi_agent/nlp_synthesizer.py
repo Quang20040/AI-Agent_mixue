@@ -30,6 +30,27 @@ def _relevant(query, content):
     return hits >= (1 if len(words) == 1 else max(2, -(-len(words) * 2 // 3)))
 
 
+# Bookkeeping columns of the source sheets: useful for tracing, noise for a person reading the answer.
+_HIDDEN_FIELDS = ('mã ảnh nguồn', 'trạng thái xác nhận', 'ngày trên tài liệu', 'số cốc ước tính theo ảnh',
+                  'lượng đầu ra đo thực tế', 'ghi chú nguồn')
+
+
+def _is_record_row(text):
+    parts = [part for part in text.split(' | ') if part.strip()]
+    return len(parts) >= 3 and sum(': ' in part for part in parts) >= len(parts) - 1
+
+
+def _record_as_bullets(text):
+    """'Tên: Đường quả | Hạn dùng: 9 tháng | Mã ảnh nguồn: ANH_18' -> readable bullets without bookkeeping."""
+    lines = []
+    for part in text.split(' | '):
+        key, _, value = part.partition(': ')
+        if not value.strip() or key.strip().lower() in _HIDDEN_FIELDS:
+            continue
+        lines.append(f"- {key.strip()}: **{value.strip()}**")
+    return '\n'.join(lines) or text
+
+
 class NLPSynthesizer:
     """Bộ tổng hợp câu trả lời ngôn ngữ tự nhiên cấp độ chuyên gia."""
 
@@ -194,6 +215,8 @@ class NLPSynthesizer:
                     if len(content) > 3000:
                         content = content[:3000] + "\n\n*(Đã rút gọn bớt các dòng tiếp theo...)*"
                     sec += f"{content}\n\n"
+                elif _is_record_row(content):
+                    sec += _record_as_bullets(content) + "\n\n"
                 else:
                     clean_snippet = content
                     if len(clean_snippet) > 800:

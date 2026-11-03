@@ -79,7 +79,9 @@ def test_dashboard_staff_restricted_access():
 
     # Nhân viên chính thức: Trang chủ, 2 trụ cột (AI Agent, Chốt ca & OCR), Báo cáo & kho, Tem & công thức
     allowed_staff_tabs = ['Trang chủ', '💬 Tuyết Vương AI', '📸 Chốt ca & OCR', 'Báo cáo & kho', 'Tem & công thức']
-    assert app.radio(key='main_navigation').options == [nav_label(page) for page in allowed_staff_tabs]
+    # Staff only file stock slips there, so their menu names the page by that (not "Doanh thu & Kho hàng").
+    staff_labels = [('Phiếu xin nhập / xuất kho' if page == 'Báo cáo & kho' else nav_label(page)) for page in allowed_staff_tabs]
+    assert app.radio(key='main_navigation').options == staff_labels
     assert len(app.radio(key='mobile_navigation').options) == len(allowed_staff_tabs)
     assert not any('mx-revenue-total' in m.value for m in app.markdown)
     assert not any('mx-approvals' in m.value for m in app.markdown)

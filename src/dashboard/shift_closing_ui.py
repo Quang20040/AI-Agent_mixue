@@ -248,16 +248,23 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                 samples_box.button('🗂️ Cả 3 ảnh mẫu của ngày', key='ocr_sample_all', use_container_width=True, on_click=choose_sample,
                           args=(['20261014_ca_sang_chieu.jpg', '20261014_ca_toi_tong_ket.jpg', '20261014_pos_slip.jpg'], None))
 
-                uploaded_files = st.file_uploader(
-                    "Thêm ảnh của ngày này (sổ chốt ca, phiếu POS) — một ảnh có thể chứa nhiều ca",
-                    type=None,  # any photo the phone offers (HEIC, JPEG, PNG, WebP…); checked by content below
-                    accept_multiple_files=True,
-                    key="shift_photo_uploader",
-                    help="Chọn ảnh bất kỳ từ thư viện hoặc chụp mới; ảnh được tự xoay đúng chiều và nén nhẹ trước khi đọc.",
-                )
+                # A rejected file is dropped from the picker: the picker is re-created under a new key and the
+                # message is shown once above it. Accepted photos are already kept in the day's list below.
+                for message in st.session_state.pop('ocr_upload_errors', []):
+                    st.error(message)
+                uploader_version = st.session_state.get('ocr_uploader_version', 0)
+                with st.container(key='shift_photo_uploader'):
+                    uploaded_files = st.file_uploader(
+                        "Thêm ảnh của ngày này (sổ chốt ca, phiếu POS) — một ảnh có thể chứa nhiều ca",
+                        type=None,  # any photo the phone offers (HEIC, JPEG, PNG, WebP…); checked by content below
+                        accept_multiple_files=True,
+                        key=f"shift_photo_uploader_v{uploader_version}",
+                        help="Chọn ảnh bất kỳ từ thư viện hoặc chụp mới; ảnh được tự xoay đúng chiều và nén nhẹ trước khi đọc.",
+                    )
                 if uploaded_files:
                     seen = st.session_state.setdefault('ocr_uploaded_seen', set())
                     SHIFT_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+                    rejected = []
                     for uf in uploaded_files:
                         contents = uf.getvalue()
                         digest = hashlib.sha256(contents).hexdigest()
@@ -267,10 +274,15 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                         try:
                             save_path = save_photo(contents, uf.name, SHIFT_UPLOADS_DIR)
                         except UploadError as exc:
-                            st.error(str(exc))
+                            rejected.append(str(exc))
                             continue
                         if str(save_path) not in day_images:
                             day_images.append(str(save_path))
+                    if rejected:
+                        _save_workspace(username, st.session_state.get('ocr_day_images', {}))
+                        st.session_state['ocr_upload_errors'] = rejected
+                        st.session_state['ocr_uploader_version'] = uploader_version + 1
+                        st.rerun()
 
                 images_slot = st.container()  # filled after the reading below, so tags are current
 
