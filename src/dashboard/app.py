@@ -855,7 +855,7 @@ with st.container(key="workspace"):
             st.divider()
             v_status = plan["verification"]["status"]
             if v_status == "VERIFIED":
-                st.success(f"Đạt kiểm tra số lượng, đơn vị và làm tròn theo định mức đang dùng · Dự thảo `{plan['draft_plan_id']}`. Định mức ước lượng vẫn cần quản lý đối chiếu.")
+                st.success("Đạt kiểm tra số lượng, đơn vị và làm tròn theo định mức đang dùng.")
             else:
                 st.error("❌ **KẾ HOẠCH BỊ TỪ CHỐI DO VI PHẠM QUY CHUẨN**")
 
@@ -885,18 +885,8 @@ with st.container(key="workspace"):
                 hide_index=True
             )
 
-            # Phê duyệt theo thẩm quyền
-            with st.container(border=True):
-                c_app1, c_app2 = st.columns([2, 1], gap="medium")
-                with c_app1:
-                    st.info(f"**Người thao tác:** {user_name} ({user_badge})\n\n*Lưu ý: Chỉ Quản lý cửa hàng hoặc Chủ quán (Admin) mới có quyền ký duyệt.*")
-                with c_app2:
-                    if st.button("✍️ Duyệt kế hoạch nấu topping", key="approve_prep_btn_vi", type="primary", use_container_width=True):
-                        app_res = agent.tool_approve_plan(plan["draft_plan_id"], user_role=role_key, user_name=user_name)
-                        if app_res.get("is_approved"):
-                            st.success(app_res["message"])
-                        else:
-                            st.error(app_res["message"])
+            st.caption("Đây là gợi ý để ca trưởng tham khảo, không cần duyệt. "
+                       "Nấu theo đợt và chỉnh theo lượng bán thực tế trong ca.")
 
         st.divider()
         st.write("#### 📉 Báo cáo Lịch sử Hao hụt & Tỷ lệ Hủy Topping (30 Ngày qua)")

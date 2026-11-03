@@ -524,7 +524,7 @@ class OcrChatMixin:
                          + (" · đủ điều kiện gửi phê duyệt" if draft.get("is_complete") else ""))
         if admin:
             approved = sum(1 for p in plans if p.get("status") == "APPROVED")
-            waiting = sum(1 for p in plans if p.get("status") == "PENDING_APPROVAL")
+            waiting = sum(1 for p in plans if p.get("status") == "PENDING_APPROVAL" and p.get("plan_type") != "TOPPING_PREPARATION")
             lines.append(f"\n**Lịch sử kế hoạch (sơ chế/nhập hàng):** {len(plans)} kế hoạch · {approved} đã duyệt · {waiting} đang chờ duyệt")
             for p in recent:
                 who = f" · duyệt bởi {p['approved_by']}" if p.get("approved_by") else ""

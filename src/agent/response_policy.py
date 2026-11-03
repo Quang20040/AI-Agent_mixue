@@ -233,10 +233,10 @@ def grounded_result_reply(query, results):
                 rows.append(f"  Lượng hạt khô tương ứng tạm tính: {line['estimated_raw_input_g']:,.0f} g cả ngày; "
                             f"đợt đầu {line.get('initial_raw_input_g') or 0:,.0f} g.")
         if entry['tool'] == 'preview_topping_prep' or data.get('is_preview') is True:
-            header = f"**Xem thử / Gợi ý sơ chế {data['target_date']}** — bản xem thử tư vấn, chưa tạo hay lưu dự thảo (chưa phê duyệt)."
+            header = f"**Xem thử / Gợi ý sơ chế {data['target_date']}** — bản gợi ý, không cần duyệt."
         else:
             draft_id_str = f" (`{data['draft_plan_id']}`)" if data.get('draft_plan_id') else ""
-            header = f"**Dự thảo sơ chế {data['target_date']}{draft_id_str}** — chưa phê duyệt."
+            header = f"**Kế hoạch sơ chế {data['target_date']}{draft_id_str}** — gợi ý, không cần duyệt."
         text = header + '\n\n' + '\n'.join(rows)
         text += '\n\n' + data.get('yield_assumption', '') + '\n\n' + data.get('prep_policy', '')
         text += forecast_context_note(data.get('forecast_context', {}))
@@ -278,7 +278,8 @@ def forecast_context_note(context):
     lines = []
     previous = context.get('previous_sales')
     if previous:
-        lines.append(f"Cơ sở ngày {previous['date']}: {previous['cups']:,.0f} ly, doanh thu {previous['revenue']:,.0f} đ.")
+        from src.engine.weather_advice import previous_sales_text
+        lines.append(previous_sales_text(previous))
     for day in context.get('days', []):
         prior_day = day.get('previous_day')
         if prior_day and not previous:
@@ -294,6 +295,7 @@ def forecast_context_note(context):
         lines.append(f"Thời tiết trong giờ bán: ngày trước ước tính {previous_weather['temperature_c']:.1f}°C, {previous_weather['rain_mm']:g} mm mưa; "
                      f"ngày cần bán dự báo {target_weather['temperature_c']:.1f}°C, {target_weather['rain_mm']:g} mm mưa.")
         lines.append(f"Nguồn khu vực: {context.get('location', 'chưa xác định')}.")
+    lines.extend(context.get('notes', []))
     lines.extend(context.get('warnings', []))
     advice = weather_preparation_advice(context)
     if advice:

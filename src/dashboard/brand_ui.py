@@ -366,7 +366,8 @@ def _home_state(agent, user_role, user_name):
         today = business_today().isoformat()
         # Only plans for today or later still need a decision; older drafts are history.
         state['plans_waiting'] = sum(1 for p in list_plans()
-                                     if p.get('status') == 'PENDING_APPROVAL' and str(p.get('target_date', ''))[:10] >= today)
+                                     if p.get('status') == 'PENDING_APPROVAL' and p.get('plan_type') != 'TOPPING_PREPARATION'
+                                     and str(p.get('target_date', ''))[:10] >= today)
         state['stock_waiting'] = len(get_pending_requests())
         if agent is not None:
             try:
@@ -519,7 +520,16 @@ def render_home_kpis(sales, menu):
                   ('Số ly bán hôm nay', f"{number(rows['quantity_sold'].sum())} ly",
                    f'{escape(top.index[0])} dẫn đầu · {int(top.iloc[0])} ly' if len(top) else '', '')]
     else:
-        hint = f'Ngày gần nhất có số: {last_sales_day[8:10]}/{last_sales_day[5:7]}' if last_sales_day else 'Chưa nhập dữ liệu bán hàng'
+        latest = last_sales_day or ''
+        shift_days = [str(r.get('business_date'))[:10] for r in get_all_shift_reports()
+                      if r.get('status', 'APPROVED') == 'APPROVED' and r.get('business_date')]
+        latest_shift = max(shift_days, default='')
+        if latest_shift > latest:
+            hint = f'Ngày gần nhất có số: {latest_shift[8:10]}/{latest_shift[5:7]} (chốt ca đã duyệt)'
+        elif latest:
+            hint = f'Ngày gần nhất có số: {latest[8:10]}/{latest[5:7]}'
+        else:
+            hint = 'Chưa nhập dữ liệu bán hàng'
         cards += [(f'Doanh thu POS hôm nay · {label_day}', 'Chưa có số', escape(hint), 'muted'),
                   ('Số ly bán hôm nay', 'Chưa có số', 'Cập nhật khi nhập doanh thu POS', 'muted')]
     summary = state.get('summary') or {}

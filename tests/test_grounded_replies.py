@@ -102,4 +102,4 @@ def test_preparation_reply_distinguishes_raw_and_finished_quantities():
     assert '6,000 g thành phẩm' in reply['text']
     assert 'hạt khô' in reply['text'] and '3,000 g' in reply['text']
     assert 'ước lượng' in reply['text']
-    assert 'chưa phê duyệt' in reply['text']
+    assert 'không cần duyệt' in reply['text']

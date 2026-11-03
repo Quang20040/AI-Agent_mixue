@@ -36,7 +36,9 @@ def test_agent_prep_tool(agent):
     assert res["status"] == "SUCCESS"
     assert res["verification"]["is_valid"] is True
     assert res["draft_plan_id"].startswith("PLAN_PREP_")
-    assert res["requires_manager_approval"] is True
+    # Prep plans are advice for the bar, not purchase commitments: no approval step.
+    assert res["requires_manager_approval"] is False
+    assert agent.tool_approve_plan(res["draft_plan_id"], user_role="MANAGER")["status"] == "NOT_REQUIRED"
 
 
 def test_agent_replenishment_tool(agent):
@@ -58,8 +60,8 @@ def test_sticker_decoder_numeric_code(agent):
 
 def test_rbac_approval_enforcement(agent):
     # 1. Generate a valid draft
-    prep_res = agent.tool_optimize_topping_prep("2026-10-13")
-    draft_id = prep_res["draft_plan_id"]
+    po_res = agent.tool_optimize_replenishment("2026-10-13")
+    draft_id = po_res["draft_plan_id"]
 
     # 2. Staff attempts approval -> Must be rejected (403/UNAUTHORIZED)
     staff_res = agent.tool_approve_plan(draft_id, user_role="STAFF", user_name="Barista")

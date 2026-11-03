@@ -1,7 +1,7 @@
 """Show what went into a forecast without overstating unavailable weather."""
 import streamlit as st
 
-from src.engine.weather_advice import weather_preparation_advice
+from src.engine.weather_advice import previous_sales_text, weather_preparation_advice
 
 
 def render_forecast_context(context):
@@ -10,12 +10,14 @@ def render_forecast_context(context):
     advice = weather_preparation_advice(context)
     if advice:
         st.info('**Gợi ý chuẩn bị theo thời tiết**\n\n' + advice)
+    for note in context.get('notes', []):
+        st.info(note)
     for warning in context.get('warnings', []):
         st.warning(warning)
     st.caption(f"Thời tiết khu vực: {context.get('location', 'chưa xác định')} · Giờ bán: {context.get('opening_hours', 'chưa xác định')}")
     previous_sales = context.get('previous_sales')
     if previous_sales:
-        st.write(f"Ngày trước bán **{previous_sales['cups']:,.0f} ly**, doanh thu **{previous_sales['revenue']:,.0f} đ**.")
+        st.write(previous_sales_text(previous_sales, bold=True))
     comparison = context.get('comparison', {})
     previous = comparison.get('previous_weather_estimate')
     target = comparison.get('target_weather_forecast')

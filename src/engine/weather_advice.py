@@ -1,5 +1,6 @@
 """Qualitative preparation advice, separate from numerical demand adjustment."""
 import math
+from datetime import date
 
 
 def weather_preparation_advice(context):
@@ -24,3 +25,17 @@ def weather_preparation_advice(context):
             'Đối chiếu số ly bán, đơn giao hàng và tồn còn dùng được trước mỗi mẻ; '
             'nếu khách vẫn đông thì giữ nhịp bổ sung. '
             'Đây là gợi ý thận trọng theo thời tiết, chưa quy đổi thành % giảm hoặc tự giảm định lượng kế hoạch.')
+
+
+def previous_sales_text(previous, bold=False):
+    b = '**' if bold else ''
+    day = previous['date']
+    try:
+        day = date.fromisoformat(day).strftime('%d/%m/%Y')
+    except (TypeError, ValueError):
+        pass
+    source = f" ({previous['source']})" if previous.get('source') else ''
+    if previous.get('cups') is None:
+        return f"Ngày {day}: doanh thu {b}{previous['revenue']:,.0f} đ{b}{source}."
+    cups = f"khoảng {b}{previous['cups']:,.0f} ly{b}" if previous.get('cups_estimated') else f"{b}{previous['cups']:,.0f} ly{b}"
+    return f"Ngày {day}: bán {cups}, doanh thu {b}{previous['revenue']:,.0f} đ{b}{source}."

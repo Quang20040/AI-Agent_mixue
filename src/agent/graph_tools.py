@@ -142,9 +142,13 @@ def build_tool_registry(service):
         first, last, count = service.db.query(func.min(SalesDaily.business_date), func.max(SalesDaily.business_date),
                                              func.count(func.distinct(SalesDaily.business_date))).filter(
                                                  SalesDaily.store_id == service.forecast_engine.store_id).one()
-        return {'status': 'SUCCESS' if first else 'NO_DATA', 'first_date': str(first) if first else None,
+        latest_recorded = service._latest_recorded_date() if hasattr(service, '_latest_recorded_date') else last
+        return {'status': 'SUCCESS' if first or latest_recorded else 'NO_DATA', 'first_date': str(first) if first else None,
                 'last_date': str(last) if last else None, 'days_with_sales': count,
-                'source_refs': ['table:sales_daily']}
+                'last_pos_item_date': str(last) if last else None,
+                'last_recorded_date': str(latest_recorded) if latest_recorded else None,
+                'note': 'last_date là ngày cuối có số ly theo món (máy POS); last_recorded_date tính cả chốt ca đã duyệt.',
+                'source_refs': ['table:sales_daily', 'shift_reports:approved']}
 
     def weather(target_date):
         from src.engine.weather import WeatherClient
@@ -207,7 +211,7 @@ def build_tool_registry(service):
                  lambda target_date, buffer_pct=.1, pearl_yield_g=2000: service.tool_optimize_topping_prep(target_date.isoformat(), buffer_pct, pearl_yield_g, persist_draft=False), 'admin', 'read'),
         ToolSpec('preview_replenishment', 'XEM THỬ / TƯ VẤN nhu cầu nhập hàng theo tồn kho mà KHÔNG tạo hay lưu dự thảo PO. Dùng khi người dùng hỏi "cần chuẩn bị nhập gì", "xem thử thiếu hàng không".', ReplenishmentArguments,
                  lambda target_date, lead_time_days=2: service.tool_optimize_replenishment(target_date.isoformat(), lead_time_days, persist_draft=False), 'admin', 'read'),
-        ToolSpec('optimize_topping_prep', 'TẠO DỰ THẢO sơ chế có kiểm định. Chỉ gọi khi người dùng yêu cầu rõ ràng lập kế hoạch / tạo dự thảo. Không phê duyệt.', PrepArguments,
+        ToolSpec('optimize_topping_prep', 'LƯU kế hoạch sơ chế có kiểm định (chỉ là gợi ý, không cần duyệt). Chỉ gọi khi người dùng yêu cầu rõ ràng lập/lưu kế hoạch.', PrepArguments,
                  lambda target_date, buffer_pct=.1, pearl_yield_g=2000: service.tool_optimize_topping_prep(target_date.isoformat(), buffer_pct, pearl_yield_g, persist_draft=True), 'admin', 'draft'),
         ToolSpec('optimize_replenishment', 'TẠO DỰ THẢO nhập hàng có kiểm định. Chỉ gọi khi được yêu cầu rõ ràng lập đơn / tạo dự thảo PO. Không mua hay phê duyệt.', ReplenishmentArguments,
                  lambda target_date, lead_time_days=2: service.tool_optimize_replenishment(target_date.isoformat(), lead_time_days, persist_draft=True), 'admin', 'draft'),

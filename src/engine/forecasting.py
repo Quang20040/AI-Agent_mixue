@@ -318,6 +318,57 @@ class ForecastingEngine:
                      'day_of_week_ma': lambda h: self.predict_day_of_week_ma(h, day)}
         return sum(functions[selected](self.get_sku_history(sku, day - timedelta(days=1))) for sku in self.skus)
 
+    def _use_shift_revenue(self, frame, target, latest, cutoff, before, metadata):
+        """Days after the last POS item export may still have approved shift closings.
+
+        Those carry the day's money, not cups per item, so the per-item mix stays on the POS history while the
+        day's total is scaled by how recent revenue compares with the POS weeks the baseline learned from.
+        """
+        try:
+            from src.engine.revenue import daily_revenue
+            recent = daily_revenue(max(latest + timedelta(days=1), cutoff - timedelta(days=13)), cutoff)
+        except Exception:  # noqa: BLE001 - shift files unreadable: keep the POS-only forecast and say so below
+            recent = pd.DataFrame()
+        shift_days = recent[recent['shift_count'] > 0] if not recent.empty else recent
+        fmt = lambda day: day.strftime('%d/%m/%Y')  # noqa: E731
+        if shift_days.empty:
+            metadata['warnings'].append(f'Chưa có doanh thu ngày {fmt(cutoff)} (chưa có chốt ca được duyệt hay dữ liệu máy POS); '
+                                        f'dữ liệu bán gần nhất là ngày {fmt(latest)}.')
+            return
+        window = before[before['business_date'] > latest - timedelta(days=28)]
+        daily = window.groupby('business_date')[['quantity_sold', 'revenue_vnd']].sum()
+        cups_total, revenue_total = float(daily['quantity_sold'].sum()), float(daily['revenue_vnd'].sum())
+        last_day = max(shift_days['business_date'])
+        metadata['as_of_revenue_date'] = str(last_day)
+        metadata['source_refs'] = [*metadata['source_refs'], 'shift_reports:approved']
+        row = shift_days[shift_days['business_date'] == cutoff]
+        if not cups_total or not revenue_total:
+            if not row.empty:
+                metadata['previous_sales'] = {'date': str(cutoff), 'cups': None, 'source': 'Chốt ca đã duyệt',
+                                              'revenue': float(row['shift_collected_vnd'].iloc[0])}
+            return
+        price = revenue_total / cups_total
+        estimated = shift_days['shift_collected_vnd'] / price
+        factor = float(np.clip(estimated.mean() / (cups_total / len(daily)), 0.7, 1.3))
+        mask = frame['target_date'] == target
+        for column in ['predicted_qty', 'lower_bound', 'upper_bound']:
+            frame.loc[mask, column] = (frame.loc[mask, column] * factor).round(1)
+        if 'baseline_qty' in frame:
+            frame.loc[mask, 'baseline_qty'] = (frame.loc[mask, 'baseline_qty'] * factor).round(1)
+        frame.loc[mask, 'model_used'] = frame.loc[mask, 'model_used'] + '+doanh_thu_chot_ca'
+        frame.loc[mask, 'confidence'] = 'LOW'
+        if not row.empty:
+            metadata['previous_sales'] = {'date': str(cutoff), 'cups': round(float(estimated[row.index].iloc[0])),
+                                          'cups_estimated': True, 'source': 'Chốt ca đã duyệt',
+                                          'revenue': float(row['shift_collected_vnd'].iloc[0])}
+        days_text = ', '.join(fmt(day) for day in shift_days['business_date'])
+        metadata['shift_revenue_adjustment'] = {'days': [str(day) for day in shift_days['business_date']],
+                                                'factor': round(factor, 3), 'avg_price_vnd': round(price)}
+        metadata['notes'].append(
+            f'Đã dùng doanh thu chốt ca đã duyệt ngày {days_text}. Máy POS mới có số ly theo món đến ngày {fmt(latest)}, '
+            f'nên tỉ lệ từng món vẫn theo lịch sử đó; tổng số ly được chỉnh ×{factor:.2f} theo doanh thu chốt ca '
+            f'(giá trung bình khoảng {price:,.0f} đ/ly).')
+
     def _apply_context(self, frame, target, cutoff, client, model):
         cfg = client.settings
         before = self.df[self.df['business_date'] <= cutoff]
@@ -328,11 +379,14 @@ class ForecastingEngine:
                     'warnings': [], 'days': [], 'source_refs': ['table:sales_daily']}
         previous_rows = before[before['business_date'] == cutoff]
         metadata['previous_sales'] = ({'date': str(cutoff), 'cups': float(previous_rows['quantity_sold'].sum()),
-                                       'revenue': float(previous_rows['revenue_vnd'].sum())} if not previous_rows.empty else None)
+                                       'revenue': float(previous_rows['revenue_vnd'].sum()), 'source': 'Máy POS'}
+                                      if not previous_rows.empty else None)
+        metadata['notes'] = []
         if latest and latest < cutoff:
-            metadata['warnings'].append(f'Chưa có doanh số ngày {cutoff}; ngày gần nhất là {latest}.')
+            self._use_shift_revenue(frame, target, latest, cutoff, before, metadata)
         if not cfg.enabled or before.empty:
-            metadata['warnings'].append('Chưa điều chỉnh theo thời tiết.' if not cfg.enabled else 'Không có lịch sử trước ngày cần dự báo.')
+            metadata['warnings'].append('Dự báo chưa tính thời tiết vì tính năng thời tiết đang tắt (bật bằng WEATHER_ENABLED=true).'
+                                        if not cfg.enabled else 'Không có lịch sử trước ngày cần dự báo.')
             return metadata
         start = max(min(before['business_date']), cutoff - timedelta(days=100))
         try:
