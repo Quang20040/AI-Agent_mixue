@@ -62,3 +62,43 @@ def test_unknown_signature_gets_placeholder():
     assert gemini_compat.add_signatures(payload, gemini_compat.SignatureMemory())
     assert payload['messages'][0]['tool_calls'][0]['extra_content'] == {
         'google': {'thought_signature': gemini_compat.PLACEHOLDER}}
+
+
+def test_everyday_messages_get_human_replies():
+    from datetime import datetime, timedelta, timezone
+
+    from src.agent.response_policy import everyday_reply
+    now = datetime(2026, 11, 3, 8, 56, tzinfo=timezone(timedelta(hours=7)))
+    assert 'đi ăn' in everyday_reply('đói quá', now=now)['text']
+    assert 'không vui' in everyday_reply('hôm nay toii buồn', now=now)['text']
+    assert everyday_reply('nay ngày mấy', now=now)['text'] == 'Hôm nay là Thứ Ba, ngày 03/11/2026.'
+    assert everyday_reply('b làm đc j', now=now)['tool_called'] == 'everyday_capabilities'
+    assert 'Xin lỗi' in everyday_reply('wtf', now=now)['text']
+    assert 'dự báo' in everyday_reply('tại sao', 'Chưa có dự báo thời tiết vì đang tắt.', now=now)['text']
+    for shop_question in ('cách nấu chân trâu', 'doanh thu hôm qua', 'tồn kho đường quả', 'chán quá, kho còn bao nhiêu trân châu'):
+        assert everyday_reply(shop_question, now=now) is None, shop_question
+
+
+def test_chat_switches_to_fallback_model_when_primary_fails(monkeypatch, tmp_path):
+    from src.agent.graph_runtime import AgentGraph
+
+    class Broken:
+        def bind_tools(self, *a, **k):
+            return self
+
+        def invoke(self, messages):
+            raise RuntimeError('quota')
+
+    from langchain_core.messages import AIMessage
+
+    class Working(Broken):
+        def invoke(self, messages):
+            return AIMessage(content='ok')
+
+    settings = AgentSettings(provider='gemini', model='gemini-3.5-flash', audit_path=str(tmp_path / 'a.jsonl'))
+    graph = AgentGraph.__new__(AgentGraph)
+    graph.settings, graph.model, graph._injected_model = settings, Broken(), False
+    monkeypatch.setattr(AgentSettings, 'build_model', lambda self: Working() if self.model == 'gemini-3.8-flash' else Broken())
+    monkeypatch.delenv('LLM_FALLBACK_MODELS', raising=False)
+    assert graph._invoke_with_fallback([], {}, []).content == 'ok'
+    assert graph.settings.model == 'gemini-3.8-flash'

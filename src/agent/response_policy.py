@@ -351,3 +351,69 @@ def missing_evidence_groups(query, results):
     successful = {entry['tool'] for entry in results if isinstance(entry['result'], dict)
                   and entry['result'].get('status', 'SUCCESS') == 'SUCCESS'}
     return [group for group in required_evidence_groups(query) if not group & successful]
+
+
+# Common chat shorthand -> plain words, applied word by word on the accent-free text.
+_SHORTHAND = {
+    'b': 'ban', 'bn': 'ban', 'bạn': 'ban', 'dc': 'duoc', 'dk': 'duoc', 'j': 'gi', 'gj': 'gi', 'k': 'khong',
+    'ko': 'khong', 'kh': 'khong', 'hok': 'khong', 'hong': 'khong', 'khg': 'khong', 'toii': 'toi', 't': 'toi',
+    'm': 'may', 'mk': 'minh', 'mik': 'minh', 'vs': 'voi', 'ntn': 'nhu the nao', 'sao z': 'sao vay', 'z': 'vay',
+    'v': 'vay', 'dt': 'doanh thu', 'sl': 'so luong', 'nl': 'nguyen lieu', 'tc': 'tran chau', 'nv': 'nhan vien',
+    'ql': 'quan ly', 'hqua': 'hom qua', 'hnay': 'hom nay', 'qua': 'qua', 'wa': 'qua', 'ns': 'noi',
+}
+
+
+def expand_shorthand(query):
+    words = normalized_query(query).strip('., ?!').split()
+    expanded = ' '.join(_SHORTHAND.get(word, word) for word in words)
+    # Drop repeated trailing letters ("toiii", "buonnn") so they match.
+    return re.sub(r'([a-z])\1{1,}\b', r'\1', expanded)
+
+
+_WHY = {'tai sao', 'sao vay', 'la sao', 'vi sao', 'sao the', 'tai sao vay', 'sao lai the', 'why', 'sao', 'the la sao'}
+
+
+def everyday_reply(query, previous_answer=None, now=None):
+    """Friendly, human replies for messages that are not about the shop (offline mode only).
+
+    Returns None for anything that might be a shop question so real lookups are never swallowed."""
+    from datetime import datetime, timedelta, timezone
+    q = expand_shorthand(query)
+    if not q:
+        return None
+    shop_words = ('doanh thu', 'doanh so', 'ton kho', 'kho', 'nhap hang', 'chot ca', 'cong thuc', 'so che', 'tran chau',
+                  'du bao', 'nguyen lieu', 'nhan vien', 'tem', 'ca sang', 'ca chieu', 'ca toi', 'don hang', 'mon', 'ly',
+                  'thoi tiet', 'mua', 'hoa don', 'duyet', 'so luong', 'tra ', 'sua', 'kem', 'nau', 'cach', 'pha',
+                  'chan trau', 'thach', 'topping', 'han dung', 'bao quan')
+    def reply(text, kind):
+        return {'text': text, 'tool_called': f'everyday_{kind}', 'status': 'SUCCESS', 'evidence_refs': []}
+
+    if q in _WHY:
+        if previous_answer:
+            short = previous_answer.strip().split('\n')[0][:160]
+            return reply(f'Bạn hỏi về câu trả lời vừa rồi: “{short}”. Lý do thường nằm ngay trong câu đó; '
+                         'bạn hỏi cụ thể hơn (ví dụ "tại sao chưa có dự báo thời tiết?") để mình giải thích rõ nhé.', 'why')
+        return reply('Bạn muốn hỏi “tại sao” về điều gì vậy? Nói thêm một chút để mình giải thích nhé.', 'why')
+    if any(re.search(r'\b' + re.escape(word.strip()) + r'\b', q) for word in shop_words):
+        return None
+    now = now or datetime.now(timezone(timedelta(hours=7)))
+    weekday = ['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy', 'Chủ Nhật'][now.weekday()]
+    if re.search(r'\b(ngay may|ngay bao nhieu|thu may|hom nay la ngay|nay la ngay|ngay gi)\b', q):
+        return reply(f'Hôm nay là {weekday}, ngày {now:%d/%m/%Y}.', 'date')
+    if re.search(r'\b(may gio|bay gio la|gio la may)\b', q):
+        return reply(f'Bây giờ là {now:%H:%M} ({weekday}, {now:%d/%m/%Y}).', 'time')
+    if re.fullmatch(r'(?:(?:toi|minh|tui|em|anh|chi) )?(?:dang |that )?(?:doi|doi bung|chua an gi|chua an)(?: (?:qua|roi|lam|that|wa|ghe|vay|the))*', q):
+        return reply('Đói thì đi ăn chút gì đã nhé 😄 Mình là trợ lý của cửa hàng Mixue nên không gọi đồ ăn giúp bạn được, '
+                     'nhưng nếu cần tra công thức, chốt ca hay kho thì cứ hỏi mình.', 'hungry')
+    if re.search(r'\b(khat|khat nuoc)\b', q):
+        return reply('Khát thì làm ly nước đã nhé! Nếu đang ở quầy, mình tra công thức món nào cũng được 🍹', 'thirsty')
+    if len(q.split()) <= 7 and re.search(r'\b(buon|chan|met|stress|cang thang|ap luc|nan|tuyet vong)\b', q):
+        return reply('Nghe bạn đang không vui 😔 Nghỉ tay vài phút, uống ngụm nước hoặc nói chuyện với ai đó bạn tin tưởng nhé. '
+                     'Mình là trợ lý cửa hàng nên chỉ giúp được việc ở quán, nhưng mình vẫn ở đây nếu bạn cần.', 'mood')
+    if re.search(r'\b(wtf|vl|vcl|dm|dcm|clm|ngu|vo dung|te qua|do te)\b', q):
+        return reply('Xin lỗi nếu câu trả lời trước chưa đúng ý bạn 🙏 Bạn nói lại giúp mình cần gì '
+                     '(ví dụ: "doanh thu hôm qua", "tồn kho trân châu", "cách nấu thạch") để mình làm lại nhé.', 'apology')
+    if re.search(r'\b(ban lam duoc gi|ban giup duoc gi|ban biet lam gi|lam duoc gi)\b', q):
+        return reply('Mình tra được công thức và cách sơ chế, giải mã tem ly, đọc ảnh sổ chốt ca, xem kho, doanh thu và dự báo '
+                     '(tùy quyền tài khoản). Bạn cứ hỏi tự nhiên, viết tắt cũng được.', 'capabilities')
+    return None

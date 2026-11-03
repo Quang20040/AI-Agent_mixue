@@ -173,6 +173,11 @@ class WeatherClient:
                                     'Mô hình có lưới khoảng 25 km; ghim địa chỉ không đảm bảo dự báo chính xác tới từng số nhà.',
                                     'Một nguồn API, một mô hình ECMWF; chưa có đối chiếu độc lập nhiều nguồn.'],
                     'source_refs': ['https://open-meteo.com/en/docs/ecmwf-api']}
-        except (WeatherUnavailable, ValueError, KeyError, TypeError):
+        except (WeatherUnavailable, ValueError, KeyError, TypeError) as exc:
+            if str(exc) == 'DISABLED':
+                return {'status': 'WEATHER_UNAVAILABLE', 'reason': 'DISABLED',
+                        'message': 'Chưa có dự báo thời tiết vì tính năng lấy thời tiết của cửa hàng đang tắt '
+                                   '(quản trị bật bằng WEATHER_ENABLED=true). Vì vậy mình chưa khuyên tăng/giảm sơ chế theo thời tiết.'}
             return {'status': 'WEATHER_UNAVAILABLE',
-                    'message': 'Chưa lấy được dự báo hợp lệ; chưa thể khuyên tăng/giảm sơ chế theo thời tiết.'}
+                    'message': 'Chưa lấy được dự báo thời tiết (dịch vụ thời tiết không phản hồi hoặc dữ liệu chưa hợp lệ); '
+                               'chưa thể khuyên tăng/giảm sơ chế theo thời tiết.'}

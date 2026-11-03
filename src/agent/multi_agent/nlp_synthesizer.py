@@ -8,7 +8,26 @@ cách Tuyết Vương Mixue (Snow King).
 
 from typing import Any
 import os
+import re
 from src.agent.response_policy import prep_guide_reply
+
+
+_STOP = {'ban', 'toi', 'minh', 'cho', 'cua', 'nhe', 'nha', 'voi', 'the', 'nao', 'gi', 'la', 'co', 'khong', 'duoc',
+         'hom', 'nay', 'qua', 'lam', 'can', 'muon', 'xem', 'hoi', 'mot', 'cai', 'vay', 'sao'}
+
+
+def _relevant(query, content):
+    """A document snippet is only shown when the question's own words appear in it (avoids random rows)."""
+    from src.agent.response_policy import expand_shorthand, normalized_query
+    words = [w for w in expand_shorthand(query).split() if len(w) >= 3 and w not in _STOP]
+    if not words:
+        return False
+    text = normalized_query(content)
+    pairs = [' '.join(p) for p in zip(words, words[1:])]
+    if pairs and any(p in text for p in pairs):
+        return True
+    hits = sum(1 for w in words if re.search(r'\b' + re.escape(w) + r'\b', text))
+    return hits >= (1 if len(words) == 1 else max(2, -(-len(words) * 2 // 3)))
 
 
 class NLPSynthesizer:
@@ -163,6 +182,8 @@ class NLPSynthesizer:
                 evidence_refs.extend(reply['evidence_refs'])
 
         # 3. Xử lý tri thức trích xuất từ Repo Docs, Báo cáo & Quy chuẩn CSV
+        if docs_results and not sections:
+            docs_results = [doc for doc in docs_results if _relevant(query, doc.get('content', ''))]
         if docs_results and not sections:
             sec = ""
             for doc in docs_results[:1]:

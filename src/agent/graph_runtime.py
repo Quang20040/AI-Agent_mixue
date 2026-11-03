@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import sqlite3
 import threading
@@ -93,6 +94,7 @@ class AgentGraph:
         self.settings = settings or AgentSettings.from_env()
         self.tools = build_tool_registry(service)
         self.model = model
+        self._injected_model = model is not None
         self.config_error = None
         if self.model is None:
             try:
@@ -255,7 +257,7 @@ Bạn là Tuyết Vương AI, trợ lý AI; không tự nhận là con người 
 Lịch sử trong cuộc trò chuyện được lưu; bạn chỉ thấy phần lịch sử hệ thống đưa vào ngữ cảnh.
 Thời gian hiện tại tại Việt Nam: {now}. Hôm nay/ngày mai phải tính từ thời gian này.
 Trả lời tiếng Việt tự nhiên, đúng trọng tâm. Chào hỏi: chỉ chào lại một câu.
-Được trò chuyện vui, kể chuyện, đùa nhẹ. Không tự liệt kê chức năng hay thống kê.
+Được trò chuyện vui, kể chuyện, đùa nhẹ. Không tự liệt kê chức năng hay thống kê.\nNgười dùng hay viết tắt/không dấu (b=bạn, đc=được, j=gì, k/ko/kh=không, dt=doanh thu, sl=số lượng, nl=nguyên liệu, tc=trân châu, nv=nhân viên, ql=quản lý, nay=hôm nay); tự hiểu, không bắt gõ lại.\nCâu ngoài phạm vi cửa hàng (đói, buồn, mệt, hỏi ngày giờ, than phiền) thì đáp tự nhiên, ngắn, đúng cảm xúc như người thật (vd đói thì khuyên đi ăn), có thể nhắc nhẹ mình là trợ lý cửa hàng Mixue; không tra công cụ, không chèn dữ liệu kho/SOP.\nCâu hỏi ngắn như 'tại sao', 'sao vậy', 'là sao' là hỏi về câu trả lời ngay trước: giải thích lý do của câu đó.
 Với dữ liệu cửa hàng, phải tra công cụ phù hợp; không tự bịa số liệu, công thức hoặc SOP.
 Nếu hỏi ngày gần nhất, dùng get_data_coverage. Không đổi 'hôm nay' thành ngày dữ liệu cũ.
 Không có dữ liệu thì nói rõ; phân biệt số bán thực tế với dự báo. Không đoán hạn dùng.
@@ -318,6 +320,36 @@ Không tiết lộ suy luận nội bộ.'''
                 return messages[i:]
         return messages
 
+    def _fallback_names(self):
+        if self.settings.provider not in {'gemini', 'google', 'google_genai'} and not os.environ.get('LLM_FALLBACK_MODELS'):
+            return []
+        raw = os.environ.get('LLM_FALLBACK_MODELS')
+        names = [m.strip() for m in raw.split(',')] if raw is not None else ['gemini-3.8-flash', 'gemini-3.5-flash-lite']
+        return [m for m in dict.fromkeys(names) if m and m != self.settings.model]
+
+    def _invoke_with_fallback(self, allowed, binding, messages):
+        """Try the configured model, then the fallback chain (quota, retired model, provider outage)."""
+        candidates = [(self.settings.model, self.model)]
+        if not self._injected_model:
+            candidates += [(name, None) for name in self._fallback_names()]
+        last_error = None
+        for name, model in candidates:
+            try:
+                if model is None:
+                    model = self.settings.model_copy(update={'model': name}).build_model()
+                answer = model.bind_tools(allowed, **binding).invoke(messages)
+                if not isinstance(answer, AIMessage):
+                    raise TypeError('Expected AIMessage')
+                if model is not self.model:
+                    print(f'[llm] switched to fallback model {name}', flush=True)
+                    self.model, self.settings = model, self.settings.model_copy(update={'model': name})
+                return answer
+            except Exception as exc:  # noqa: BLE001 - log class + HTTP status only, never the message
+                status = getattr(exc, 'status_code', None) or getattr(getattr(exc, 'response', None), 'status_code', None)
+                print(f'[llm] model call failed: {type(exc).__name__} status={status} model={name}', flush=True)
+                last_error = exc
+        raise last_error
+
     def _model(self, state, runtime: Runtime[Actor]):
         actor = runtime.context
         if self._expired(actor) or state['model_count'] >= self.settings.max_model_calls:
@@ -340,14 +372,9 @@ Không tiết lộ suy luận nội bộ.'''
             instructions += '. Hãy tra đủ từng nhóm trước khi kết luận. Nếu công cụ thất bại, báo giới hạn cụ thể.'
             instructions += ' Không gọi lại các công cụ đã thành công nếu không đổi ngày hoặc tham số.'
         try:
-            answer = self.model.bind_tools(allowed, **binding).invoke([
+            answer = self._invoke_with_fallback(allowed, binding, [
                 SystemMessage(content=instructions), *self._history(state['messages'])])
-            if not isinstance(answer, AIMessage):
-                raise TypeError('Expected AIMessage')
-        except Exception as exc:  # noqa: BLE001 - never expose provider errors containing credentials
-            # Log only the class and HTTP status so the cause is visible in server logs without secrets.
-            status = getattr(exc, 'status_code', None) or getattr(getattr(exc, 'response', None), 'status_code', None)
-            print(f'[llm] model call failed: {type(exc).__name__} status={status} model={self.settings.model}', flush=True)
+        except Exception:  # noqa: BLE001 - never expose provider errors containing credentials
             grounded = grounded_result_reply(state['query'], state['results'])
             if grounded and not missing:
                 return {'response': grounded, 'messages': [AIMessage(content=grounded['text'])],

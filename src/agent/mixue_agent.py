@@ -23,7 +23,7 @@ from src.engine.validator import IndependentPlanValidator
 from src.models import Ingredient, MenuItem, RecipeBOM, SalesDaily
 from src.agent.multi_agent import MultiAgentOrchestrator
 from src.agent.ocr_chat import OcrChatMixin
-from src.agent.response_policy import casual_reply, conversational_reply, is_prep_guide_request
+from src.agent.response_policy import casual_reply, conversational_reply, everyday_reply, is_prep_guide_request
 
 # --- STICKER / LABEL DECODER DICTIONARY ---
 SUGAR_LEVELS = {
@@ -1874,6 +1874,10 @@ Bạn được trang bị 8 công cụ vận hành:
         light_chat = casual_reply(user_query)
         if light_chat:
             return light_chat
+        previous_answer = next((m.get('content') for m in reversed(chat_history or []) if m.get('role') == 'assistant'), None)
+        everyday = everyday_reply(user_query, previous_answer)
+        if everyday:
+            return everyday
 
         # 0.55. PHÂN RÃ CÂU HỎI GHÉP ĐA Ý ĐỊNH (MULTI-INTENT COMPOUND QUERY)
         if _allow_compound:
