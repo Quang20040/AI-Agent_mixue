@@ -1,0 +1,41 @@
+{
+ "perf": [
+  {
+   "what": "Tải trang đăng nhập (lần đầu)",
+   "seconds": 12.22
+  },
+  {
+   "what": "Đăng nhập nhanh Quản lý → trang chủ",
+   "seconds": 8.22
+  },
+  {
+   "what": "Chuyển trang (Quản lý)",
+   "per_page_seconds": {
+    "Điều hướng": 1.82,
+    "Trang chủ": 1.82,
+    "Trợ lý Tuyết Vương": 2.6,
+    "Chốt ca & Quét hóa đơn": 2.67,
+    "Doanh thu & Kho hàng": 3.53,
+    "Dự báo bán hàng": 3.65,
+    "Chuẩn bị & Nấu topping": 2.23,
+    "Đặt hàng nguyên liệu": 2.44,
+    "Công thức & Mã tem ly": 2.23,
+    "Quản lý nhân viên": 2.23
+   }
+  },
+  {
+   "what": "Chạy dự báo",
+   "seconds": 5.41
+  },
+  {
+   "what": "Đọc 1 ảnh sổ (OCR Gemini)",
+   "seconds": 9.8
+  },
+  {
+   "what": "Trạng thái chatbot",
+   "value": "AI Online"
+  }
+ ],
+ "console_errors": [],
+ "failed_requests": []
+}
