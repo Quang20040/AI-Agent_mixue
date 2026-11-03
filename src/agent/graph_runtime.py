@@ -344,7 +344,10 @@ Không tiết lộ suy luận nội bộ.'''
                 SystemMessage(content=instructions), *self._history(state['messages'])])
             if not isinstance(answer, AIMessage):
                 raise TypeError('Expected AIMessage')
-        except Exception:  # noqa: BLE001 - never expose provider errors containing credentials
+        except Exception as exc:  # noqa: BLE001 - never expose provider errors containing credentials
+            # Log only the class and HTTP status so the cause is visible in server logs without secrets.
+            status = getattr(exc, 'status_code', None) or getattr(getattr(exc, 'response', None), 'status_code', None)
+            print(f'[llm] model call failed: {type(exc).__name__} status={status} model={self.settings.model}', flush=True)
             grounded = grounded_result_reply(state['query'], state['results'])
             if grounded and not missing:
                 return {'response': grounded, 'messages': [AIMessage(content=grounded['text'])],

@@ -81,4 +81,8 @@ class AgentSettings(BaseModel):
         provider = 'openai' if self.provider in {'openrouter', 'gemini', 'google', 'google_genai'} else self.provider
         if self.provider == 'openrouter':
             kwargs['extra_body'] = {'provider': {'require_parameters': True}}
+        if self.provider in {'gemini', 'google', 'google_genai'}:
+            # Gemini 3 rejects follow-up calls unless each tool call's thought signature is sent back.
+            from src.agent.gemini_compat import http_clients
+            kwargs['http_client'], kwargs['http_async_client'] = http_clients(kwargs['timeout'])
         return init_chat_model(self.model, model_provider=provider, **kwargs)
