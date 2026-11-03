@@ -99,6 +99,12 @@ def _json(value):
     return json.dumps(value, ensure_ascii=False, default=native)
 
 
+# Which model actually answered, per (provider, configured model), shared by every session in the process.
+# Each browser session builds its own graph; without this, every new session first waited on a model that
+# was failing before reaching the fallback that works (the 150 s first answer in the 03/11 QA run).
+_WORKING_MODEL: dict[tuple[str, str], str] = {}
+
+
 class AgentGraph:
     def __init__(self, service, settings=None, model=None, checkpointer=None):
         self.service = service
@@ -106,7 +112,11 @@ class AgentGraph:
         self.tools = build_tool_registry(service)
         self.model = model
         self._injected_model = model is not None
+        self._configured_model = self.settings.model
         self.config_error = None
+        known = _WORKING_MODEL.get((self.settings.provider, self.settings.model))
+        if self.model is None and known and known != self.settings.model:
+            self.settings = self.settings.model_copy(update={'model': known})
         if self.model is None:
             try:
                 self.model = self.settings.build_model()
@@ -345,7 +355,7 @@ Không tiết lộ suy luận nội bộ.'''
             return []
         raw = os.environ.get('LLM_FALLBACK_MODELS')
         names = [m.strip() for m in raw.split(',')] if raw is not None else ['gemini-3.8-flash', 'gemini-3.5-flash-lite']
-        return [m for m in dict.fromkeys(names) if m and m != self.settings.model]
+        return [m for m in dict.fromkeys([getattr(self, '_configured_model', self.settings.model), *names]) if m and m != self.settings.model]
 
     def _invoke_with_fallback(self, allowed, binding, messages):
         """Try the configured model, then the fallback chain (quota, retired model, provider outage)."""
@@ -358,12 +368,18 @@ Không tiết lộ suy luận nội bộ.'''
                 if model is None:
                     model = self.settings.model_copy(update={'model': name}).build_model()
                 # Small talk is answered without tools so the model cannot drag shop data into it.
+                started = time.monotonic()
                 answer = (model if allowed is None else model.bind_tools(allowed, **binding)).invoke(messages)
                 if not isinstance(answer, AIMessage):
                     raise TypeError('Expected AIMessage')
+                took = time.monotonic() - started
+                if took > 10:
+                    print(f'[llm] slow answer: {took:.0f}s model={name}', flush=True)
                 if model is not self.model:
                     print(f'[llm] switched to fallback model {name}', flush=True)
                     self.model, self.settings = model, self.settings.model_copy(update={'model': name})
+                if not self._injected_model:
+                    _WORKING_MODEL[(self.settings.provider, getattr(self, '_configured_model', self.settings.model))] = name
                 return answer
             except Exception as exc:  # noqa: BLE001 - log class + HTTP status only, never the message
                 status = getattr(exc, 'status_code', None) or getattr(getattr(exc, 'response', None), 'status_code', None)

@@ -130,3 +130,34 @@ def test_small_talk_goes_to_model_without_tools(tmp_path):
         assert not model.bound and 'chuyện đời thường' in model.seen[0]
     finally:
         service.close()
+
+
+def test_new_session_starts_on_the_model_that_worked(monkeypatch, tmp_path):
+    """Every browser session builds its own graph; the second one must not wait on the failing model again."""
+    from src.agent import graph_runtime
+    from src.agent.mixue_agent import MixueOperationsAgent
+    asked = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        asked.append(body['model'])
+        if body['model'] == 'gemini-broken':
+            return httpx.Response(404, json={'error': {'message': 'model not found'}})
+        return httpx.Response(200, json={'id': 'x', 'object': 'chat.completion', 'created': 0, 'model': body['model'],
+                                         'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': 'Chào bạn!'},
+                                                      'finish_reason': 'stop'}],
+                                         'usage': {'prompt_tokens': 1, 'completion_tokens': 1, 'total_tokens': 2}})
+    mock = httpx.MockTransport(handler)
+    monkeypatch.setattr(gemini_compat.httpx, 'HTTPTransport', lambda *a, **k: mock)
+    monkeypatch.setenv('LLM_FALLBACK_MODELS', 'gemini-ok')
+    monkeypatch.setattr(graph_runtime, '_WORKING_MODEL', {})
+    settings = AgentSettings(llm_enabled=True, provider='gemini', model='gemini-broken', api_key='test-key',
+                             base_url='https://generativelanguage.googleapis.com/v1beta/openai/',
+                             allow_external_transfer=True, audit_path=str(tmp_path / 'audit.jsonl'))
+    for _ in range(2):
+        service = MixueOperationsAgent(settings=settings, checkpointer=InMemorySaver())
+        try:
+            assert service.process_query('kể chuyện vui đi', 'MANAGER', 'Test')['text'] == 'Chào bạn!'
+        finally:
+            service.close()
+    assert asked == ['gemini-broken', 'gemini-ok', 'gemini-ok']
