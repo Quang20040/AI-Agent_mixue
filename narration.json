@@ -1,0 +1,97 @@
+[
+ {
+  "start": 0.0,
+  "orig": "Xin chào thầy cô! Em là Bùi Văn Quang. Đây là BeverageOps AI, hệ thống AI Agent hỗ trợ đối soát chốt ca cho cửa hàng Mixue hai một ba hai, xây dựng trên ba trụ cột chính.",
+  "resp": "Xin chào thầy cô! Em là Bùi Văn Quang. Đây là Bi-vơ-rịt Óp Ây Ai, hệ thống Ây Ai Ây-giần hỗ trợ đối soát chốt ca cho cửa hàng Mixue hai một ba hai, xây dựng trên ba trụ cột chính."
+ },
+ {
+  "start": 8.4,
+  "orig": "Đầu tiên là đăng nhập. Hệ thống phân quyền ba vai trò, mật khẩu được băm bằng PBKDF2, và đăng nhập sai tám lần sẽ bị khóa sáu mươi giây.",
+  "resp": "Đầu tiên là đăng nhập. Hệ thống phân quyền ba vai trò, mật khẩu được băm bằng pê bê ca đê ép hai, và đăng nhập sai tám lần sẽ bị khóa sáu mươi giây."
+ },
+ {
+  "start": 17.8,
+  "orig": "Trụ cột thứ nhất: chốt ca từ ảnh. Nhân viên chỉ cần chụp sổ giao ca viết tay và phiếu POS, rồi tải lên. Một ảnh có thể chứa cả ba ca.",
+  "resp": "Trụ cột thứ nhất: chốt ca từ ảnh. Nhân viên chỉ cần chụp sổ giao ca viết tay và phiếu pốt, rồi tải lên. Một ảnh có thể chứa cả ba ca."
+ },
+ {
+  "start": 29.7,
+  "orig": "Gemini chỉ chép nguyên văn từng ô, tuyệt đối không tự tính. Hệ thống còn phát hiện ngày trên ảnh khác với ngày đang chọn.",
+  "resp": "Giê-mi-nai chỉ chép nguyên văn từng ô, tuyệt đối không tự tính. Hệ thống còn phát hiện ngày trên ảnh khác với ngày đang chọn."
+ },
+ {
+  "start": 36.9,
+  "orig": "Sau đó, mã tất định mới quy đổi số viết tắt, tách biểu thức cộng, và đối chiếu với phiếu POS.",
+  "resp": "Sau đó, mã tất định mới quy đổi số viết tắt, tách biểu thức cộng, và đối chiếu với phiếu pốt."
+ },
+ {
+  "start": 43.7,
+  "orig": "Mỗi ô đều có bằng chứng rõ ràng: chữ đọc từ ảnh, giá trị đã chuẩn hóa, và lý do cần kiểm tra.",
+  "resp": "Mỗi ô đều có bằng chứng rõ ràng: chữ đọc từ ảnh, giá trị đã chuẩn hóa, và lý do cần kiểm tra."
+ },
+ {
+  "start": 52.2,
+  "orig": "Ô đọc chắc được điền thẳng. Còn ô chưa chắc, hệ thống điền gợi ý và tô vàng, để nhân viên đối chiếu lại với ảnh.",
+  "resp": "Ô đọc chắc được điền thẳng. Còn ô chưa chắc, hệ thống điền gợi ý và tô vàng, để nhân viên đối chiếu lại với ảnh."
+ },
+ {
+  "start": 61.1,
+  "orig": "Trụ cột thứ hai: con người duyệt. Báo cáo gửi đi chỉ nằm trong hàng đợi, chưa có con số nào được ghi sổ.",
+  "resp": "Trụ cột thứ hai: con người duyệt. Báo cáo gửi đi chỉ nằm trong hàng đợi, chưa có con số nào được ghi sổ."
+ },
+ {
+  "start": 67.6,
+  "orig": "Nhân viên cũng không có quyền xem doanh thu, kể cả khi hỏi trợ lý. Trợ lý từ chối lịch sự, và gợi ý những việc vẫn có thể giúp.",
+  "resp": "Nhân viên cũng không có quyền xem doanh thu, kể cả khi hỏi trợ lý. Trợ lý từ chối lịch sự, và gợi ý những việc vẫn có thể giúp."
+ },
+ {
+  "start": 90.0,
+  "orig": "Về phía quản lý, chuông báo việc chờ duyệt hiện ngay trên trang chủ.",
+  "resp": "Về phía quản lý, chuông báo việc chờ duyệt hiện ngay trên trang chủ."
+ },
+ {
+  "start": 96.5,
+  "orig": "Khi duyệt, đồ thị LangGraph dừng lại ở bước interrupt, chờ quyết định của quản lý rồi mới ghi sổ. Ở đây, em bấm từ chối để không làm thay đổi sổ thật.",
+  "resp": "Khi duyệt, đồ thị Lăng-gráp dừng lại ở bước in-tơ-rắp, chờ quyết định của quản lý rồi mới ghi sổ. Ở đây, em bấm từ chối để không làm thay đổi sổ thật."
+ },
+ {
+  "start": 106.2,
+  "orig": "Yêu cầu chuyển sang trạng thái bị từ chối, và nhân viên thấy ngay kết quả.",
+  "resp": "Yêu cầu chuyển sang trạng thái bị từ chối, và nhân viên thấy ngay kết quả."
+ },
+ {
+  "start": 114.0,
+  "orig": "Doanh thu mỗi ngày chỉ có một con số, lấy từ báo cáo đã được duyệt.",
+  "resp": "Doanh thu mỗi ngày chỉ có một con số, lấy từ báo cáo đã được duyệt."
+ },
+ {
+  "start": 118.3,
+  "orig": "Trụ cột thứ ba: tác tử LangGraph. Mỗi câu hỏi đi qua các bước kiểm tra an toàn, gọi mô hình, kiểm tra quyền, rồi mới chạy công cụ. Cả hai mươi lăm công cụ đều được phân quyền.",
+  "resp": "Trụ cột thứ ba: tác tử Lăng-gráp. Mỗi câu hỏi đi qua các bước kiểm tra an toàn, gọi mô hình, kiểm tra quyền, rồi mới chạy công cụ. Cả hai mươi lăm công cụ đều được phân quyền."
+ },
+ {
+  "start": 134.1,
+  "orig": "Câu trả lời so sánh doanh thu lấy từ công cụ get daily sales, trên dữ liệu đã duyệt, kèm nguồn để kiểm tra lại. Không có con số nào bị bịa ra.",
+  "resp": "Câu trả lời so sánh doanh thu lấy từ công cụ ghét đây-li xeo, trên dữ liệu đã duyệt, kèm nguồn để kiểm tra lại. Không có con số nào bị bịa ra."
+ },
+ {
+  "start": 149.7,
+  "orig": "Hỏi viết tắt như c t, T S 1, công thức được lấy thẳng từ bảng định lượng, chứ không để mô hình tự nhớ.",
+  "resp": "Hỏi viết tắt như xê tê, tê ét một, công thức được lấy thẳng từ bảng định lượng, chứ không để mô hình tự nhớ."
+ },
+ {
+  "start": 161.3,
+  "orig": "Dự báo bán hàng dùng trung bình trượt, sai số WAPE khoảng hai mươi hai phần trăm, có hiệu chỉnh theo doanh thu chốt ca và thời tiết.",
+  "resp": "Dự báo bán hàng dùng trung bình trượt, sai số oe-ép khoảng hai mươi hai phần trăm, có hiệu chỉnh theo doanh thu chốt ca và thời tiết."
+ },
+ {
+  "start": 174.8,
+  "orig": "Còn với chuyện ngoài lề, trợ lý trả lời tự nhiên, ngắn gọn, và đúng vai.",
+  "resp": "Còn với chuyện ngoài lề, trợ lý trả lời tự nhiên, ngắn gọn, và đúng vai."
+ },
+ {
+  "start": 180.8,
+  "orig": "Tóm lại: AI chép chữ, mã tính tiền, và con người quyết định. Em xin cảm ơn thầy cô đã theo dõi!",
+  "resp": "Tóm lại: Ây Ai chép chữ, mã tính tiền, và con người quyết định. Em xin cảm ơn thầy cô đã theo dõi!"
+ }
+]
