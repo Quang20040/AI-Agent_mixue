@@ -1,0 +1,57 @@
+{
+ "evaluation_period": "2026-07-31 to 2026-10-15 (77 days)",
+ "items": 39,
+ "rows_evaluated": 3003,
+ "refit_every_days": 7,
+ "features": [
+  "dow",
+  "lag1",
+  "lag2",
+  "lag7",
+  "lag14",
+  "ma7",
+  "ma14",
+  "ma28",
+  "dow_ma3",
+  "store_lag1",
+  "store_ma7",
+  "sku"
+ ],
+ "metrics": {
+  "seasonal_naive": {
+   "MAE": 11.46,
+   "WAPE_pct": 27.15,
+   "Bias_pct": 1.45
+  },
+  "moving_average": {
+   "MAE": 9.46,
+   "WAPE_pct": 22.41,
+   "Bias_pct": 1.01
+  },
+  "day_of_week_ma": {
+   "MAE": 9.78,
+   "WAPE_pct": 23.17,
+   "Bias_pct": 1.82
+  },
+  "gradient_boosting": {
+   "MAE": 9.15,
+   "WAPE_pct": 21.68,
+   "Bias_pct": 1.88,
+   "days_better_than_moving_average": "49/77",
+   "wape_change_vs_ma_pct_points_95ci": [
+    -1.39,
+    -0.08
+   ]
+  },
+  "neural_net": {
+   "MAE": 12.12,
+   "WAPE_pct": 28.71,
+   "Bias_pct": 6.31,
+   "days_better_than_moving_average": "24/77",
+   "wape_change_vs_ma_pct_points_95ci": [
+    2.37,
+    11.25
+   ]
+  }
+ }
+}
