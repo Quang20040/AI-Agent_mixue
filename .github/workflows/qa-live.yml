@@ -26,6 +26,15 @@ jobs:
         run: |
           pip install playwright
           python -m playwright install --with-deps chromium
+      - name: OCR timing
+        if: github.event.inputs.mode == 'ocrtime'
+        run: |
+          cd scripts && python ocr_timing.py "${{ github.event.inputs.url || 'https://mixue-beverageops-demo.onrender.com' }}" ../ocr_timing || true
+          cd ../ocr_timing && rm -f *.jpg && git init -q -b ocr-timing
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -q -m "OCR timing for ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" HEAD:ocr-timing
       - name: Narration audio
         if: github.event.inputs.mode == 'tts'
         run: |
@@ -69,10 +78,10 @@ jobs:
         if: github.event.inputs.mode == 'shots'
         run: python scripts/report_shots.py "${{ github.event.inputs.url || 'https://mixue-beverageops-demo.onrender.com' }}" qa_live
       - name: Run QA
-        if: github.event.inputs.mode != 'shots' && github.event.inputs.mode != 'video' && github.event.inputs.mode != 'tts'
+        if: github.event.inputs.mode != 'shots' && github.event.inputs.mode != 'video' && github.event.inputs.mode != 'tts' && github.event.inputs.mode != 'ocrtime'
         run: python scripts/qa_live.py "${{ github.event.inputs.url || 'https://mixue-beverageops-demo.onrender.com' }}" qa_live "${{ github.event.inputs.mode || 'all' }}"
       - name: Publish to qa-results branch
-        if: always() && github.event.inputs.mode != 'video' && github.event.inputs.mode != 'tts'
+        if: always() && github.event.inputs.mode != 'video' && github.event.inputs.mode != 'tts' && github.event.inputs.mode != 'ocrtime'
         run: |
           [ -d qa_live ] || exit 0
           cd qa_live
