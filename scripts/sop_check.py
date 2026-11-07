@@ -8,7 +8,7 @@ from playwright.sync_api import sync_playwright
 sys.argv = [sys.argv[0], sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else 'sop_check']
 import qa_live as q  # noqa: E402
 
-QUESTIONS = ['hồng trà ủ mấy phút', 'thach dao bao quan the nao', 'cách sửa máy lạnh bị chảy nước']
+QUESTIONS = ['tra tài liệu: những điểm còn cần xác nhận trong dữ liệu là gì', 'theo tài liệu, ảnh 17 là ảnh gì', 'việt quất đã có công thức trong tài liệu chưa']
 
 
 def main():
@@ -26,6 +26,7 @@ def main():
         panel = page.get_by_text('Mức dùng AI').first
         panel.scroll_into_view_if_needed()
         q.idle(page, 800)
+        q.idle(page, 4000)
         q.shot(page, 'ai_usage_panel')
         out['usage_text'] = page.evaluate("document.body.innerText.split('Mức dùng AI')[1]?.slice(0, 3000) || ''")
         browser.close()
