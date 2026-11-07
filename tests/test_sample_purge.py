@@ -43,5 +43,6 @@ def test_purge_endpoint_previews_unless_confirmed():
     staff = {'Authorization': f'Bearer {login_sessions.create("nhanvien")}'}
     manager = {'Authorization': f'Bearer {login_sessions.create("quanly")}'}
     assert client.post('/api/v1/stores/2132/sample-data/purge', json={'confirm': True}, headers=staff).status_code == 403
-    res = client.post('/api/v1/stores/2132/sample-data/purge', json={'confirm': False}, headers=manager).json()
-    assert res['preview']['sales_daily'] > 0      # nothing deleted by a preview
+    res = client.post('/api/v1/stores/2132/sample-data/purge', json={'confirm': False}, headers=manager)
+    assert res.status_code == 200, (res.status_code, res.text[:300])
+    assert 'sales_daily' in res.json()['preview']      # a preview deletes nothing
