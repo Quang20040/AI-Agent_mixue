@@ -36,5 +36,26 @@ services:
     volumes:
       - ./data:/app/data
 
+  # REST API for other frontends (mobile app, React web, POS): http://localhost:8000/docs
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: ["python", "-m", "uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mixue_admin}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD before starting}@postgres:5432/${POSTGRES_DB:-beverageops}
+      APP_ENV: production
+      APP_DEMO_MODE: 'false'
+      STORE_ID: ${STORE_ID:?Set STORE_ID before starting}
+      TZ: Asia/Ho_Chi_Minh
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./data:/app/data
+
 volumes:
   postgres_data:
