@@ -11,13 +11,20 @@ RECIPE_TO_STOCK = {
     'NL04': '21',  # Syrup hạt dẻ và bơ → Syrup hạt dẻ
     'NL05': '25',  # Syrup socola → Syrup Socola
     'NL10': '29',  # Vụn Oreo → Vụn Oreo
+    'NL11': '23',  # Mứt xoài → Syrup Xoài (850g*20 lon) — shop confirmed: "mứt xoài là syrup xoài"
+    'NL12': '16',  # Mứt đào mật → Mứt đào vàng — shop confirmed: đào mật and đào vàng are the same peach syrup
     'NL13': '16',  # Mứt đào vàng → Mứt đào vàng (900g*20 hộp)
     'NL15': '27',  # Mứt chanh leo → Syrup chanh dây (chanh leo = chanh dây)
     'NL16': '15',  # Mứt cam bưởi → Syrup cam bưởi
 }
+# Not bought on their own, so never put on a purchase order (shop confirmed):
+NOT_PURCHASED = {
+    'NL09': 'lấy từ thùng ốc quế',          # Vụn ốc quế = broken cones from the cone carton
+}
+# Bought by the box outside the stock sheet (shop confirmed) — on-hand is not tracked in the ledger.
+BOUGHT_PER_BOX = {'NL22'}                    # Bột cà phê hòa tan
 # Still to confirm with the shop (left unmapped on purpose):
-#   NL11 Mứt xoài ↔ 23 Syrup Xoài (lon)?   NL12 Mứt đào mật ↔ 17 Mứt trái đào?   NL14 Mứt dâu tây ↔ 24 Syrup Dâu Tây (hộp)?
-#   NL09 Vụn ốc quế, NL22 Bột cà phê hòa tan: no matching stock item.
+#   NL14 Mứt dâu tây ↔ 24 Syrup Dâu Tây (hộp)?
 
 
 def stock_id(recipe_id: str) -> str | None:

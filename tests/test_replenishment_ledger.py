@@ -67,3 +67,24 @@ def test_recipe_codes_are_ordered_as_stock_sheet_items():
     unmapped = [x for x in lines.values() if x['on_hand_source'] == 'chưa ghép với sổ kho']
     assert all(str(x['ingredient_id']).startswith('NL') for x in unmapped)
     update_stock_cell_manually('10', 'Tồn cuối T10/2026', '', 'chucuahang', year=2026, month=11)
+
+
+def test_shop_confirmed_mappings():
+    from src.engine.optimizer import MIXUE_CARTON_SPECS
+    from src.engine.stock_mapping import BOUGHT_PER_BOX, NOT_PURCHASED, stock_id
+    assert stock_id('NL11') == '23'                        # mứt xoài = syrup xoài, 20 lon/thùng
+    assert stock_id('NL12') == stock_id('NL13') == '16'    # đào mật và đào vàng là cùng syrup đào, 20 hộp/thùng
+    assert MIXUE_CARTON_SPECS['NL11']['carton_size'] == 17000.0 and MIXUE_CARTON_SPECS['NL12'] is MIXUE_CARTON_SPECS['16']
+    assert 'NL09' in NOT_PURCHASED and stock_id('NL09') is None   # vụn ốc quế lấy từ thùng ốc quế
+    assert 'NL22' in BOUGHT_PER_BOX and 'NL22' not in MIXUE_CARTON_SPECS   # cà phê hòa tan mua theo hộp, không phải cafe rang
+
+
+def test_cone_crumbs_never_ordered_and_peach_merged():
+    from src.agent.config import AgentSettings
+    from src.agent.mixue_agent import MixueOperationsAgent
+    agent = MixueOperationsAgent(settings=AgentSettings.from_env())
+    result = agent.tool_optimize_replenishment(target_date='2026-11-07', persist_draft=False)
+    every = result.get('all_lines') or result['top_orders']
+    ids = [str(x['ingredient_id']) for x in every]
+    assert 'NL09' not in ids and 'NL11' not in ids and 'NL12' not in ids
+    assert len(ids) == len(set(ids))

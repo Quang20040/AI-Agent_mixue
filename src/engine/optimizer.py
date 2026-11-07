@@ -98,12 +98,12 @@ MIXUE_CARTON_SPECS.update({
     "NL08": MIXUE_CARTON_SPECS["18"],  # Thạch lô hội: Thùng 18kg (1kg*18 túi)
     "NL10": MIXUE_CARTON_SPECS["29"],  # Vụn Oreo: Thùng 10kg (1kg*10 gói)
     "NL11": MIXUE_CARTON_SPECS["23"],  # Mứt xoài: Thùng 17kg (850g*20 lon)
-    "NL12": MIXUE_CARTON_SPECS["17"],  # Mứt trái đào: Thùng 18kg (900g*20 hộp)
+    "NL12": MIXUE_CARTON_SPECS["16"],  # Mứt đào mật = syrup đào (cùng loại đào vàng): Thùng 18kg (900g*20 hộp)
     "NL13": MIXUE_CARTON_SPECS["16"],  # Mứt đào vàng: Thùng 18kg (900g*20 hộp)
     "NL14": MIXUE_CARTON_SPECS["24"],  # Mứt dâu tây: Thùng 18kg (900g*20 hộp)
     "NL15": MIXUE_CARTON_SPECS["27"],  # Mứt chanh leo: Thùng 18kg (900g*20 lon)
     "NL16": MIXUE_CARTON_SPECS["15"],  # Mứt cam bưởi: Thùng 18kg (900g*20 hộp)
-    "NL22": MIXUE_CARTON_SPECS["28"]   # Bột cafe: Thùng 7.6kg (380g*20 gói)
+    # NL22 Bột cà phê hòa tan: mua lẻ theo hộp, không phải Bột Cafe rang (28) — không gán quy cách thùng
 })
 
 
@@ -275,10 +275,12 @@ class OptimizerEngine:
         po_lines = []
 
         # Recipe codes → stock-sheet items, so the order (and the delivery that comes back) lands on the sheet's rows.
-        from src.engine.stock_mapping import stock_id
+        from src.engine.stock_mapping import BOUGHT_PER_BOX, NOT_PURCHASED, stock_id
         catalog = {i.ingredient_id: i for i in self.db.query(Ingredient).all()}
         merged_rows: dict[str, dict] = {}
         for _, row in raw_demand.iterrows():
+            if str(row["ingredient_id"]) in NOT_PURCHASED:
+                continue
             target = stock_id(row["ingredient_id"]) or row["ingredient_id"]
             entry = merged_rows.setdefault(target, {
                 "ingredient_id": target,
@@ -304,6 +306,9 @@ class OptimizerEngine:
             elif ing_id in counted:
                 on_hand_packs = counted[ing_id] / pack_size_for_stock
                 on_hand_source = "kiểm kê"
+            elif str(ing_id) in BOUGHT_PER_BOX:
+                on_hand_packs = 0.0
+                on_hand_source = "mua lẻ theo hộp, không theo dõi trên sổ kho"
             elif not row["mapped"]:
                 on_hand_packs = 0.0
                 on_hand_source = "chưa ghép với sổ kho"
