@@ -70,7 +70,6 @@ from src.engine.daily_stock_service import (
     update_stock_movement,
 )
 from src.models import MenuItem, User
-from src.engine.plan_service import list_plans
 
 # ==============================================================================
 # CẤU HÌNH TRANG STREAMLIT
@@ -954,107 +953,24 @@ with st.container(key="workspace"):
             </div>
             """, unsafe_allow_html=True)
 
-        if "po_plan_vi" in st.session_state and st.session_state["po_plan_vi"]["top_orders"]:
-            po_res = st.session_state["po_plan_vi"]
-            st.divider()
-            st.write(f"#### 📄 Dự thảo Đơn Hàng `{po_res['draft_plan_id']}` (Gồm {po_res['critical_shortage_count']} mặt hàng nguy cấp)")
-
-            po_items = pd.DataFrame(po_res["top_orders"])
-            po_display = po_items.copy()
-
-            # Định dạng cột tổng lượng quy đổi và tồn kho kèm đơn vị
-            po_display = po_display.reindex(columns=["ingredient_id", "ingredient_name", "ingredient_group", "daily_demand", "current_on_hand", "days_of_stock_remaining", "carton_spec", "display_order", "recommended_order_qty", "unit", "priority"])
-            po_display["Tổng quy đổi"] = po_display.apply(
-                lambda r: f"{r['recommended_order_qty']:,.0f} {r['unit']}", axis=1
-            )
-            po_display["Tồn kho"] = po_display.apply(
-                lambda r: f"{r['current_on_hand']:,.0f} {r['unit']}", axis=1
-            )
-            po_display["Nhu cầu/ngày"] = po_display.apply(
-                lambda r: f"{r['daily_demand']:,.1f} {r['unit']}", axis=1
-            )
-
-            po_display = po_display.rename(columns={
-                "ingredient_id": "Mã NL",
-                "ingredient_name": "Tên nguyên liệu",
-                "ingredient_group": "Nhóm hàng",
-                "days_of_stock_remaining": "Số ngày đủ",
-                "carton_spec": "Quy cách đóng gói chuẩn Mixue",
-                "display_order": "Số lượng đặt (Nguyên thùng/kiện)",
-                "priority": "Mức ưu tiên"
-            })
-
-            prio_map = {"CRITICAL": "🚨 NGUY CẤP (HẾT HÀNG)", "REORDER": "📦 CẦN NHẬP", "OK": "✅ ĐỦ HÀNG"}
-            po_display["Mức ưu tiên"] = po_display["Mức ưu tiên"].map(lambda x: prio_map.get(x, x))
-
-            st.dataframe(
-                po_display[["Mã NL", "Tên nguyên liệu", "Nhóm hàng", "Nhu cầu/ngày", "Tồn kho", "Số ngày đủ", "Quy cách đóng gói chuẩn Mixue", "Số lượng đặt (Nguyên thùng/kiện)", "Tổng quy đổi", "Mức ưu tiên"]],
-                use_container_width=True,
-                hide_index=True
-            )
-
-            with st.container(border=True):
-                c_po_app1, c_po_app2 = st.columns([2, 1], gap="medium")
-                with c_po_app1:
-                    st.warning("⚠️ Chỉ Quản lý cửa hàng (Bùi Văn Quang) hoặc Chủ quán (Nguyễn Hạnh Chi) mới có quyền ký duyệt đơn nhập hàng.")
-                with c_po_app2:
-                    if st.button("✍️ Ký duyệt Đơn Nhập Hàng", key="approve_po_btn_vi", type="primary", use_container_width=True):
-                        app_res = agent.tool_approve_plan(po_res["draft_plan_id"], user_role=role_key, user_name=user_name)
-                        if app_res.get("is_approved"):
-                            st.success(app_res["message"])
-                        else:
-                            st.error(app_res["message"])
-
-
+        from src.dashboard.purchase_ui import render_draft_editor, render_order_history
+        from src.engine.plan_service import get_plan as _get_plan
+        if flash := st.session_state.pop("po_flash", None):
+            (st.success if flash[0] == "success" else st.error)(flash[1])
+        po_res = st.session_state.get("po_plan_vi")
+        if po_res and po_res.get("draft_plan_id"):
+            draft = _get_plan(po_res["draft_plan_id"])
+            if draft and draft.get("status") == "PENDING_APPROVAL":
+                st.divider()
+                st.write(f"#### 📄 Dự thảo đơn hàng `{draft['plan_id']}` · {po_res['critical_shortage_count']} mặt hàng sắp hết, "
+                         f"{po_res['reorder_count']} cần nhập")
+                render_draft_editor(agent, draft, role_key, user_name, st.session_state.get("username", user_name), "new")
+            elif po_res and not po_res.get("top_orders"):
+                st.info("Tồn kho đủ theo nhu cầu dự báo; không có nguyên liệu cần đặt thêm.")
         st.divider()
-        if "po_plan_vi" in st.session_state and not st.session_state["po_plan_vi"]["top_orders"]:
-            st.info("Tồn kho đủ theo nhu cầu dự báo; không có nguyên liệu cần đặt thêm.")
-        st.write("#### Lịch sử đơn nhập hàng đã lưu")
-        saved_orders = list_plans("REPLENISHMENT_PO")
-        if not saved_orders:
-            st.info("Chưa có đơn nhập hàng. Tạo dự thảo để lưu đơn đầu tiên.")
-        shown_orders = saved_orders[:8]
-        if len(saved_orders) > 8:
-            older = {f"{o['plan_id']} · {o['target_date']}": o for o in saved_orders[8:]}
-            pick = st.selectbox(f"Đơn cũ hơn ({len(older)})", ["—"] + list(older), key="older_po_pick")
-            if pick != "—":
-                shown_orders = shown_orders + [older[pick]]
-        for order in shown_orders:
-            approved = order["status"] == "APPROVED"
-            status_label = "Đã duyệt · Chờ nhận hàng" if approved else "Chờ duyệt"
-            with st.expander(f"{order['plan_id']} · {order['target_date']} · {status_label}"):
-                st.caption(f"Ngày tạo: {order['created_at']} · Thời gian giao: {order.get('lead_time_days', 2)} ngày")
-                if approved:
-                    st.success(f"Người duyệt: {order['approved_by']} · Lúc: {order['approved_at']}")
-                lines = pd.DataFrame([line for line in order["lines"] if line.get("recommended_order_qty", 0) > 0])
-                if lines.empty:
-                    st.info("Không có nguyên liệu cần đặt trong đơn này.")
-                else:
-                    details = lines[["ingredient_id", "ingredient_name", "display_order", "carton_spec", "recommended_order_qty", "unit"]].rename(columns={
-                        "ingredient_id": "Mã nguyên liệu", "ingredient_name": "Nguyên liệu", "display_order": "Số thùng/kiện",
-                        "carton_spec": "Quy cách", "recommended_order_qty": "Tổng lượng", "unit": "Đơn vị"})
-                    st.dataframe(details, use_container_width=True, hide_index=True)
-                    def order_csv(details=details, order=order, status_label=status_label):
-                        export = details.copy()
-                        export.insert(0, "Mã đơn", order["plan_id"])
-                        export.insert(1, "Ngày đặt", order["target_date"])
-                        export.insert(2, "Trạng thái", status_label)
-                        export.insert(3, "Người duyệt", order.get("approved_by", ""))
-                        export.insert(4, "Thời điểm duyệt", order.get("approved_at", ""))
-                        return export.to_csv(index=False).encode("utf-8-sig")
-                    st.download_button("Tải phiếu đặt hàng CSV", order_csv, on_click="ignore",
-                                       file_name=f"{order['plan_id']}.csv", mime="text/csv", key=f"download_{order['plan_id']}")
-                if not approved and st.button("Ký duyệt đơn đã lưu", key=f"approve_{order['plan_id']}"):
-                    result = agent.tool_approve_plan(order["plan_id"], user_role=role_key, user_name=user_name)
-                    if result.get("is_approved"):
-                        st.rerun()
-                    else:
-                        st.error(result["message"])
-        st.caption("Ký duyệt lưu phiếu đặt hàng. Ghi nhận hàng thực nhận tại Sổ kho khi hàng được giao.")
+        render_order_history(agent, role_key, user_name, st.session_state.get("username", user_name))
 
-    # ==============================================================================
-    # TAB 5: TEM IN NHÃN & CÔNG THỨC PHA CHẾ (BOM)
-    # ==============================================================================
+
     elif section == "Tem & công thức":
         st.subheader("📋 Sổ tay Công thức Pha chế")
         st.caption("Tra cứu định lượng nguyên liệu và hướng dẫn pha chế theo món.")

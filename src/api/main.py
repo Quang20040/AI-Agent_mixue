@@ -274,6 +274,49 @@ def decide(body: DecisionIn, kind: str = Path(..., pattern='^(shift|stock|plan)$
     return {'messages': _decide(agent, items, body.approve, user.role, user.name, user.username)}
 
 
+# --- purchase orders (manager) -----------------------------------------------------------------------------
+
+@api.get('/v1/stores/{store_id}/purchase-orders', tags=['purchase orders'])
+def purchase_orders_list(status: str | None = Query(None, pattern='^(PENDING_APPROVAL|APPROVED|RECEIVED|REJECTED)$'),
+                         store_id: str = Depends(store_access), user: User = Depends(admin_user)):
+    from src.engine.plan_service import list_plans
+    from src.engine.purchase_orders import expected_arrival
+    orders = [o for o in list_plans('REPLENISHMENT_PO') if not status or o.get('status') == status][:50]
+    return _plain([{**o, 'expected_arrival': expected_arrival(o)} for o in orders])
+
+
+class QuantitiesIn(BaseModel):
+    packs: dict[str, int] = Field(..., description='mã nguyên liệu → số thùng/kiện, ví dụ {"1": 7}')
+
+
+@api.patch('/v1/stores/{store_id}/purchase-orders/{plan_id}', tags=['purchase orders'])
+def purchase_order_edit(body: QuantitiesIn, plan_id: str = Path(..., max_length=40), store_id: str = Depends(store_access),
+                        user: User = Depends(admin_user)):
+    """Change cartons on an AI draft before approving it (approval: POST /approvals/plan/{plan_id})."""
+    from src.engine.purchase_orders import update_quantities
+    ok, msg = update_quantities(plan_id, body.packs, user.name, user.role)
+    if not ok:
+        raise HTTPException(409, msg)
+    return {'message': msg}
+
+
+class ReceiveIn(BaseModel):
+    received: dict[str, int] = Field(..., description='mã nguyên liệu → số thùng thực nhận')
+    received_on: date | None = None
+    note: str = Field('', max_length=300)
+
+
+@api.post('/v1/stores/{store_id}/purchase-orders/{plan_id}/receive', tags=['purchase orders'])
+def purchase_order_receive(body: ReceiveIn, plan_id: str = Path(..., max_length=40), store_id: str = Depends(store_access),
+                           user: User = Depends(admin_user)):
+    """Goods arrived: one stock-in slip per line with the cartons actually received; the order becomes RECEIVED."""
+    from src.engine.purchase_orders import receive
+    ok, msg, slips = receive(plan_id, body.received, body.received_on or date.today(), user.username, user.role, body.note)
+    if not ok:
+        raise HTTPException(409, msg)
+    return {'message': msg, 'slips': slips}
+
+
 # --- assistant -----------------------------------------------------------------------------------------------
 
 class ChatIn(BaseModel):
