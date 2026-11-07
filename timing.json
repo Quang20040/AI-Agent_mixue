@@ -1,0 +1,29 @@
+[
+ {
+  "case": "one_photo_click_now",
+  "photos": 1,
+  "pause_before_click_s": 0,
+  "seconds_after_click": 10.2,
+  "app_summary": "Đọc xong 1 ảnh trong 7.6 giây · 5 ô vàng cần kiểm tra · 2 ô trống · ⚖️ cộng ngang lệch",
+  "model_calls": "",
+  "error": ""
+ },
+ {
+  "case": "three_photos_click_now",
+  "photos": 3,
+  "pause_before_click_s": 0,
+  "seconds_after_click": 8.8,
+  "app_summary": "Đọc xong 3 ảnh trong 5.8 giây · 9 ô vàng cần kiểm tra · 2 ô trống · ⚖️ cộng ngang lệch",
+  "model_calls": "Thời gian gọi AI: ảnh 1: cache 0s · ảnh 2: cache 0s · ảnh 3: cache 0s",
+  "error": ""
+ },
+ {
+  "case": "one_photo_after_30s",
+  "photos": 1,
+  "pause_before_click_s": 30,
+  "seconds_after_click": 2.6,
+  "app_summary": "Đọc xong 1 ảnh · không có ô cần kiểm tra · 11 ô trống · ⚖️ cộng ngang khớp",
+  "model_calls": "",
+  "error": ""
+ }
+]
