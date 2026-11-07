@@ -1106,9 +1106,10 @@ class ProviderHTTPError(Exception):
 
 
 class _NativeAnswer:
-    def __init__(self, content: str, model_name: str, finish_reason: str):
+    def __init__(self, content: str, model_name: str, finish_reason: str, usage: dict | None = None):
         self.content = content
         self.response_metadata = {'model_name': model_name, 'finish_reason': finish_reason}
+        self.usage_metadata = usage or {}
 
 
 class GeminiNativeReader:
@@ -1152,7 +1153,7 @@ class GeminiNativeReader:
         if not text:
             raise ProviderHTTPError(None, f'empty answer (finishReason={finish or "?"}, '
                                           f'block={(data.get("promptFeedback") or {}).get("blockReason")})')
-        return _NativeAnswer(text, self.model_id, 'length' if finish == 'max_tokens' else finish)
+        return _NativeAnswer(text, self.model_id, 'length' if finish == 'max_tokens' else finish, data.get('usageMetadata'))
 
 
 def _read_with_mode(valid_images, mode, model, cfg, shift_hint, target_date, model_id=None):
@@ -1193,10 +1194,15 @@ def _read_with_mode(valid_images, mode, model, cfg, shift_hint, target_date, mod
                     'image_url': {'url': f'data:{mime_multi};base64,' + base64.b64encode(data_multi).decode()},
                 })
 
+        started = time.monotonic()
         answer = reader.invoke([
             SystemMessage(content=prompt),
             HumanMessage(content=human_content),
         ])
+        from src.engine import llm_usage
+        tin, tout, think = llm_usage.usage_from_metadata(getattr(answer, 'usage_metadata', None))
+        llm_usage.record('ocr', str(getattr(answer, 'response_metadata', {}).get('model_name') or model_id or ocr_model_id(cfg)),
+                         tin, tout, think, ok=True, seconds=time.monotonic() - started)
         if getattr(answer, 'response_metadata', {}).get('finish_reason') in {'length', 'max_tokens'}:
             return {'status': 'OCR_ERROR', 'error_code': 'OUTPUT_TRUNCATED', 'error_type': 'IncompleteResponse',
                     'message': 'Mô hình trả kết quả chưa đầy đủ. Hãy thử đọc từng ảnh; chưa có số liệu để lưu.'}

@@ -36,7 +36,7 @@ os.environ.update(_PATHS)
 
 
 @pytest.fixture(autouse=True)
-def disable_live_models(monkeypatch):
+def disable_live_models(monkeypatch, tmp_path):
     for name, value in _PATHS.items():
         monkeypatch.setenv(name, value)
     monkeypatch.setenv('POSTGRES_MCP_ENABLED', 'false')
@@ -48,6 +48,7 @@ def disable_live_models(monkeypatch):
     # Older OCR tests fake only the OpenAI-compatible reader, so they keep the compat-first order;
     # tests/test_ocr_speed.py checks the native-first default.
     monkeypatch.setenv('OCR_NATIVE_FIRST', '0')
+    monkeypatch.setenv('LLM_USAGE_DB', str(tmp_path / 'llm_usage.db'))
     import sys
     if 'src.engine.vision_ocr' in sys.modules:
         sys.modules['src.engine.vision_ocr']._COOLDOWN.clear()

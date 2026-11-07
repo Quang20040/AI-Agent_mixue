@@ -27,12 +27,12 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# Standard token pricing reference (USD per 1M tokens) - strictly disclosed when calculating cost
+# Token pricing (USD per 1M tokens), shared with the per-call usage log in src/engine/llm_usage.py.
+from src.engine.llm_usage import PRICES as _PRICES  # noqa: E402
+
 MODEL_PRICING = {
     "offline_rule_engine": {"input_per_m": 0.0, "output_per_m": 0.0},
-    "gemini-2.0-flash": {"input_per_m": 0.10, "output_per_m": 0.40},
-    "gemini-1.5-flash": {"input_per_m": 0.075, "output_per_m": 0.30},
-    "gemini-1.5-pro": {"input_per_m": 1.25, "output_per_m": 5.00},
+    **{model: {"input_per_m": p[0], "output_per_m": p[1]} for model, p in _PRICES.items()},
 }
 
 # Empirical manual baseline for shift closing without AI (seconds)

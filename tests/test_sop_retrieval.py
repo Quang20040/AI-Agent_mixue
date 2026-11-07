@@ -139,3 +139,31 @@ def test_no_question_is_sent_for_embedding_when_ai_is_off(monkeypatch):
     monkeypatch.setattr(sop_embeddings, 'document_vectors', lambda: {'x': None})
     monkeypatch.setattr(httpx, 'post', lambda *a, **k: (_ for _ in ()).throw(AssertionError('network')))
     assert sop_embeddings.query_vector('trân châu nấu bao lâu') is None  # LLM_ENABLED=false in tests
+
+
+def test_question_embedding_is_requested_with_the_secret_key_and_logged(monkeypatch):
+    """Settings hold the key as a SecretStr: the request must carry its value (regression)."""
+    import httpx
+    from pydantic import SecretStr
+    from src.agent.config import AgentSettings
+    from src.engine import llm_usage, sop_embeddings
+    sent = {}
+
+    class Resp:
+        status_code = 200
+
+        def json(self):
+            return {'embeddings': [{'values': [0.6, 0.8]}]}
+
+    def post(url, json=None, timeout=None, headers=None):
+        sent.update(headers)
+        return Resp()
+    monkeypatch.setattr(httpx, 'post', post)
+    monkeypatch.setattr(sop_embeddings, 'document_vectors', lambda: {'x': None})
+    monkeypatch.setattr(sop_embeddings, '_QUERIES', {})
+    monkeypatch.setattr(sop_embeddings, '_COOLDOWN_UNTIL', [0.0])
+    cfg = AgentSettings(llm_enabled=True, provider='gemini', model='gemini-3.5-flash',
+                        api_key=SecretStr('k-123\n'), allow_external_transfer=True)
+    vec = sop_embeddings.query_vector('trân châu nấu bao lâu', settings=cfg)
+    assert vec is not None and sent['x-goog-api-key'] == 'k-123'
+    assert [r['feature'] for r in llm_usage.summary(1)] == ['embedding']

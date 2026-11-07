@@ -39,6 +39,7 @@ if [ -n "${PERSIST_DIR:-}" ]; then
   export OCR_EDITS_LOG_FILE="${OCR_EDITS_LOG_FILE:-$PERSIST_DIR/agent_private/ocr_user_edits.jsonl}"
   export AGENT_CHECKPOINT_PATH="${AGENT_CHECKPOINT_PATH:-$PERSIST_DIR/agent_private/checkpoints.sqlite}"
   export AGENT_AUDIT_PATH="${AGENT_AUDIT_PATH:-$PERSIST_DIR/agent_private/audit.jsonl}"
+  export LLM_USAGE_DB="${LLM_USAGE_DB:-$PERSIST_DIR/agent_private/llm_usage.db}"
   export CHAT_ATTACHMENTS_DIR="${CHAT_ATTACHMENTS_DIR:-$PERSIST_DIR/chat_attachments}"
   export SHIFT_UPLOADS_DIR="${SHIFT_UPLOADS_DIR:-$PERSIST_DIR/shift_uploads}"
 else

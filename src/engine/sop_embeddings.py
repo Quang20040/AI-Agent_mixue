@@ -95,10 +95,15 @@ def query_vector(query: str, settings=None) -> np.ndarray | None:
     try:
         from src.agent.config import AgentSettings
         cfg = settings or AgentSettings.from_env()
-        if not (cfg.llm_enabled and cfg.allow_external_transfer and cfg.api_key
+        key = cfg.api_key.get_secret_value() if hasattr(cfg.api_key, 'get_secret_value') else str(cfg.api_key or '')
+        if not (cfg.llm_enabled and cfg.allow_external_transfer and key.strip()
                 and cfg.provider in {'gemini', 'google', 'google_genai'}):
             return None
-        vec = embed_texts([query], 'RETRIEVAL_QUERY', cfg.api_key, timeout=float(os.environ.get('SOP_EMBED_TIMEOUT') or 4))[0]
+        started = time.monotonic()
+        vec = embed_texts([query], 'RETRIEVAL_QUERY', key, timeout=float(os.environ.get('SOP_EMBED_TIMEOUT') or 4))[0]
+        from src.engine import llm_usage  # the embedding API returns no token count: ~3 characters per token
+        llm_usage.record('embedding', embed_model(), max(1, len(query) // 3), 0, ok=True,
+                         seconds=time.monotonic() - started, estimated=True)
     except Exception as exc:  # noqa: BLE001 - any failure means "no semantic signal this time"
         logger.warning('SOP query embedding unavailable (%s); lexical ranking only', type(exc).__name__)
         _COOLDOWN_UNTIL[0] = time.monotonic() + 60

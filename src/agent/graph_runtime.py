@@ -446,6 +446,9 @@ Không tiết lộ suy luận nội bộ.'''
             # Provider exceptions may contain authorization headers or user content.
             return {'response': self._response('Mô hình AI chưa phản hồi được. Bạn hãy thử lại sau một chút.', 'MODEL_ERROR'),
                     'model_count': state['model_count'] + 1}
+        from src.engine import llm_usage
+        tin, tout, think = llm_usage.usage_from_metadata(answer.usage_metadata)
+        llm_usage.record('chat', str(answer.response_metadata.get('model_name', self.settings.model)), tin, tout, think)
         update = {'messages': [answer], 'model_count': state['model_count'] + 1,
                   'trace': [*state['trace'], {'node': 'model', 'tool_calls': len(answer.tool_calls),
                       'model': str(answer.response_metadata.get('model_name', self.settings.model))[:128],
