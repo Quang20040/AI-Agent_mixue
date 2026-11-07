@@ -47,8 +47,13 @@ def remove_last(page, n):
         buttons = page.locator('[class*="st-key-ocr_rm_"] button')
         if buttons.count() == 0:
             break
-        buttons.last.click()
-        q.idle(page, 600)
+        btn = buttons.last
+        try:
+            btn.scroll_into_view_if_needed(timeout=5000)
+            btn.click(timeout=8000)
+        except Exception:
+            btn.evaluate('b => b.click()')
+        q.idle(page, 900)
         removed += 1
     return removed
 
@@ -87,7 +92,7 @@ def cleanup(n):
         q.quick_login(page, 'quick_login_manager')
         q.nav(page, 'Chốt ca')
         before = count_images(page)
-        removed = remove_last(page, n) if before >= n else 0
+        removed = remove_last(page, min(n, before))
         after = count_images(page)
         q.shot(page, 'cleanup_after')
         (OUT / 'cleanup.json').write_text(json.dumps({'before': before, 'removed': removed, 'after': after}), encoding='utf-8')
