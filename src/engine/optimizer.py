@@ -98,7 +98,7 @@ MIXUE_CARTON_SPECS.update({
     "NL08": MIXUE_CARTON_SPECS["18"],  # Thạch lô hội: Thùng 18kg (1kg*18 túi)
     "NL10": MIXUE_CARTON_SPECS["29"],  # Vụn Oreo: Thùng 10kg (1kg*10 gói)
     "NL11": MIXUE_CARTON_SPECS["23"],  # Mứt xoài: Thùng 17kg (850g*20 lon)
-    "NL12": MIXUE_CARTON_SPECS["16"],  # Mứt đào mật = syrup đào (cùng loại đào vàng): Thùng 18kg (900g*20 hộp)
+    "NL12": MIXUE_CARTON_SPECS["17"],  # Mứt đào mật = syrup đào hồng: Thùng 18kg (900g*20 hộp)
     "NL13": MIXUE_CARTON_SPECS["16"],  # Mứt đào vàng: Thùng 18kg (900g*20 hộp)
     "NL14": MIXUE_CARTON_SPECS["24"],  # Mứt dâu tây: Thùng 18kg (900g*20 hộp)
     "NL15": MIXUE_CARTON_SPECS["27"],  # Mứt chanh leo: Thùng 18kg (900g*20 lon)

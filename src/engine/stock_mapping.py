@@ -12,8 +12,9 @@ RECIPE_TO_STOCK = {
     'NL05': '25',  # Syrup socola → Syrup Socola
     'NL10': '29',  # Vụn Oreo → Vụn Oreo
     'NL11': '23',  # Mứt xoài → Syrup Xoài (850g*20 lon) — shop confirmed: "mứt xoài là syrup xoài"
-    'NL12': '16',  # Mứt đào mật → Mứt đào vàng — shop confirmed: đào mật and đào vàng are the same peach syrup
-    'NL13': '16',  # Mứt đào vàng → Mứt đào vàng (900g*20 hộp)
+    'NL12': '17',  # Mứt đào mật (= đào hồng, dùng cho Super sundae đào hồng) → Mứt trái đào / syrup đào hồng (900g*20 hộp)
+    'NL13': '16',  # Mứt đào vàng → Mứt đào vàng / syrup đào vàng (900g*20 hộp)
+    'NL14': '24',  # Mứt dâu tây → Syrup Dâu Tây (900g*20 hộp) — shop confirmed
     'NL15': '27',  # Mứt chanh leo → Syrup chanh dây (chanh leo = chanh dây)
     'NL16': '15',  # Mứt cam bưởi → Syrup cam bưởi
 }
@@ -23,8 +24,6 @@ NOT_PURCHASED = {
 }
 # Bought by the box outside the stock sheet (shop confirmed) — on-hand is not tracked in the ledger.
 BOUGHT_PER_BOX = {'NL22'}                    # Bột cà phê hòa tan
-# Still to confirm with the shop (left unmapped on purpose):
-#   NL14 Mứt dâu tây ↔ 24 Syrup Dâu Tây (hộp)?
 
 
 def stock_id(recipe_id: str) -> str | None:
