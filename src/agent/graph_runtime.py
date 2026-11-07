@@ -127,9 +127,14 @@ class AgentGraph:
         if checkpointer is None:
             path = Path(self.settings.checkpoint_path)
             path.parent.mkdir(parents=True, exist_ok=True)
-            self.connection = sqlite3.connect(str(path), check_same_thread=False)
-            self.connection.execute('PRAGMA journal_mode = WAL')
-            self.connection.execute('PRAGMA busy_timeout = 5000')
+            self.connection = sqlite3.connect(str(path), check_same_thread=False, timeout=10)
+            # busy_timeout first: switching to WAL needs a moment of exclusive access, and another session
+            # (Streamlit tab, API user) may hold the file. Already-WAL files need no switch.
+            self.connection.execute('PRAGMA busy_timeout = 10000')
+            try:
+                self.connection.execute('PRAGMA journal_mode = WAL')
+            except sqlite3.OperationalError:
+                pass
             checkpointer = SqliteSaver(self.connection)
         self.lock = threading.RLock()
         builder = StateGraph(AgentState, context_schema=Actor)
