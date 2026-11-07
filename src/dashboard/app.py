@@ -395,12 +395,13 @@ with st.container(key="workspace"):
             pending_count = len(pending_list)
             inbox_tab_label = f"📋 Duyệt nhập / xuất kho ({pending_count} chờ)" if pending_count > 0 else "📋 Duyệt nhập / xuất kho"
 
+            # Lazy tabs: only the open tab is built and sent to the browser (the stock file alone is a month-wide table).
             tab_inbox, tab_matrix, tab_sales, tab_recon = st.tabs([
                 inbox_tab_label,
                 f"📦 File kho (Tháng {stock_month:02d}/{stock_year})",
                 "📊 Thống kê doanh thu",
                 "🔍 Kiểm tra hao hụt nguyên liệu"
-            ])
+            ], key="stock_admin_tabs", on_change="rerun")
 
             # Duyệt phiếu nhập / xuất kho: tick several slips and approve or reject them together.
             with tab_inbox:
@@ -431,296 +432,299 @@ with st.container(key="workspace"):
 
             # File kho của tháng đang chọn (đủ số ngày thực của tháng)
             with tab_matrix:
-                st.subheader(f"📦 File kho (Tháng {stock_month:02d}/{stock_year}) · {stock_days} ngày")
-                st.caption("Tính theo thùng / kiện / dây / bình. Chỉ ghi nhận phiếu nhập, xuất, kiểm kho đã được duyệt.")
+                if tab_matrix.open:
+                    st.subheader(f"📦 File kho (Tháng {stock_month:02d}/{stock_year}) · {stock_days} ngày")
+                    st.caption("Tính theo thùng / kiện / dây / bình. Chỉ ghi nhận phiếu nhập, xuất, kiểm kho đã được duyệt.")
 
-                matrix_df = get_stock_matrix_df(stock_year, stock_month)
-                _moved = (pd.to_numeric(matrix_df.get("Tổng nhập"), errors="coerce").fillna(0).sum()
-                          + pd.to_numeric(matrix_df.get("Tổng xuất"), errors="coerce").fillna(0).sum())
-                _opening = find_opening_column(matrix_df.columns)
-                if not _moved:
-                    carried = bool(_opening and (matrix_df[_opening] != "—").any())
-                    st.info(f"ℹ️ Kỳ Tháng {stock_month:02d}/{stock_year} hiện chưa có giao dịch thực tế phát sinh."
-                            + (" Cột tồn đầu kỳ là số chuyển sang từ tháng trước." if carried else ""))
+                    matrix_df = get_stock_matrix_df(stock_year, stock_month)
+                    _moved = (pd.to_numeric(matrix_df.get("Tổng nhập"), errors="coerce").fillna(0).sum()
+                              + pd.to_numeric(matrix_df.get("Tổng xuất"), errors="coerce").fillna(0).sum())
+                    _opening = find_opening_column(matrix_df.columns)
+                    if not _moved:
+                        carried = bool(_opening and (matrix_df[_opening] != "—").any())
+                        st.info(f"ℹ️ Kỳ Tháng {stock_month:02d}/{stock_year} hiện chưa có giao dịch thực tế phát sinh."
+                                + (" Cột tồn đầu kỳ là số chuyển sang từ tháng trước." if carried else ""))
 
-                # Top KPI metrics
-                kpi1, kpi2, kpi3, kpi4 = st.columns(4, gap="medium")
-                with kpi1:
-                    st.metric("Tổng mặt hàng theo dõi", f"{len(matrix_df)} mặt hàng", help="Quy cách đóng gói chuẩn F&B Mixue")
-                with kpi2:
-                    total_in = pd.to_numeric(matrix_df["Tổng nhập"], errors="coerce").fillna(0).sum()
-                    st.metric("Tổng nhập trong tháng", f"{total_in:,.1f} kiện/thùng", help="Số lượng nhập từ tổng kho")
-                with kpi3:
-                    total_out = pd.to_numeric(matrix_df["Tổng xuất"], errors="coerce").fillna(0).sum()
-                    st.metric("Tổng xuất dùng quầy bar", f"{total_out:,.1f} kiện/thùng", help="Số lượng khui dùng tại quầy pha chế")
-                with kpi4:
-                    total_stock = pd.to_numeric(matrix_df["Tồn sổ sách"], errors="coerce").fillna(0).sum()
-                    st.metric("Tồn kho hiện tại", f"{total_stock:,.1f} kiện/thùng", help="Tồn lũy kế hiện có tại cửa hàng")
+                    # Top KPI metrics
+                    kpi1, kpi2, kpi3, kpi4 = st.columns(4, gap="medium")
+                    with kpi1:
+                        st.metric("Tổng mặt hàng theo dõi", f"{len(matrix_df)} mặt hàng", help="Quy cách đóng gói chuẩn F&B Mixue")
+                    with kpi2:
+                        total_in = pd.to_numeric(matrix_df["Tổng nhập"], errors="coerce").fillna(0).sum()
+                        st.metric("Tổng nhập trong tháng", f"{total_in:,.1f} kiện/thùng", help="Số lượng nhập từ tổng kho")
+                    with kpi3:
+                        total_out = pd.to_numeric(matrix_df["Tổng xuất"], errors="coerce").fillna(0).sum()
+                        st.metric("Tổng xuất dùng quầy bar", f"{total_out:,.1f} kiện/thùng", help="Số lượng khui dùng tại quầy pha chế")
+                    with kpi4:
+                        total_stock = pd.to_numeric(matrix_df["Tồn sổ sách"], errors="coerce").fillna(0).sum()
+                        st.metric("Tồn kho hiện tại", f"{total_stock:,.1f} kiện/thùng", help="Tồn lũy kế hiện có tại cửa hàng")
 
-                st.divider()
+                    st.divider()
 
-                col_act, col_filter = st.columns([1.2, 1.8], gap="large")
+                    col_act, col_filter = st.columns([1.2, 1.8], gap="large")
 
-                with col_act:
-                    with st.container(border=True):
-                        st.write("#### ⚡ Nhập / Sửa nhanh số liệu kho")
-                        act_tab1, act_tab2, act_tab3 = st.tabs(["➕ Ghi nhập / xuất kho", "✏️ Sửa 1 ô trên bảng", "🗑️ Lịch sử nhập / xuất"])
+                    with col_act:
+                        with st.container(border=True):
+                            st.write("#### ⚡ Nhập / Sửa nhanh số liệu kho")
+                            act_tab1, act_tab2, act_tab3 = st.tabs(["➕ Ghi nhập / xuất kho", "✏️ Sửa 1 ô trên bảng", "🗑️ Lịch sử nhập / xuất"])
 
-                        with act_tab1:
-                            st.caption("Quản lý / Chủ quán ghi xuất, nhập hoặc kiểm kho (ghi luôn, không cần duyệt).")
-                            with st.form("admin_stock_entry_form", clear_on_submit=True):
-                                e_date = st.date_input("Ngày phát sinh", value=business_today(), key="admin_stock_date")
+                            with act_tab1:
+                                st.caption("Quản lý / Chủ quán ghi xuất, nhập hoặc kiểm kho (ghi luôn, không cần duyệt).")
+                                with st.form("admin_stock_entry_form", clear_on_submit=True):
+                                    e_date = st.date_input("Ngày phát sinh", value=business_today(), key="admin_stock_date")
 
-                                item_choices = [f"{row['Mã NL']} — {row['Tên mặt hàng (Quy cách)']}" for _, row in matrix_df.iterrows()]
-                                selected_item_str = st.selectbox("Chọn mặt hàng & quy cách", item_choices, key="admin_stock_item")
-                                selected_ing_id = selected_item_str.split(" — ")[0]
+                                    item_choices = [f"{row['Mã NL']} — {row['Tên mặt hàng (Quy cách)']}" for _, row in matrix_df.iterrows()]
+                                    selected_item_str = st.selectbox("Chọn mặt hàng & quy cách", item_choices, key="admin_stock_item")
+                                    selected_ing_id = selected_item_str.split(" — ")[0]
 
-                                action_type = st.radio(
-                                    "Thao tác kho",
-                                    [
-                                        ("OUT", "📤 Xuất quầy bar sử dụng (Khui thùng/dây)"),
-                                        ("IN", "📥 Nhập hàng từ kho tổng"),
-                                        ("ACTUAL_COUNT", "🔍 Kiểm kê thực tế cuối ngày/tuần")
-                                    ],
-                                    format_func=lambda x: x[1],
-                                    key="admin_stock_action"
+                                    action_type = st.radio(
+                                        "Thao tác kho",
+                                        [
+                                            ("OUT", "📤 Xuất quầy bar sử dụng (Khui thùng/dây)"),
+                                            ("IN", "📥 Nhập hàng từ kho tổng"),
+                                            ("ACTUAL_COUNT", "🔍 Kiểm kê thực tế cuối ngày/tuần")
+                                        ],
+                                        format_func=lambda x: x[1],
+                                        key="admin_stock_action"
+                                    )
+
+                                    e_qty = st.number_input("Số lượng (Thùng / Kiện / Bình / Dây)", min_value=0.0, max_value=50.0, value=1.0, step=0.5, key="admin_stock_qty")
+                                    e_notes = st.text_input("Ghi chú (Tùy chọn)", placeholder="Ví dụ: Quản lý nhận hàng ca chiều", key="admin_stock_notes")
+
+                                    btn_stock_save = st.form_submit_button("Lưu vào file kho 🚀", type="primary", use_container_width=True)
+
+                                    if btn_stock_save:
+                                        res_save = create_stock_request(
+                                            business_date=e_date,
+                                            ingredient_id=selected_ing_id,
+                                            movement_type=action_type[0],
+                                            quantity=e_qty,
+                                            recorded_by=st.session_state.get("username", "admin"),
+                                            user_role=user_role,
+                                            notes=e_notes
+                                        )
+                                        if res_save["status"] == "SUCCESS":
+                                            st.session_state["stock_flash_msg"] = {"type": "success", "text": res_save["message"]}
+                                            st.rerun()
+                                        else:
+                                            st.error(res_save["message"])
+
+                            with act_tab2:
+                                st.caption("Chọn một ô trên bảng kho để xem, sửa số hoặc xóa về trống.")
+                                item_choices_edit = [f"{row['Mã NL']} — {row['Tên mặt hàng (Quy cách)']}" for _, row in matrix_df.iterrows()]
+                                edit_item_str = st.selectbox("1. Chọn mặt hàng:", item_choices_edit, key="edit_item_picker")
+                                edit_ing_id = edit_item_str.split(" — ")[0]
+
+                                edit_col_options = list(stock_column_map.keys())
+                                edit_col_name = st.selectbox("2. Chọn cột / ngày phát sinh:", edit_col_options, key="edit_col_picker")
+
+                                cur_val = get_cell_value(edit_ing_id, edit_col_name, year=stock_year, month=stock_month)
+                                if cur_val is not None:
+                                    st.info(f"📊 Giá trị hiện tại trong ô: **{cur_val:g}** (Thùng/Kiện/Dây)")
+                                    default_input = float(cur_val)
+                                else:
+                                    st.caption("ℹ️ Ô này hiện đang trống (chưa có số liệu).")
+                                    default_input = 1.0
+
+                                edit_qty_input = st.number_input("3. Nhập số lượng mới:", min_value=0.0, max_value=100.0, value=default_input, step=0.5, key="edit_qty_val_num")
+
+                                col_btn_save, col_btn_del = st.columns(2)
+                                with col_btn_save:
+                                    if st.button("💾 Lưu Sửa Số Lượng", type="primary", use_container_width=True, key="btn_save_cell_single"):
+                                        ok, msg = update_stock_cell_manually(
+                                            ingredient_id=edit_ing_id,
+                                            column_name=edit_col_name,
+                                            new_value=edit_qty_input,
+                                            updated_by=st.session_state.get("username", "admin"), year=stock_year, month=stock_month
+                                        )
+                                        st.session_state["stock_flash_msg"] = {"type": "success" if ok else "error", "text": msg}
+                                        st.rerun()
+
+                                with col_btn_del:
+                                    if st.button("🗑️ XÓA Ô NÀY (Về Trống)", type="secondary", use_container_width=True, key="btn_del_cell_single"):
+                                        ok, msg = update_stock_cell_manually(
+                                            ingredient_id=edit_ing_id,
+                                            column_name=edit_col_name,
+                                            new_value="",
+                                            updated_by=st.session_state.get("username", "admin"), year=stock_year, month=stock_month
+                                        )
+                                        st.session_state["stock_flash_msg"] = {"type": "success" if ok else "error", "text": msg}
+                                        st.rerun()
+
+                            with act_tab3:
+                                st.caption("Các lần nhập / xuất đã ghi. Chọn một dòng để sửa số lượng hoặc xóa.")
+                                all_movs_tab3 = get_all_movements_detailed(limit=100)
+                                if all_movs_tab3:
+                                    mov_map = {
+                                        f"#{m['id']} [{m['business_date']}] {m['ingredient_name']} — {m['type_label']} {m['quantity']:g} (Bởi: {m['recorded_by']})": m
+                                        for m in all_movs_tab3
+                                    }
+                                    sel_mov_label = st.selectbox("Chọn dòng nhập / xuất:", list(mov_map.keys()), key="sel_mov_to_act_tab3")
+                                    sel_mov = mov_map[sel_mov_label]
+
+                                    st.markdown(f"""
+                                    <div style="background:#f1f5f9; border-radius:6px; padding:10px; font-size:13px; margin-bottom:10px; border:1px solid #cbd5e1;">
+                                        <b>Mã lệnh:</b> #{sel_mov['id']} | <b>Ngày:</b> {sel_mov['business_date']}<br>
+                                        <b>Mặt hàng:</b> {sel_mov['ingredient_name']}<br>
+                                        <b>Loại thao tác:</b> {sel_mov['type_label']} | <b>Số lượng:</b> {sel_mov['quantity']:g}<br>
+                                        <b>Người tạo:</b> {sel_mov['recorded_by']} | <b>Người duyệt:</b> {sel_mov['approved_by']}
+                                    </div>
+                                    """, unsafe_allow_html=True)
+
+                                    c_up_qty, c_del_mov = st.columns(2)
+                                    with c_up_qty:
+                                        new_m_qty = st.number_input("Số lượng mới:", min_value=0.1, max_value=100.0, value=float(sel_mov['quantity']), step=0.5, key="new_m_qty_val_tab3")
+                                        if st.button("✏️ Lưu Số Lượng", type="primary", use_container_width=True, key="btn_update_mov_qty_tab3"):
+                                            ok, msg = update_stock_movement(sel_mov['id'], new_m_qty, admin_username=st.session_state.get("username", "admin"))
+                                            st.session_state["stock_flash_msg"] = {"type": "success" if ok else "error", "text": msg}
+                                            st.rerun()
+
+                                    with c_del_mov:
+                                        st.write("")
+                                        st.write("")
+                                        if st.button("🗑️ Xóa phiếu này", type="secondary", use_container_width=True, key="btn_del_mov_perm_tab3"):
+                                            ok, msg = delete_stock_movement(sel_mov['id'], admin_username=st.session_state.get("username", "admin"))
+                                            st.session_state["stock_flash_msg"] = {"type": "success" if ok else "error", "text": msg}
+                                            st.rerun()
+                                else:
+                                    st.info("Chưa có lần nhập / xuất nào.")
+
+                    with col_filter:
+                        with st.container(border=True):
+                            st.write("#### 📥 Xem & Tải file kho Excel")
+                            st.caption("Xuất file bảng tính Excel chuẩn nhận diện Google Sheet hoặc lọc theo tuần.")
+
+                            cf1, cf2 = st.columns([1.5, 1])
+                            with cf1:
+                                view_mode = st.selectbox(
+                                    "Chọn phạm vi hiển thị cột:",
+                                    list(stock_views)
+                                )
+                            with cf2:
+                                # Built only when the button is pressed (it costs seconds on a small server).
+                                st.download_button(
+                                    label="📥 Tải file kho (.xlsx)",
+                                    data=lambda y=stock_year, m=stock_month: generate_excel_export(y, m),
+                                    on_click="ignore",
+                                    file_name=f"Mixue_Kho_{stock_year}_{stock_month}.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    use_container_width=True
                                 )
 
-                                e_qty = st.number_input("Số lượng (Thùng / Kiện / Bình / Dây)", min_value=0.0, max_value=50.0, value=1.0, step=0.5, key="admin_stock_qty")
-                                e_notes = st.text_input("Ghi chú (Tùy chọn)", placeholder="Ví dụ: Quản lý nhận hàng ca chiều", key="admin_stock_notes")
+                            st.markdown("""
+                            <div style="font-size: 12px; color: #475569; background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0; line-height: 1.5;">
+                                🎨 <strong>Quy ước màu sắc chuẩn sổ kho Mixue:</strong><br>
+                                • <span style="background:#e0f2fe; padding:2px 6px; border-radius:4px; font-weight:bold; color:#0369a1;">Màu xanh dương:</span> Cột <b>Nhập hàng</b> từ kho tổng.<br>
+                                • <span style="background:#dcfce7; padding:2px 6px; border-radius:4px; font-weight:bold; color:#15803d;">Màu xanh lá:</span> Cột <b>Chốt tồn</b> sau mỗi chu kỳ tuần.<br>
+                                • <span>Cột T2 - CN:</span> Lượng xuất dùng pha chế tại quầy theo từng ngày.
+                            </div>
+                            """, unsafe_allow_html=True)
 
-                                btn_stock_save = st.form_submit_button("Lưu vào file kho 🚀", type="primary", use_container_width=True)
+                    st.write(f"#### 📋 Sổ kho tháng {stock_month}/{stock_year}")
+                    st.caption("💡 **Chế độ sửa trực tiếp bằng tay:** Bạn có thể bấm đúp chuột vào bất kỳ ô số liệu nào trên bảng để gõ số sửa trực tiếp như Excel, sau đó bấm nút **'💾 Lưu Các Ô Đã Sửa Vào Sổ Kho'** bên dưới.")
 
-                                if btn_stock_save:
-                                    res_save = create_stock_request(
-                                        business_date=e_date,
-                                        ingredient_id=selected_ing_id,
-                                        movement_type=action_type[0],
-                                        quantity=e_qty,
-                                        recorded_by=st.session_state.get("username", "admin"),
-                                        user_role=user_role,
-                                        notes=e_notes
-                                    )
-                                    if res_save["status"] == "SUCCESS":
-                                        st.session_state["stock_flash_msg"] = {"type": "success", "text": res_save["message"]}
-                                        st.rerun()
-                                    else:
-                                        st.error(res_save["message"])
+                    cols_show = stock_views[view_mode] or [c for c in matrix_df.columns if c != 'Mã NL']
 
-                        with act_tab2:
-                            st.caption("Chọn một ô trên bảng kho để xem, sửa số hoặc xóa về trống.")
-                            item_choices_edit = [f"{row['Mã NL']} — {row['Tên mặt hàng (Quy cách)']}" for _, row in matrix_df.iterrows()]
-                            edit_item_str = st.selectbox("1. Chọn mặt hàng:", item_choices_edit, key="edit_item_picker")
-                            edit_ing_id = edit_item_str.split(" — ")[0]
+                    disabled_cols = [c for c in cols_show if c not in stock_column_map]
 
-                            edit_col_options = list(stock_column_map.keys())
-                            edit_col_name = st.selectbox("2. Chọn cột / ngày phát sinh:", edit_col_options, key="edit_col_picker")
+                    # Ràng buộc dữ liệu: chỉ cho phép nhập số dương/không âm (>= 0.0)
+                    stock_col_config = {
+                        c: st.column_config.NumberColumn(
+                            min_value=0.0,
+                            step=0.5,
+                            format="%.1f"
+                        )
+                        for c in cols_show if c in stock_column_map
+                    }
 
-                            cur_val = get_cell_value(edit_ing_id, edit_col_name, year=stock_year, month=stock_month)
-                            if cur_val is not None:
-                                st.info(f"📊 Giá trị hiện tại trong ô: **{cur_val:g}** (Thùng/Kiện/Dây)")
-                                default_input = float(cur_val)
-                            else:
-                                st.caption("ℹ️ Ô này hiện đang trống (chưa có số liệu).")
-                                default_input = 1.0
-
-                            edit_qty_input = st.number_input("3. Nhập số lượng mới:", min_value=0.0, max_value=100.0, value=default_input, step=0.5, key="edit_qty_val_num")
-
-                            col_btn_save, col_btn_del = st.columns(2)
-                            with col_btn_save:
-                                if st.button("💾 Lưu Sửa Số Lượng", type="primary", use_container_width=True, key="btn_save_cell_single"):
-                                    ok, msg = update_stock_cell_manually(
-                                        ingredient_id=edit_ing_id,
-                                        column_name=edit_col_name,
-                                        new_value=edit_qty_input,
-                                        updated_by=st.session_state.get("username", "admin"), year=stock_year, month=stock_month
-                                    )
-                                    st.session_state["stock_flash_msg"] = {"type": "success" if ok else "error", "text": msg}
-                                    st.rerun()
-
-                            with col_btn_del:
-                                if st.button("🗑️ XÓA Ô NÀY (Về Trống)", type="secondary", use_container_width=True, key="btn_del_cell_single"):
-                                    ok, msg = update_stock_cell_manually(
-                                        ingredient_id=edit_ing_id,
-                                        column_name=edit_col_name,
-                                        new_value="",
-                                        updated_by=st.session_state.get("username", "admin"), year=stock_year, month=stock_month
-                                    )
-                                    st.session_state["stock_flash_msg"] = {"type": "success" if ok else "error", "text": msg}
-                                    st.rerun()
-
-                        with act_tab3:
-                            st.caption("Các lần nhập / xuất đã ghi. Chọn một dòng để sửa số lượng hoặc xóa.")
-                            all_movs_tab3 = get_all_movements_detailed(limit=100)
-                            if all_movs_tab3:
-                                mov_map = {
-                                    f"#{m['id']} [{m['business_date']}] {m['ingredient_name']} — {m['type_label']} {m['quantity']:g} (Bởi: {m['recorded_by']})": m
-                                    for m in all_movs_tab3
-                                }
-                                sel_mov_label = st.selectbox("Chọn dòng nhập / xuất:", list(mov_map.keys()), key="sel_mov_to_act_tab3")
-                                sel_mov = mov_map[sel_mov_label]
-
-                                st.markdown(f"""
-                                <div style="background:#f1f5f9; border-radius:6px; padding:10px; font-size:13px; margin-bottom:10px; border:1px solid #cbd5e1;">
-                                    <b>Mã lệnh:</b> #{sel_mov['id']} | <b>Ngày:</b> {sel_mov['business_date']}<br>
-                                    <b>Mặt hàng:</b> {sel_mov['ingredient_name']}<br>
-                                    <b>Loại thao tác:</b> {sel_mov['type_label']} | <b>Số lượng:</b> {sel_mov['quantity']:g}<br>
-                                    <b>Người tạo:</b> {sel_mov['recorded_by']} | <b>Người duyệt:</b> {sel_mov['approved_by']}
-                                </div>
-                                """, unsafe_allow_html=True)
-
-                                c_up_qty, c_del_mov = st.columns(2)
-                                with c_up_qty:
-                                    new_m_qty = st.number_input("Số lượng mới:", min_value=0.1, max_value=100.0, value=float(sel_mov['quantity']), step=0.5, key="new_m_qty_val_tab3")
-                                    if st.button("✏️ Lưu Số Lượng", type="primary", use_container_width=True, key="btn_update_mov_qty_tab3"):
-                                        ok, msg = update_stock_movement(sel_mov['id'], new_m_qty, admin_username=st.session_state.get("username", "admin"))
-                                        st.session_state["stock_flash_msg"] = {"type": "success" if ok else "error", "text": msg}
-                                        st.rerun()
-
-                                with c_del_mov:
-                                    st.write("")
-                                    st.write("")
-                                    if st.button("🗑️ Xóa phiếu này", type="secondary", use_container_width=True, key="btn_del_mov_perm_tab3"):
-                                        ok, msg = delete_stock_movement(sel_mov['id'], admin_username=st.session_state.get("username", "admin"))
-                                        st.session_state["stock_flash_msg"] = {"type": "success" if ok else "error", "text": msg}
-                                        st.rerun()
-                            else:
-                                st.info("Chưa có lần nhập / xuất nào.")
-
-                with col_filter:
-                    with st.container(border=True):
-                        st.write("#### 📥 Xem & Tải file kho Excel")
-                        st.caption("Xuất file bảng tính Excel chuẩn nhận diện Google Sheet hoặc lọc theo tuần.")
-
-                        cf1, cf2 = st.columns([1.5, 1])
-                        with cf1:
-                            view_mode = st.selectbox(
-                                "Chọn phạm vi hiển thị cột:",
-                                list(stock_views)
-                            )
-                        with cf2:
-                            # Built only when the button is pressed (it costs seconds on a small server).
-                            st.download_button(
-                                label="📥 Tải file kho (.xlsx)",
-                                data=lambda y=stock_year, m=stock_month: generate_excel_export(y, m),
-                                on_click="ignore",
-                                file_name=f"Mixue_Kho_{stock_year}_{stock_month}.xlsx",
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                use_container_width=True
-                            )
-
-                        st.markdown("""
-                        <div style="font-size: 12px; color: #475569; background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0; line-height: 1.5;">
-                            🎨 <strong>Quy ước màu sắc chuẩn sổ kho Mixue:</strong><br>
-                            • <span style="background:#e0f2fe; padding:2px 6px; border-radius:4px; font-weight:bold; color:#0369a1;">Màu xanh dương:</span> Cột <b>Nhập hàng</b> từ kho tổng.<br>
-                            • <span style="background:#dcfce7; padding:2px 6px; border-radius:4px; font-weight:bold; color:#15803d;">Màu xanh lá:</span> Cột <b>Chốt tồn</b> sau mỗi chu kỳ tuần.<br>
-                            • <span>Cột T2 - CN:</span> Lượng xuất dùng pha chế tại quầy theo từng ngày.
-                        </div>
-                        """, unsafe_allow_html=True)
-
-                st.write(f"#### 📋 Sổ kho tháng {stock_month}/{stock_year}")
-                st.caption("💡 **Chế độ sửa trực tiếp bằng tay:** Bạn có thể bấm đúp chuột vào bất kỳ ô số liệu nào trên bảng để gõ số sửa trực tiếp như Excel, sau đó bấm nút **'💾 Lưu Các Ô Đã Sửa Vào Sổ Kho'** bên dưới.")
-
-                cols_show = stock_views[view_mode] or [c for c in matrix_df.columns if c != 'Mã NL']
-
-                disabled_cols = [c for c in cols_show if c not in stock_column_map]
-
-                # Ràng buộc dữ liệu: chỉ cho phép nhập số dương/không âm (>= 0.0)
-                stock_col_config = {
-                    c: st.column_config.NumberColumn(
-                        min_value=0.0,
-                        step=0.5,
-                        format="%.1f"
+                    edited_matrix = st.data_editor(
+                        matrix_df[cols_show],
+                        use_container_width=True,
+                        hide_index=True,
+                        disabled=disabled_cols,
+                        column_config=stock_col_config,
+                        key=f"stock_editor_{stock_year}_{stock_month}_{view_mode}"
                     )
-                    for c in cols_show if c in stock_column_map
-                }
 
-                edited_matrix = st.data_editor(
-                    matrix_df[cols_show],
-                    use_container_width=True,
-                    hide_index=True,
-                    disabled=disabled_cols,
-                    column_config=stock_col_config,
-                    key=f"stock_editor_{stock_year}_{stock_month}_{view_mode}"
-                )
+                    c_save_col, c_hint_col = st.columns([1.5, 3], gap="medium")
+                    with c_save_col:
+                        btn_save_manual = st.button("💾 Lưu Các Ô Đã Sửa Vào Sổ Kho", type="primary", use_container_width=True)
+                        if btn_save_manual:
+                            editor_key = f"stock_editor_{stock_year}_{stock_month}_{view_mode}"
+                            editor_session_data = st.session_state.get(editor_key, {})
+                            res_update = update_stock_matrix_from_editor(
+                                edited_df=edited_matrix,
+                                original_df=matrix_df,
+                                updated_by=st.session_state.get("username", "admin"),
+                                editor_session_data=editor_session_data, year=stock_year, month=stock_month
+                            )
+                            if res_update["updated_count"] > 0:
+                                st.session_state["stock_flash_msg"] = {
+                                    "type": "success",
+                                    "text": f"Đã lưu thành công {res_update['updated_count']} ô sửa đổi vào sổ kho! Toàn bộ công thức tồn sổ sách đã được tính toán lại."
+                                }
+                                if editor_key in st.session_state:
+                                    st.session_state[editor_key] = {"edited_rows": {}}
+                                st.rerun()
+                            else:
+                                st.info("ℹ️ Không phát hiện thay đổi nào trên bảng. Nhấp đúp chuột vào ô để sửa số, nhấn Enter rồi bấm Lưu.")
+                    with c_hint_col:
+                        st.caption("💡 *Mẹo sửa trên bảng:* Nhấp đúp chuột vào bất kỳ ô số liệu nào (trừ các cột công thức tính tự động), gõ số mới, nhấn **Enter**, sau đó bấm **'Lưu Các Ô Đã Sửa Vào Sổ Kho'**.")
 
-                c_save_col, c_hint_col = st.columns([1.5, 3], gap="medium")
-                with c_save_col:
-                    btn_save_manual = st.button("💾 Lưu Các Ô Đã Sửa Vào Sổ Kho", type="primary", use_container_width=True)
-                    if btn_save_manual:
-                        editor_key = f"stock_editor_{stock_year}_{stock_month}_{view_mode}"
-                        editor_session_data = st.session_state.get(editor_key, {})
-                        res_update = update_stock_matrix_from_editor(
-                            edited_df=edited_matrix,
-                            original_df=matrix_df,
-                            updated_by=st.session_state.get("username", "admin"),
-                            editor_session_data=editor_session_data, year=stock_year, month=stock_month
-                        )
-                        if res_update["updated_count"] > 0:
-                            st.session_state["stock_flash_msg"] = {
-                                "type": "success",
-                                "text": f"Đã lưu thành công {res_update['updated_count']} ô sửa đổi vào sổ kho! Toàn bộ công thức tồn sổ sách đã được tính toán lại."
-                            }
-                            if editor_key in st.session_state:
-                                st.session_state[editor_key] = {"edited_rows": {}}
-                            st.rerun()
+                    with st.expander("📑 Tất cả lần nhập / xuất đã ghi", expanded=False):
+                        all_movs_list = get_all_movements_detailed(limit=100)
+                        if all_movs_list:
+                            movs_df = pd.DataFrame(all_movs_list)
+                            show_movs_df = movs_df[["id", "business_date", "ingredient_name", "type_label", "quantity", "status", "recorded_by", "approved_by", "notes"]].rename(
+                                columns={
+                                    "id": "Mã",
+                                    "business_date": "Ngày",
+                                    "ingredient_name": "Mặt hàng",
+                                    "type_label": "Loại phiếu",
+                                    "quantity": "Số lượng",
+                                    "status": "Trạng thái",
+                                    "recorded_by": "Người tạo",
+                                    "approved_by": "Người duyệt",
+                                    "notes": "Ghi chú"
+                                }
+                            )
+                            st.dataframe(show_movs_df, use_container_width=True, hide_index=True)
                         else:
-                            st.info("ℹ️ Không phát hiện thay đổi nào trên bảng. Nhấp đúp chuột vào ô để sửa số, nhấn Enter rồi bấm Lưu.")
-                with c_hint_col:
-                    st.caption("💡 *Mẹo sửa trên bảng:* Nhấp đúp chuột vào bất kỳ ô số liệu nào (trừ các cột công thức tính tự động), gõ số mới, nhấn **Enter**, sau đó bấm **'Lưu Các Ô Đã Sửa Vào Sổ Kho'**.")
-
-                with st.expander("📑 Tất cả lần nhập / xuất đã ghi", expanded=False):
-                    all_movs_list = get_all_movements_detailed(limit=100)
-                    if all_movs_list:
-                        movs_df = pd.DataFrame(all_movs_list)
-                        show_movs_df = movs_df[["id", "business_date", "ingredient_name", "type_label", "quantity", "status", "recorded_by", "approved_by", "notes"]].rename(
-                            columns={
-                                "id": "Mã",
-                                "business_date": "Ngày",
-                                "ingredient_name": "Mặt hàng",
-                                "type_label": "Loại phiếu",
-                                "quantity": "Số lượng",
-                                "status": "Trạng thái",
-                                "recorded_by": "Người tạo",
-                                "approved_by": "Người duyệt",
-                                "notes": "Ghi chú"
-                            }
-                        )
-                        st.dataframe(show_movs_df, use_container_width=True, hide_index=True)
-                    else:
-                        st.caption("Chưa có lần nhập / xuất nào.")
+                            st.caption("Chưa có lần nhập / xuất nào.")
 
             # Thống kê doanh thu: approved shift closings + POS item sales, never added twice.
             with tab_sales:
-                from src.dashboard.revenue_ui import render_revenue_report
-                st.subheader("📊 Thống kê doanh thu")
-                st.caption("Số liệu từ các ca đã được duyệt và file bán hàng của máy POS (nếu có). Không có số thì báo chưa có dữ liệu.")
-                render_revenue_report()
+                if tab_sales.open:
+                    from src.dashboard.revenue_ui import render_revenue_report
+                    st.subheader("📊 Thống kê doanh thu")
+                    st.caption("Số liệu từ các ca đã được duyệt và file bán hàng của máy POS (nếu có). Không có số thì báo chưa có dữ liệu.")
+                    render_revenue_report()
 
             # TAB 4: ĐỐI SOÁT THẤT THOÁT KHO CHI TIẾT
             with tab_recon:
-                st.subheader("🔍 Kiểm tra hao hụt nguyên liệu")
-                st.caption("So sánh lượng nguyên liệu ước tính theo số ly bán ra với lượng kiểm kho thực tế.")
-                if st.button("📊 Xem bảng hao hụt nguyên liệu", key="btn_load_recon", type="primary") or "recon_df" in st.session_state:
-                    if "recon_df" not in st.session_state:
-                        st.session_state["recon_df"] = get_cached_reconciliation_data()
-                    recon_df = st.session_state["recon_df"]
+                if tab_recon.open:
+                    st.subheader("🔍 Kiểm tra hao hụt nguyên liệu")
+                    st.caption("So sánh lượng nguyên liệu ước tính theo số ly bán ra với lượng kiểm kho thực tế.")
+                    if st.button("📊 Xem bảng hao hụt nguyên liệu", key="btn_load_recon", type="primary") or "recon_df" in st.session_state:
+                        if "recon_df" not in st.session_state:
+                            st.session_state["recon_df"] = get_cached_reconciliation_data()
+                        recon_df = st.session_state["recon_df"]
 
-                    display_recon = recon_df.copy().rename(columns={
-                        "ingredient_id": "Mã nguyên liệu",
-                        "ingredient_name": "Tên nguyên liệu",
-                        "total_purchased": "Tổng nhập",
-                        "theoretical_usage": "Ước tính theo số ly bán",
-                        "actual_stock_count": "Tồn thực tế kiểm kê",
-                        "variance": "Chênh lệch kho",
-                        "variance_pct": "Tỷ lệ lệch (%)",
-                        "unit": "Đơn vị"
-                    })
-                    st.dataframe(
-                        display_recon[["Mã nguyên liệu", "Tên nguyên liệu", "Tổng nhập", "Ước tính theo số ly bán", "Tồn thực tế kiểm kê", "Chênh lệch kho", "Tỷ lệ lệch (%)", "Đơn vị"]].head(25),
-                        use_container_width=True,
-                        hide_index=True
-                    )
+                        display_recon = recon_df.copy().rename(columns={
+                            "ingredient_id": "Mã nguyên liệu",
+                            "ingredient_name": "Tên nguyên liệu",
+                            "total_purchased": "Tổng nhập",
+                            "theoretical_usage": "Ước tính theo số ly bán",
+                            "actual_stock_count": "Tồn thực tế kiểm kê",
+                            "variance": "Chênh lệch kho",
+                            "variance_pct": "Tỷ lệ lệch (%)",
+                            "unit": "Đơn vị"
+                        })
+                        st.dataframe(
+                            display_recon[["Mã nguyên liệu", "Tên nguyên liệu", "Tổng nhập", "Ước tính theo số ly bán", "Tồn thực tế kiểm kê", "Chênh lệch kho", "Tỷ lệ lệch (%)", "Đơn vị"]].head(25),
+                            use_container_width=True,
+                            hide_index=True
+                        )
 
 
     # ==============================================================================

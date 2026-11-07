@@ -144,6 +144,8 @@ def test_stock_file_follows_the_real_month_and_says_when_empty():
     app = _open('quick_login_manager')
     app.radio(key='main_navigation').set_value('Báo cáo & kho').run()
     app.date_input(key='stock_period').set_value(date(2030, 1, 1)).run()
+    app.session_state['stock_admin_tabs'] = '📦 File kho (Tháng 01/2030)'  # tabs are lazy: open the stock file
+    app.run()
     assert not app.exception
     assert any('Kỳ Tháng 01/2030 hiện chưa có giao dịch thực tế phát sinh' in i.value for i in app.info)
     assert any('31 ngày' in s.value for s in app.subheader)
