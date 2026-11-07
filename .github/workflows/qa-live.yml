@@ -37,6 +37,15 @@ jobs:
         run: |
           pip install playwright
           python -m playwright install --with-deps chromium
+      - name: SOP check
+        if: github.event.inputs.mode == 'sopcheck'
+        run: |
+          mkdir -p sop_check && cd scripts && python sop_check.py "${{ github.event.inputs.url || 'https://mixue-beverageops-demo.onrender.com' }}" ../sop_check || true
+          cd ../sop_check && git init -q -b sop-check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -q -m "SOP check for ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" HEAD:sop-check
       - name: OCR timing
         if: startsWith(github.event.inputs.mode, 'ocr')
         run: |
@@ -89,10 +98,10 @@ jobs:
         if: github.event.inputs.mode == 'shots'
         run: python scripts/report_shots.py "${{ github.event.inputs.url || 'https://mixue-beverageops-demo.onrender.com' }}" qa_live
       - name: Run QA
-        if: github.event.inputs.mode != 'shots' && github.event.inputs.mode != 'video' && github.event.inputs.mode != 'tts' && !startsWith(github.event.inputs.mode, 'ocr') && github.event.inputs.mode != 'mlexp'
+        if: github.event.inputs.mode != 'shots' && github.event.inputs.mode != 'video' && github.event.inputs.mode != 'tts' && !startsWith(github.event.inputs.mode, 'ocr') && github.event.inputs.mode != 'mlexp' && github.event.inputs.mode != 'sopcheck'
         run: python scripts/qa_live.py "${{ github.event.inputs.url || 'https://mixue-beverageops-demo.onrender.com' }}" qa_live "${{ github.event.inputs.mode || 'all' }}"
       - name: Publish to qa-results branch
-        if: always() && github.event.inputs.mode != 'video' && github.event.inputs.mode != 'tts' && !startsWith(github.event.inputs.mode, 'ocr') && github.event.inputs.mode != 'mlexp'
+        if: always() && github.event.inputs.mode != 'video' && github.event.inputs.mode != 'tts' && !startsWith(github.event.inputs.mode, 'ocr') && github.event.inputs.mode != 'mlexp' && github.event.inputs.mode != 'sopcheck'
         run: |
           [ -d qa_live ] || exit 0
           cd qa_live
