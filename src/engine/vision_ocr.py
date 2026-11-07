@@ -880,8 +880,13 @@ def extract_image(
                 shift_hint = next(s for s in SHIFTS if s in found)
                 with ThreadPoolExecutor(max_workers=len(valid_images)) as pool:
                     results = list(pool.map(read_one, valid_images))
-        return merge_image_extractions(results, names=[item[1] for item in valid_images],
-                                       shas=[item[3] for item in valid_images], shift_hint=shift_hint, target_date=target_date)
+        merged = merge_image_extractions(results, names=[item[1] for item in valid_images],
+                                         shas=[item[3] for item in valid_images], shift_hint=shift_hint,
+                                         target_date=target_date)
+        if isinstance(merged, dict):
+            merged['read_log'] = [dict(entry, image=i + 1) for i, r in enumerate(results)
+                                  for entry in (r.get('read_log') or [{'model': 'cache', 'seconds': 0}])]
+        return merged
 
     # One reading covers every shift on the page: switching the shift on screen re-uses it.
     sheet_key = (valid_images[0][3], ocr_model_id(cfg)) if model is None else None
@@ -926,6 +931,7 @@ def _read_page(valid_images, sheet_key, shift_hint, target_date, cfg, model):
             if is_gemini(cfg):
                 plan.append((model_id, 'gemini_native'))
     started = time.monotonic()
+    read_log: list[dict[str, Any]] = []
     outcome: Any = None
     skip_model: str | None = None
     for model_id, mode in plan:
@@ -933,8 +939,12 @@ def _read_page(valid_images, sheet_key, shift_hint, target_date, cfg, model):
             continue
         if attempts and time.monotonic() - started > OCR_TIMEOUT_SECONDS * 1.6:
             break  # keep the whole wait bounded; report the last error
+        t0 = time.monotonic()
         outcome = _read_with_mode(valid_images, mode, model, cfg, shift_hint, target_date, model_id)
+        read_log.append({'model': model_id or 'model', 'mode': mode, 'seconds': round(time.monotonic() - t0, 1),
+                         'ok': not isinstance(outcome, Exception)})
         if not isinstance(outcome, Exception):
+            logger.info('OCR read: %s / %s in %.1fs', model_id, mode, time.monotonic() - t0)
             break
         status = getattr(outcome, 'status_code', None)
         reason = re.search(r'"status":\s*"([A-Z_]{3,40})"', str(outcome)) if isinstance(outcome, ProviderHTTPError) else None
@@ -946,18 +956,23 @@ def _read_page(valid_images, sheet_key, shift_hint, target_date, cfg, model):
         if status != 400:
             skip_model = model_id  # not a format problem: other JSON modes of this model will fail the same way
     if isinstance(outcome, Exception) or outcome is None:
-        return _ocr_error(outcome or RuntimeError('no attempt'), attempts)
-    if isinstance(outcome, dict):
-        return outcome
-    result, model_name = outcome
-    from src.engine.day_sheet import DaySheet
-    if isinstance(result, DaySheet):
-        if sheet_key:
-            if len(_DAY_SHEETS) > 64:
-                _DAY_SHEETS.pop(next(iter(_DAY_SHEETS)))
-            _DAY_SHEETS[sheet_key] = (result, model_name)
-        return _from_day_sheet(result, valid_images, shift_hint, target_date, attempts, model_name)
-    return _finish_extraction(result, valid_images, shift_hint, target_date, attempts, model_name)
+        out = _ocr_error(outcome or RuntimeError('no attempt'), attempts)
+    elif isinstance(outcome, dict):
+        out = outcome
+    else:
+        result, model_name = outcome
+        from src.engine.day_sheet import DaySheet
+        if isinstance(result, DaySheet):
+            if sheet_key:
+                if len(_DAY_SHEETS) > 64:
+                    _DAY_SHEETS.pop(next(iter(_DAY_SHEETS)))
+                _DAY_SHEETS[sheet_key] = (result, model_name)
+            out = _from_day_sheet(result, valid_images, shift_hint, target_date, attempts, model_name)
+        else:
+            out = _finish_extraction(result, valid_images, shift_hint, target_date, attempts, model_name)
+    if isinstance(out, dict):
+        out['read_log'] = read_log  # per-attempt model, output mode and seconds: where a slow read spent its time
+    return out
 
 
 _DAY_SHEETS: dict[tuple[str, str], tuple[Any, str]] = {}

@@ -373,6 +373,11 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                     if not balanced:
                         for disc in consistency.get('discrepancies', []):
                             st.error(f"⚠️ {disc.get('message')}")
+                    if is_admin and extracted.get('read_log'):
+                        st.caption('Thời gian gọi AI: ' + ' · '.join(
+                            (f"ảnh {e['image']}: " if e.get('image') else '') + f"{e.get('model')}"
+                            + (f" / {e['mode']}" if e.get('mode') else '') + f" {e.get('seconds', 0):g}s"
+                            + ('' if e.get('ok', True) else ' (lỗi)') for e in extracted['read_log']))
                     if st.button('🔎 Xem bằng chứng từng ô', key='ocr_open_evidence', use_container_width=True):
                         show_evidence(extracted)
                 elif extracted:
