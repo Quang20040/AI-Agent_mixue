@@ -740,6 +740,7 @@ def _inline_refs(schema: dict[str, Any]) -> dict[str, Any]:
 
 
 # With thinking held at 'low' a page reads in ~10-30 s; past this the next model in the chain is faster.
+OCR_MAX_ATTEMPTS = int(os.environ.get('OCR_MAX_ATTEMPTS') or 6)
 OCR_TIMEOUT_SECONDS = float(os.environ.get('OCR_TIMEOUT_SECONDS') or 60)
 
 
@@ -951,6 +952,8 @@ def _read_page(valid_images, sheet_key, shift_hint, target_date, cfg, model):
             continue
         if attempts and time.monotonic() - started > OCR_TIMEOUT_SECONDS * 1.6:
             break  # keep the whole wait bounded; report the last error
+        if len(read_log) >= OCR_MAX_ATTEMPTS:
+            break  # each failed call that already sent the photo is billed for its input tokens
         t0 = time.monotonic()
         at = round(t0 - started, 1)
         outcome = _read_with_mode(valid_images, mode, model, cfg, shift_hint, target_date, model_id)
