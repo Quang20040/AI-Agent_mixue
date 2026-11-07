@@ -1,0 +1,29 @@
+{
+ "chat": [
+  {
+   "tag": "sop_0",
+   "message": "tra tài liệu: những điểm còn cần xác nhận trong dữ liệu là gì",
+   "reply": "Theo tài liệu quy chuẩn vận hành, có 19 điểm cần xác nhận và lưu ý chính sau đây:\n\nHiệu lực công thức: Ngày tài liệu (25/05/2026) không tự coi là ngày hiệu lực tại cửa hàng; cột ngày áp dụng để trống.\nKem ốc quế (DK1): Định lượng 120±10 g trong ảnh tính cả vỏ ốc quế; chưa tách được lượng kem nên chưa ghi 120 g kem vào BOM.\nThiếu công thức vị Việt Quất (DK3, THQ8, ST2): Chưa có công thức Việt Quất trong ảnh; không lấy công thức vị khác thay thế.\nMón 2J (TS3, TS8): Chọn 2 trong 3 loại topping; cần biết lựa chọn thực tế, không cộng cả ba.\nLucky sundae (DK7, DK8): Vụn ốc quế có thể thay bằng trân châu nguyên vị, thạch đường đen hoặc thạch đào 40g; cần biết lựa chọn thực tế.\nLượng nước pha chế (Thêm đến vạch): Trà sữa lạnh nước và đá có chỗ chỉ ghi đến vạch hoặc cách miệng cốc 0.8 cm; không tự suy ra ml từ dung tích cốc.\nCà phê tươi (TP09, TP10): Chưa chứng minh là cà phê cô đặc pha từ cà phê hòa tan 2025; không tự gộp.\nMã nguyên liệu cà phê (NL22 và mã kho 28): Cà phê hòa tan khác bột cà phê rang; chưa nối hai mã này.\nTên syrup và mứt (NL01 đến NL18): Một số tên syrup trong danh mục kho khác mứt trong công thức; giữ riêng mã dùng pha món và mã nhập kho để tránh gộp nhầm.\nMâu thuẫn hạn dùng: Danh sách kho và ảnh có sự khác biệt (ví dụ đường mật/đường quả 12 tháng so với ảnh ghi 24 tháng; trà xanh/hồng trà 1 năm so với ảnh ghi 9/18 tháng); giữ cả hai nguồn.\nQuy cách trà: Danh sách kho ghi trà xanh/hồng trà túi 50g; công thức mẻ ghi trà xanh 60g/gói, hồng trà 100g/gói; định lượng mẻ",
+   "latency_s": 11.41,
+   "new_messages": 2,
+   "exceptions": []
+  },
+  {
+   "tag": "sop_1",
+   "message": "theo tài liệu, ảnh 17 là ảnh gì",
+   "reply": "Theo tài liệu, mã ANH_17 là ảnh tài liệu ghi nhận hạn dùng nguyên liệu/vật tư (trong bảng hạn dùng nguyên liệu trên ảnh), ví dụ như hạn dùng của Vụn Oreo (12 tháng), Mứt dâu tây (12 tháng) và Vỏ ốc quế (6 tháng).\n\nkeyboard_arrow_right\n\nNguồn dữ liệu",
+   "latency_s": 7.76,
+   "new_messages": 2,
+   "exceptions": []
+  },
+  {
+   "tag": "sop_2",
+   "message": "việt quất đã có công thức trong tài liệu chưa",
+   "reply": "Theo tài liệu quy chuẩn (điểm XN03), chưa có công thức Việt Quất trong ảnh; quy định không được lấy công thức của vị khác thay thế.\n\nkeyboard_arrow_right\n\nNguồn dữ liệu",
+   "latency_s": 7.76,
+   "new_messages": 2,
+   "exceptions": []
+  }
+ ],
+ "usage_text": " (token & chi phí)\n\nToken hôm nay\n\n153.034\n\nToken 7 ngày\n\n153.034\n\nChi phí 7 ngày (nếu trả phí)\n\n0.049 USD\n\nGói miễn phí của Gemini không bị tính tiền; cột chi phí là số tiền nếu bật trả phí, theo giá niêm yết. Token của tra cứu vector là ước tính (API không trả số token).\n\nexpand_more"
+}
