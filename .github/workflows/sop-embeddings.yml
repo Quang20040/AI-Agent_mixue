@@ -1,0 +1,39 @@
+name: SOP embeddings
+
+# Builds the Gemini embedding vectors for the SOP documents, retrains the SOP ranker with the semantic
+# signal and pushes the result to the `sop-embeddings` branch for review (it never deploys by itself).
+# Needs the repository secret GEMINI_API_KEY.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  embed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Install
+        run: pip install -r requirements.txt scikit-learn
+      - name: Embed SOP chunks and benchmark questions
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PYTHONPATH: .
+        run: python scripts/build_sop_embeddings.py
+      - name: Retrain ranker (lexical + semantic) and evaluate
+        env:
+          PYTHONPATH: .
+        run: python scripts/train_sop_ranker.py --repeats 10 | tee ranker_report.txt
+      - name: Push to sop-embeddings branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b sop-embeddings
+          git add -f data/sop_embeddings src/agent/multi_agent/sop_ranker.json ranker_report.txt
+          git commit -m "SOP embeddings + retrained ranker"
+          git push -f origin sop-embeddings

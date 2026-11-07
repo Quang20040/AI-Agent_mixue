@@ -86,3 +86,56 @@ def test_benchmark_requires_both_file_and_entity():
             {'file_path': filename, 'metadata': {'code': code}, 'content': 'pearl'}])
         assert evaluator.evaluate_case(case)['passed'] is False
 
+
+
+def test_sop_questions_are_ranked_by_the_learned_model():
+    agent = RepoDocsAgent(Path('.'))
+    hits = agent.search('trân châu luộc mấy phút', top_k=3, category_filter='SOP_QUY_CHUAN')
+    assert hits and hits[0]['citation']['score_kind'] == 'learned_relevance_score'
+    assert any('35 phút' in h['content'] for h in hits)
+
+
+def test_learned_ranker_rejects_new_out_of_scope_questions_without_a_word_list():
+    """The held-out questions were written after the hand-tuned ranker; its word list rejected 1 of their 10
+    out-of-scope questions. The learned threshold must keep rejecting them (and still answer)."""
+    report = evaluate_sop_retrieval(benchmark_path='tests/fixtures/sop_retrieval_heldout.json')
+    metrics = report['metrics']
+    assert metrics['Negative_Rejection_Rate_pct'] >= 90.0
+    assert metrics['Hit@3'] >= 70.0
+
+
+def test_heuristic_ranker_stays_available(monkeypatch):
+    monkeypatch.setenv('SOP_RANKER', 'heuristic')
+    hits = RepoDocsAgent(Path('.')).search('trân châu luộc mấy phút', top_k=3, category_filter='SOP_QUY_CHUAN')
+    assert hits and hits[0]['citation']['score_kind'] == 'heuristic_relevance_not_probability'
+
+
+def test_semantic_signal_is_used_when_question_vectors_are_available(monkeypatch):
+    """With document and question vectors, the semantic variant ranks; the closest chunk can win on meaning."""
+    import json
+    import numpy as np
+    from src.agent.multi_agent import repo_docs_agent as rda
+    from src.engine import sop_embeddings
+    agent = RepoDocsAgent(Path('.'))
+    spec = json.loads(rda.SOP_RANKER_PATH.read_text(encoding='utf-8'))
+    spec.pop('dense', None)
+    dense = {**spec, 'features': spec['features'] + ['dense_cos'], 'mean': spec['mean'] + [-0.2],
+             'scale': spec['scale'] + [0.1], 'weights': spec['weights'] + [50.0], 'variant': 'semantic'}
+    monkeypatch.setattr(rda, 'load_sop_ranker', lambda: rda.LearnedRanker({**spec, 'dense': dense}))
+    target = next(c for c in agent.chunks if c.file_path.endswith('16_Quy_tac_duong_va_topping.csv'))
+    others = [c for c in agent.chunks if c.category == 'SOP_QUY_CHUAN' and c is not target][:50]
+    q = np.array([1.0, 0.0])
+    vectors = {target.chunk_id: np.array([1.0, 0.0]), **{c.chunk_id: np.array([0.0, 1.0]) for c in others}}
+    monkeypatch.setattr(sop_embeddings, 'document_vectors', lambda: vectors)
+    monkeypatch.setattr(sop_embeddings, 'query_vector', lambda query, settings=None: q)
+    hits = agent.search('topping thêm thì đường thế nào', top_k=3, category_filter='SOP_QUY_CHUAN')
+    assert hits[0]['citation']['chunk_id'] == target.chunk_id
+    assert hits[0]['citation']['score_kind'] == 'learned_relevance_score_semantic'
+
+
+def test_no_question_is_sent_for_embedding_when_ai_is_off(monkeypatch):
+    import httpx
+    from src.engine import sop_embeddings
+    monkeypatch.setattr(sop_embeddings, 'document_vectors', lambda: {'x': None})
+    monkeypatch.setattr(httpx, 'post', lambda *a, **k: (_ for _ in ()).throw(AssertionError('network')))
+    assert sop_embeddings.query_vector('trân châu nấu bao lâu') is None  # LLM_ENABLED=false in tests

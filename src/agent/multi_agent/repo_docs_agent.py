@@ -145,6 +145,88 @@ def _detect_code_in_query(query_norm: str) -> str | None:
     return None
 
 
+OUT_OF_SCOPE_TERMS = {
+    "banh bao", "thit", "sau rieng", "musang king",
+    "khong ton tai", "khong_ton_tai", "kfc", "ga ran",
+    "lau thai", "tomyum", "tom yum", "pizza", "pho mai", "xuc xich",
+    "hamburger", "com tam", "bun bo", "pho bo", "suon"
+}
+# Day-by-day logs (sales, purchases, stock counts, topping waste): data rows, rarely the answer to an SOP question.
+LOG_TABLES = ("04_Ban_hang_hang_ngay.csv", "05_Nhap_hang.csv", "06_Kiem_ke.csv", "07_Chuan_bi_va_huy_topping.csv")
+
+
+def heuristic_score(f: dict[str, float]) -> float:
+    """Hand-tuned fusion of the relevance signals (the ranker used before the learned one)."""
+    score = (f["bm25"] * 0.4) + (f["tfidf_cos"] * 6.0) + (f["trig_sim"] * 10.0) + f["code_boost"] + f["title_boost"] \
+        + f["intent_boost"] + f["phrase_boost"]
+    # Penalize heavily if term coverage is too low unless strong entity match
+    if f["coverage"] < 0.35 and f["tfidf_cos"] < 0.25 and f["code_boost"] == 0.0 and f["intent_boost"] <= 0.0 \
+            and f["phrase_boost"] <= 0.0:
+        score *= 0.15
+    return score
+
+
+def dense_gap(cosines: list[float | None]) -> list[float]:
+    """Semantic feature per chunk: cosine minus the question's best cosine (0 = closest chunk, more negative =
+    further). Chunks without a vector (log rows) count as the furthest. Relative to the question, so the
+    scale of an embedding model's cosines does not matter."""
+    present = [c for c in cosines if c is not None]
+    if not present:
+        return [0.0] * len(cosines)
+    top, low = max(present), min(present)
+    return [(low if c is None else c) - top for c in cosines]
+
+
+class LearnedRanker:
+    """Learned linear relevance model: score = w . standardized(features) + b; answers below `threshold` are dropped."""
+
+    def __init__(self, spec: dict[str, Any]):
+        self.features: list[str] = spec["features"]
+        self.mean = spec["mean"]
+        self.scale = spec["scale"]
+        self.weights = spec["weights"]
+        self.bias = float(spec["bias"])
+        self.threshold = float(spec["threshold"])
+        self.corpus = spec.get("corpus", "")
+        self.name = spec.get("variant", "lexical")
+        # Same model plus the semantic signal (question-chunk embedding cosine), used when vectors are available.
+        self.dense = LearnedRanker(spec["dense"]) if spec.get("dense") else None
+
+    def vector(self, f: dict[str, float]) -> list[float]:
+        import math
+        out = []
+        for name in self.features:
+            base, _, kind = name.partition(":")
+            value = float(f.get(base, 0.0))
+            if kind == "log1p":
+                value = math.log1p(max(value, 0.0))
+            out.append(value)
+        return out
+
+    def score(self, f: dict[str, float]) -> float:
+        x = self.vector(f)
+        return self.bias + sum(w * (v - m) / s for w, v, m, s in zip(self.weights, x, self.mean, self.scale))
+
+
+_RANKER_CACHE: dict[str, Any] = {}
+SOP_RANKER_PATH = Path(__file__).with_name("sop_ranker.json")
+
+
+def load_sop_ranker() -> LearnedRanker | None:
+    """The trained SOP ranker, unless SOP_RANKER=heuristic or no model file ships with the code."""
+    import json
+    import os
+    if os.environ.get("SOP_RANKER", "learned").strip().lower() == "heuristic":
+        return None
+    if "model" not in _RANKER_CACHE:
+        try:
+            _RANKER_CACHE["model"] = LearnedRanker(json.loads(SOP_RANKER_PATH.read_text(encoding="utf-8")))
+        except (OSError, ValueError, KeyError) as exc:
+            logger.warning("SOP ranker unavailable, using heuristic weights: %s", exc)
+            _RANKER_CACHE["model"] = None
+    return _RANKER_CACHE["model"]
+
+
 class DocumentChunk:
     """Đoạn văn bản trích xuất từ tài liệu hoặc file dữ liệu trong repo."""
 
@@ -485,139 +567,61 @@ class RepoDocsAgent:
     def search(self, query: str, top_k: int = 5, category_filter: str | None = None) -> list[dict[str, Any]]:
         """Lục tìm tài liệu và dữ liệu khớp nhất bằng Hybrid Search (BM25 + N-gram + Entity Matching).
 
-        Không gửi dữ liệu ra ngoài, hoàn toàn deterministic và có ngưỡng tin cậy nghiêm ngặt.
+        SOP lookups (category SOP_QUY_CHUAN) are ranked by a model learned from labelled questions
+        (src/agent/multi_agent/sop_ranker.json, see scripts/train_sop_ranker.py); SOP_RANKER=heuristic or a
+        missing model falls back to the hand-tuned weights. Không gửi dữ liệu ra ngoài.
         """
         if top_k <= 0 or not self.bm25 or not self.chunks:
             return []
-
-        q_norm = _normalize(query)
-
-        # 0. Out-of-scope / alien negative query rejection
-        out_of_scope_terms = {
-            "banh bao", "thit", "sau rieng", "musang king",
-            "khong ton tai", "khong_ton_tai", "kfc", "ga ran",
-            "lau thai", "tomyum", "tom yum", "pizza", "pho mai", "xuc xich",
-            "hamburger", "com tam", "bun bo", "pho bo", "suon"
-        }
-        if any(term in q_norm for term in out_of_scope_terms):
+        ranker = load_sop_ranker() if category_filter == "SOP_QUY_CHUAN" else None
+        if ranker is not None and ranker.corpus and ranker.corpus != self.corpus_fingerprint(category_filter):
+            ranker = None  # trained on other documents (they changed, or a test corpus): scores would not mean the same
+        ctx = self._query_context(query, category_filter, scope_list=ranker is None)
+        if ctx is None:
             return []
+        scores = self.bm25.get_scores(ctx["expanded_tokens"])
+        doc_vecs = qvec = None
+        if ranker is not None and ranker.dense is not None:
+            from src.engine.sop_embeddings import document_vectors, query_vector
+            qvec = query_vector(query)
+            if qvec is not None:
+                doc_vecs = document_vectors()
+                ranker = ranker.dense
 
-        query_tokens = _tokenize(query)
-        if not query_tokens:
-            return []
-
-        expanded_tokens = _expand_semantic_tokens(q_norm, query_tokens)
-        meaningful_tokens = [t for t in expanded_tokens if t not in VI_STOPWORDS and len(t) > 1]
-        if not meaningful_tokens:
-            meaningful_tokens = expanded_tokens
-
-        import math
-        from collections import Counter
-
-        q_tfidf_terms = _ngrams_for_tfidf(expanded_tokens)
-        q_tf_counts = Counter(q_tfidf_terms)
-        q_vec = {
-            term: (1.0 + math.log(cnt)) * self.idf.get(term, 1.0)
-            for term, cnt in q_tf_counts.items()
-            if term in self.idf
-        }
-        q_norm_val = math.sqrt(sum(v * v for v in q_vec.values())) or 1.0
-
-        query_trigrams = _trigrams(q_norm)
-        detected_code = _detect_code_in_query(q_norm)
-        explicit_codes = {code.upper() for code in re.findall(r'\btp\d+\b', q_norm)}
-        indexed_codes = {c.metadata.get('code') for c in self.chunks if not category_filter or c.category == category_filter}
-        if explicit_codes and not explicit_codes <= indexed_codes:
-            return []
-
-        # Detect source image query (e.g. ANH_08, anh 8)
-        img_match = re.search(r"anh[_\s]*(\d+)", q_norm)
-        target_img = f"ANH_{int(img_match.group(1)):02d}" if img_match else None
-
-        # Detect storage intent
-        storage_keywords = {
-            "bao quan", "han dung", "han su dung", "de duoc", "may tieng",
-            "bao lau", "tu lanh", "tu mat", "ngan mat", "nhiet do", "dieu kien", "de ngoai",
-        }
-        is_storage_query = any(kw in q_norm for kw in storage_keywords)
-
-        scores = self.bm25.get_scores(expanded_tokens)
         scored_chunks: list[tuple[float, DocumentChunk]] = []
-
+        pending: list[tuple[dict[str, float], DocumentChunk]] = []
         for i, bm25_score in enumerate(scores):
             chunk = self.chunks[i]
             if category_filter and chunk.category != category_filter:
                 continue
-            if explicit_codes and chunk.metadata.get('code') not in explicit_codes:
+            if ctx["explicit_codes"] and chunk.metadata.get('code') not in ctx["explicit_codes"]:
                 continue
-
-            # 1. Lexical BM25 component
-            raw_bm25 = float(bm25_score)
-
-            # 1b. Dense Sublinear TF-IDF Cosine Similarity component
-            dot_prod = sum(val * chunk.tfidf_vec.get(term, 0.0) for term, val in q_vec.items())
-            tfidf_cos = dot_prod / (q_norm_val * chunk.tfidf_norm) if dot_prod > 0 else 0.0
-
-            # 2. Character 3-gram similarity component (handles typos and spelling variants)
-            trig_sim = _trigram_similarity(query_trigrams, chunk.trigrams)
-
-            # 3. Meaningful term coverage
-            matches = sum(1 for t in meaningful_tokens if t in chunk.title_norm or t in chunk.tokens_set)
-            coverage = matches / len(meaningful_tokens) if meaningful_tokens else 0.0
-
-            # 4. Exact entity / code boost
-            code_boost = 0.0
-            chunk_code = chunk.metadata.get("code")
-            if detected_code and chunk_code and chunk_code == detected_code:
-                code_boost = 5.0
-            elif detected_code and detected_code.lower() in chunk.tokens_set:
-                code_boost = 3.5
-
-            # 5. Exact title phrase boost
-            title_boost = 0.0
-            if any(t in chunk.title_norm for t in meaningful_tokens):
-                title_boost = 2.0
-
-            # 6. Intent & Image Specific Boosts
-            intent_boost = 0.0
-            doc_type = chunk.metadata.get("doc_type", "")
-            # Prefer the source that answers the requested operation, rather than
-            # a short expiry/time row that merely repeats the ingredient name.
-            is_recipe_query = any(kw in q_norm for kw in (
-                "cach nau", "cach u", "quy trinh", "so che", "dinh luong", "nau chan", "nau tran", "ham tra", "pha cot"))
-            if is_recipe_query and not is_storage_query and doc_type == "sop_batch_formula":
-                intent_boost += 10.0
-            if ("topping" in q_norm and any(kw in q_norm for kw in ("giam duong", "toi da", "may phan"))
-                    and chunk.file_path.endswith("16_Quy_tac_duong_va_topping.csv")):
-                intent_boost += 10.0
-            if is_storage_query:
-                if doc_type in ("storage_rule", "shelf_life") or "Quy_dinh_bao_quan" in chunk.file_path or "Han_dung" in chunk.file_path:
-                    intent_boost += 6.0
-                elif doc_type == "sop_batch_formula" and not any(kw in q_norm for kw in ("me", "phan", "cach nau", "so che", "dinh luong")):
-                    intent_boost -= 3.0
-
-            if target_img and chunk.metadata.get("source_image") == target_img:
-                intent_boost += 6.0
-
-            # Exact phrase match boost
-            phrase_boost = 0.0
-            if q_norm and (q_norm in chunk.content_norm or q_norm in chunk.title_norm):
-                phrase_boost = 6.0
-            elif any(len(t) >= 4 and t in chunk.content_norm for t in query_tokens):
-                phrase_boost = 1.5
-
-            # 7. Hybrid Score Synthesis (BM25 + TF-IDF Cosine + Trigrams + Entity/Intent Reranker)
-            hybrid_score = (raw_bm25 * 0.4) + (tfidf_cos * 6.0) + (trig_sim * 10.0) + code_boost + title_boost + intent_boost + phrase_boost
-
-            # Penalize heavily if term coverage is too low unless strong entity match
-            if coverage < 0.35 and tfidf_cos < 0.25 and code_boost == 0.0 and intent_boost <= 0.0 and phrase_boost <= 0.0:
-                hybrid_score *= 0.15
-
-            # 8. Strict confidence cutoff (prevent false-positive hallucinations on negative queries)
-            if hybrid_score >= 3.2 and (coverage >= 0.30 or tfidf_cos >= 0.30 or code_boost > 0.0 or intent_boost > 0.0 or phrase_boost > 0.0):
+            f = self._components(ctx, chunk, float(bm25_score))
+            if doc_vecs is not None:
+                vec = doc_vecs.get(chunk.chunk_id)
+                f["dense_cos"] = float(vec @ qvec) if vec is not None else None
+                pending.append((f, chunk))
+                continue
+            if ranker is not None:
+                score = ranker.score(f)
+                if score >= ranker.threshold:
+                    scored_chunks.append((score, chunk))
+                continue
+            hybrid_score = heuristic_score(f)
+            # Strict confidence cutoff (prevent false-positive hallucinations on negative queries)
+            if hybrid_score >= 3.2 and (f["coverage"] >= 0.30 or f["tfidf_cos"] >= 0.30 or f["code_boost"] > 0.0
+                                        or f["intent_boost"] > 0.0 or f["phrase_boost"] > 0.0):
                 scored_chunks.append((hybrid_score, chunk))
 
+        if pending:  # semantic feature is relative to the question's closest chunk: needs every cosine first
+            for (f, chunk), gap in zip(pending, dense_gap([f["dense_cos"] for f, _ in pending])):
+                f["dense_cos"] = gap
+                score = ranker.score(f)
+                if score >= ranker.threshold:
+                    scored_chunks.append((score, chunk))
         scored_chunks.sort(key=lambda x: x[0], reverse=True)
+        score_kind = ("learned_relevance_score" + ("_semantic" if doc_vecs is not None else "")) if ranker is not None \
+            else "heuristic_relevance_not_probability"
 
         results = []
         for s, c in scored_chunks[:top_k]:
@@ -636,10 +640,126 @@ class RepoDocsAgent:
                     "char_start": c.metadata.get("char_start"),
                     "char_end": c.metadata.get("char_end"),
                     "verification_status": c.metadata.get("verification_status", "UNKNOWN"),
-                    "score_kind": "heuristic_relevance_not_probability",
+                    "score_kind": score_kind,
                 },
             })
         return results
+
+    def corpus_fingerprint(self, category: str) -> str:
+        """Identifies the indexed documents of a category; a learned ranker is only used on the corpus it saw."""
+        key = ("fingerprint", category)
+        cache = getattr(self, "_fingerprints", None)
+        if cache is None:
+            cache = self._fingerprints = {}
+        if key not in cache:
+            ids = sorted(c.chunk_id for c in self.chunks if c.category == category)
+            cache[key] = hashlib.sha256("\n".join(ids).encode()).hexdigest()[:16]
+        return cache[key]
+
+    def _query_context(self, query: str, category_filter: str | None, scope_list: bool = True) -> dict[str, Any] | None:
+        """Everything about the question that the per-chunk scoring needs; None means 'no answer'."""
+        import math
+        from collections import Counter
+
+        q_norm = _normalize(query)
+        # Hand-written out-of-scope list (heuristic ranker only; the learned ranker rejects by its own threshold).
+        if scope_list and any(term in q_norm for term in OUT_OF_SCOPE_TERMS):
+            return None
+        query_tokens = _tokenize(query)
+        if not query_tokens:
+            return None
+        expanded_tokens = _expand_semantic_tokens(q_norm, query_tokens)
+        meaningful_tokens = [t for t in expanded_tokens if t not in VI_STOPWORDS and len(t) > 1]
+        if not meaningful_tokens:
+            meaningful_tokens = expanded_tokens
+
+        q_tf_counts = Counter(_ngrams_for_tfidf(expanded_tokens))
+        q_vec = {
+            term: (1.0 + math.log(cnt)) * self.idf.get(term, 1.0)
+            for term, cnt in q_tf_counts.items()
+            if term in self.idf
+        }
+        explicit_codes = {code.upper() for code in re.findall(r'\btp\d+\b', q_norm)}
+        indexed_codes = {c.metadata.get('code') for c in self.chunks if not category_filter or c.category == category_filter}
+        if explicit_codes and not explicit_codes <= indexed_codes:
+            return None
+        img_match = re.search(r"anh[_\s]*(\d+)", q_norm)
+        storage_keywords = {
+            "bao quan", "han dung", "han su dung", "de duoc", "may tieng",
+            "bao lau", "tu lanh", "tu mat", "ngan mat", "nhiet do", "dieu kien", "de ngoai",
+        }
+        return {
+            "q_norm": q_norm,
+            "query_tokens": query_tokens,
+            "expanded_tokens": expanded_tokens,
+            "meaningful_tokens": meaningful_tokens,
+            "q_vec": q_vec,
+            "q_norm_val": math.sqrt(sum(v * v for v in q_vec.values())) or 1.0,
+            "query_trigrams": _trigrams(q_norm),
+            "detected_code": _detect_code_in_query(q_norm),
+            "explicit_codes": explicit_codes,
+            "target_img": f"ANH_{int(img_match.group(1)):02d}" if img_match else None,
+            "is_storage_query": any(kw in q_norm for kw in storage_keywords),
+            # Prefer the source that answers the requested operation, rather than
+            # a short expiry/time row that merely repeats the ingredient name.
+            "is_recipe_query": any(kw in q_norm for kw in (
+                "cach nau", "cach u", "quy trinh", "so che", "dinh luong", "nau chan", "nau tran", "ham tra", "pha cot")),
+        }
+
+    @staticmethod
+    def _components(ctx: dict[str, Any], chunk: DocumentChunk, raw_bm25: float) -> dict[str, float]:
+        """Relevance signals for one (question, chunk) pair. Both rankers read these."""
+        q_norm = ctx["q_norm"]
+        meaningful_tokens = ctx["meaningful_tokens"]
+        # 1b. Dense Sublinear TF-IDF Cosine Similarity component
+        dot_prod = sum(val * chunk.tfidf_vec.get(term, 0.0) for term, val in ctx["q_vec"].items())
+        tfidf_cos = dot_prod / (ctx["q_norm_val"] * chunk.tfidf_norm) if dot_prod > 0 else 0.0
+        # 2. Character 3-gram similarity component (handles typos and spelling variants)
+        trig_sim = _trigram_similarity(ctx["query_trigrams"], chunk.trigrams)
+        # 3. Meaningful term coverage
+        matches = sum(1 for t in meaningful_tokens if t in chunk.title_norm or t in chunk.tokens_set)
+        coverage = matches / len(meaningful_tokens) if meaningful_tokens else 0.0
+        # 4. Exact entity / code boost
+        detected_code = ctx["detected_code"]
+        code_boost = 0.0
+        chunk_code = chunk.metadata.get("code")
+        if detected_code and chunk_code and chunk_code == detected_code:
+            code_boost = 5.0
+        elif detected_code and detected_code.lower() in chunk.tokens_set:
+            code_boost = 3.5
+        # 5. Exact title phrase boost
+        title_boost = 2.0 if any(t in chunk.title_norm for t in meaningful_tokens) else 0.0
+        # 6. Intent & Image Specific Boosts
+        recipe_match = topping_rule = storage_match = storage_penalty = 0.0
+        doc_type = chunk.metadata.get("doc_type", "")
+        if ctx["is_recipe_query"] and not ctx["is_storage_query"] and doc_type == "sop_batch_formula":
+            recipe_match = 1.0
+        if ("topping" in q_norm and any(kw in q_norm for kw in ("giam duong", "toi da", "may phan"))
+                and chunk.file_path.endswith("16_Quy_tac_duong_va_topping.csv")):
+            topping_rule = 1.0
+        if ctx["is_storage_query"]:
+            if doc_type in ("storage_rule", "shelf_life") or "Quy_dinh_bao_quan" in chunk.file_path or "Han_dung" in chunk.file_path:
+                storage_match = 1.0
+            elif doc_type == "sop_batch_formula" and not any(kw in q_norm for kw in ("me", "phan", "cach nau", "so che", "dinh luong")):
+                storage_penalty = 1.0
+        image_match = 1.0 if ctx["target_img"] and chunk.metadata.get("source_image") == ctx["target_img"] else 0.0
+        # Exact phrase match boost
+        phrase_exact = phrase_partial = 0.0
+        if q_norm and (q_norm in chunk.content_norm or q_norm in chunk.title_norm):
+            phrase_exact = 1.0
+        elif any(len(t) >= 4 and t in chunk.content_norm for t in ctx["query_tokens"]):
+            phrase_partial = 1.0
+        intent_boost = 10.0 * recipe_match + 10.0 * topping_rule + 6.0 * storage_match - 3.0 * storage_penalty + 6.0 * image_match
+        return {
+            "bm25": raw_bm25, "tfidf_cos": tfidf_cos, "trig_sim": trig_sim, "coverage": coverage,
+            "code_boost": code_boost, "code_exact": float(code_boost == 5.0), "code_token": float(code_boost == 3.5),
+            "title_boost": title_boost, "recipe_match": recipe_match, "topping_rule": topping_rule,
+            "storage_match": storage_match, "storage_penalty": storage_penalty, "image_match": image_match,
+            "intent_boost": intent_boost, "phrase_exact": phrase_exact, "phrase_partial": phrase_partial,
+            "phrase_boost": 6.0 * phrase_exact + 1.5 * phrase_partial,
+            "is_full_table": float(doc_type == "full_table"),
+            "is_log_row": float(any(chunk.file_path.endswith(n) for n in LOG_TABLES)),
+        }
 
     # --- CÁC PHƯƠNG THỨC TRA CỨU ĐẶC BIỆT THEO CHỦ ĐỀ CHUYÊN MÔN ---
 

@@ -1,0 +1,923 @@
+[
+ {
+  "query_id": "HO_01",
+  "query": "trân châu luộc mấy phút",
+  "query_type": "paraphrase",
+  "expected_codes": [
+   "TP02"
+  ],
+  "expected_files": [
+   "13_Thoi_gian_so_che_theo_anh.csv",
+   "09_Cong_thuc_so_che_theo_me.csv"
+  ],
+  "expected_keywords": [
+   "35 phút",
+   "tp02"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_02",
+  "query": "1 mẻ trân châu cần bao nhiêu nước",
+  "query_type": "paraphrase",
+  "expected_codes": [
+   "TP02"
+  ],
+  "expected_files": [
+   "09_Cong_thuc_so_che_theo_me.csv"
+  ],
+  "expected_keywords": [
+   "tp02"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_03",
+  "query": "tran chau nau xong de ngoai duoc may tieng",
+  "query_type": "unaccented",
+  "expected_codes": [],
+  "expected_files": [
+   "10_Quy_dinh_bao_quan_theo_anh.csv",
+   "15_Han_dung_nguyen_lieu_tren_anh.csv"
+  ],
+  "expected_keywords": [
+   "4 giờ"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_04",
+  "query": "hạn sử dụng trân châu khô chưa nấu",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "15_Han_dung_nguyen_lieu_tren_anh.csv"
+  ],
+  "expected_keywords": [
+   "trân châu chưa nấu"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_05",
+  "query": "ủ trân châu với đường bao lâu",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "13_Thoi_gian_so_che_theo_anh.csv"
+  ],
+  "expected_keywords": [
+   "ủ đường 10 phút"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_06",
+  "query": "thạch đào làm xong cất tủ mát được mấy ngày",
+  "query_type": "paraphrase",
+  "expected_codes": [
+   "TP04"
+  ],
+  "expected_files": [
+   "10_Quy_dinh_bao_quan_theo_anh.csv"
+  ],
+  "expected_keywords": [
+   "0+3 ngày"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_07",
+  "query": "khuấy thạch đào bao lâu",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "13_Thoi_gian_so_che_theo_anh.csv"
+  ],
+  "expected_keywords": [
+   "khuấy 2 phút sau thêm đường mật"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_08",
+  "query": "nguyên liệu nấu thạch đào gồm những gì",
+  "query_type": "paraphrase",
+  "expected_codes": [
+   "TP04"
+  ],
+  "expected_files": [
+   "09_Cong_thuc_so_che_theo_me.csv"
+  ],
+  "expected_keywords": [
+   "tp04"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_09",
+  "query": "thach dao de nhiet do phong",
+  "query_type": "unaccented",
+  "expected_codes": [
+   "TP04"
+  ],
+  "expected_files": [
+   "10_Quy_dinh_bao_quan_theo_anh.csv"
+  ],
+  "expected_keywords": [
+   "đổ bỏ cuối ngày"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_10",
+  "query": "thạch đường đen để lạnh được bao lâu",
+  "query_type": "paraphrase",
+  "expected_codes": [
+   "TP03"
+  ],
+  "expected_files": [
+   "10_Quy_dinh_bao_quan_theo_anh.csv"
+  ],
+  "expected_keywords": [
+   "0+3 ngày"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_11",
+  "query": "cong thuc thach duong den 1 me",
+  "query_type": "unaccented",
+  "expected_codes": [
+   "TP03"
+  ],
+  "expected_files": [
+   "09_Cong_thuc_so_che_theo_me.csv"
+  ],
+  "expected_keywords": [
+   "tp03"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_12",
+  "query": "cho syrup đường đen vào thạch rồi khuấy mấy phút",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "13_Thoi_gian_so_che_theo_anh.csv"
+  ],
+  "expected_keywords": [
+   "khuấy 1 phút sau thêm syrup đường đen"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_13",
+  "query": "pha trà sữa lạnh ủ trà bao nhiêu phút",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "13_Thoi_gian_so_che_theo_anh.csv"
+  ],
+  "expected_keywords": [
+   "ủ 12 phút"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_14",
+  "query": "trà sữa pha sẵn để qua đêm được không",
+  "query_type": "paraphrase",
+  "expected_codes": [
+   "TP05"
+  ],
+  "expected_files": [
+   "10_Quy_dinh_bao_quan_theo_anh.csv"
+  ],
+  "expected_keywords": [
+   "đổ bỏ cuối ngày"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_15",
+  "query": "2 phần trà sữa lạnh cần bao nhiêu đá",
+  "query_type": "paraphrase",
+  "expected_codes": [
+   "TP05"
+  ],
+  "expected_files": [
+   "09_Cong_thuc_so_che_theo_me.csv"
+  ],
+  "expected_keywords": [
+   "tp05"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_16",
+  "query": "hồng trà ủ mấy phút",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "13_Thoi_gian_so_che_theo_anh.csv"
+  ],
+  "expected_keywords": [
+   "ủ 10 phút"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_17",
+  "query": "có được pha nửa phần hồng trà không",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "13_Thoi_gian_so_che_theo_anh.csv",
+   "09_Cong_thuc_so_che_theo_me.csv"
+  ],
+  "expected_keywords": [
+   "0.5"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_18",
+  "query": "hong tra de duoc bao lau",
+  "query_type": "unaccented",
+  "expected_codes": [
+   "TP08"
+  ],
+  "expected_files": [
+   "10_Quy_dinh_bao_quan_theo_anh.csv"
+  ],
+  "expected_keywords": [
+   "đổ bỏ cuối ngày"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_19",
+  "query": "trà xanh ủ lạnh mấy phút",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "13_Thoi_gian_so_che_theo_anh.csv"
+  ],
+  "expected_keywords": [
+   "ủ 6 phút"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_20",
+  "query": "1 mẻ trà xanh dùng bao nhiêu lá trà",
+  "query_type": "paraphrase",
+  "expected_codes": [
+   "TP07"
+  ],
+  "expected_files": [
+   "09_Cong_thuc_so_che_theo_me.csv"
+  ],
+  "expected_keywords": [
+   "tp07"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_21",
+  "query": "luong da cho me tra xanh",
+  "query_type": "unaccented",
+  "expected_codes": [
+   "TP07"
+  ],
+  "expected_files": [
+   "09_Cong_thuc_so_che_theo_me.csv"
+  ],
+  "expected_keywords": [
+   "nl21"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_22",
+  "query": "pha hỗn hợp kem trước khi cho vào máy làm thế nào",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "13_Thoi_gian_so_che_theo_anh.csv",
+   "09_Cong_thuc_so_che_theo_me.csv"
+  ],
+  "expected_keywords": [
+   "để 15 phút",
+   "tp11"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_23",
+  "query": "kem tươi trong máy để được bao lâu",
+  "query_type": "paraphrase",
+  "expected_codes": [
+   "TP01"
+  ],
+  "expected_files": [
+   "10_Quy_dinh_bao_quan_theo_anh.csv"
+  ],
+  "expected_keywords": [
+   "đổ bỏ cuối ngày"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_24",
+  "query": "pha cà phê cô đặc khuấy bao lâu",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "13_Thoi_gian_so_che_theo_anh.csv"
+  ],
+  "expected_keywords": [
+   "khuấy khoảng 1 phút"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_25",
+  "query": "sua dac pha tu bot tra sua giu duoc may tieng",
+  "query_type": "unaccented",
+  "expected_codes": [
+   "TP06"
+  ],
+  "expected_files": [
+   "10_Quy_dinh_bao_quan_theo_anh.csv"
+  ],
+  "expected_keywords": [
+   "8 giờ"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_26",
+  "query": "cà phê cô đặc bảo quản thế nào",
+  "query_type": "paraphrase",
+  "expected_codes": [
+   "TP10"
+  ],
+  "expected_files": [
+   "10_Quy_dinh_bao_quan_theo_anh.csv"
+  ],
+  "expected_keywords": [
+   "bình đong"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_27",
+  "query": "syrup socola hạn bao lâu",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "15_Han_dung_nguyen_lieu_tren_anh.csv"
+  ],
+  "expected_keywords": [
+   "syrup socola"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_28",
+  "query": "vun oreo de duoc bao lau",
+  "query_type": "unaccented",
+  "expected_codes": [],
+  "expected_files": [
+   "15_Han_dung_nguyen_lieu_tren_anh.csv"
+  ],
+  "expected_keywords": [
+   "vụn oreo"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_29",
+  "query": "mứt dâu tây hạn sử dụng",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "15_Han_dung_nguyen_lieu_tren_anh.csv"
+  ],
+  "expected_keywords": [
+   "mứt dâu tây"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_30",
+  "query": "bột pudding còn hạn mấy tháng",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "15_Han_dung_nguyen_lieu_tren_anh.csv"
+  ],
+  "expected_keywords": [
+   "bột pudding"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_31",
+  "query": "duong mat han dung",
+  "query_type": "unaccented",
+  "expected_codes": [],
+  "expected_files": [
+   "15_Han_dung_nguyen_lieu_tren_anh.csv",
+   "02_Nguyen_lieu.csv"
+  ],
+  "expected_keywords": [
+   "đường mật"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_32",
+  "query": "ống hút với cốc nhựa để được bao lâu",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "15_Han_dung_nguyen_lieu_tren_anh.csv"
+  ],
+  "expected_keywords": [
+   "ống hút"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_33",
+  "query": "bột kem nguyên vị hết hạn sau bao lâu",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "15_Han_dung_nguyen_lieu_tren_anh.csv"
+  ],
+  "expected_keywords": [
+   "bột kem nguyên vị"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_34",
+  "query": "khách chọn 30% đường mà thêm topping thì pha sao",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "16_Quy_tac_duong_va_topping.csv"
+  ],
+  "expected_keywords": [
+   "30%"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_35",
+  "query": "americano có cho đường không",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "16_Quy_tac_duong_va_topping.csv"
+  ],
+  "expected_keywords": [
+   "americano"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_36",
+  "query": "đơn giao ship có được thêm topping không",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "16_Quy_tac_duong_va_topping.csv",
+   "11_Dinh_luong_topping_them.csv"
+  ],
+  "expected_keywords": [
+   "giao ship"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_37",
+  "query": "đường 50% mà thêm topping thì pha mức nào",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "16_Quy_tac_duong_va_topping.csv"
+  ],
+  "expected_keywords": [
+   "50%"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_38",
+  "query": "them 1 topping thi pha duong bao nhieu",
+  "query_type": "unaccented",
+  "expected_codes": [],
+  "expected_files": [
+   "16_Quy_tac_duong_va_topping.csv"
+  ],
+  "expected_keywords": [
+   "70%"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_39",
+  "query": "thêm 1 phần trân châu vào sundae là bao nhiêu gam",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "11_Dinh_luong_topping_them.csv"
+  ],
+  "expected_keywords": [
+   "sundae"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_40",
+  "query": "dinh luong them vun oreo",
+  "query_type": "unaccented",
+  "expected_codes": [],
+  "expected_files": [
+   "11_Dinh_luong_topping_them.csv"
+  ],
+  "expected_keywords": [
+   "nl10"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_41",
+  "query": "trà hoa quả thêm thạch dừa bao nhiêu",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "11_Dinh_luong_topping_them.csv"
+  ],
+  "expected_keywords": [
+   "trà hoa quả"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_42",
+  "query": "kem ốc quế giá bao nhiêu",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "01_Danh_muc_mon.csv"
+  ],
+  "expected_keywords": [
+   "kem ốc quế"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_43",
+  "query": "menu có tổng cộng bao nhiêu món",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "01_Danh_muc_mon.csv",
+   "DOC_TRUOC_KHI_DUNG.md"
+  ],
+  "expected_keywords": [
+   "39"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_44",
+  "query": "giá super sundae dâu tây",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "01_Danh_muc_mon.csv"
+  ],
+  "expected_keywords": [
+   "super sundae"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_45",
+  "query": "trà sữa hoa nhài định lượng thế nào",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "14_Mon_trong_anh_chua_co_ma_menu.csv"
+  ],
+  "expected_keywords": [
+   "trà sữa hoa nhài"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_46",
+  "query": "việt quất có công thức chưa",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "12_Cac_diem_can_xac_nhan.csv"
+  ],
+  "expected_keywords": [
+   "việt quất"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_47",
+  "query": "những điểm còn cần xác nhận trong dữ liệu",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "12_Cac_diem_can_xac_nhan.csv"
+  ],
+  "expected_keywords": [
+   "xn01"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_48",
+  "query": "cà phê tươi với cà phê hòa tan có gộp làm một được không",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "12_Cac_diem_can_xac_nhan.csv"
+  ],
+  "expected_keywords": [
+   "cà phê hòa tan"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_49",
+  "query": "danh sách ảnh nguồn công thức",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "08_Danh_sach_anh_nguon.csv"
+  ],
+  "expected_keywords": [
+   "anh_01"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_50",
+  "query": "anh 17 la anh gi",
+  "query_type": "unaccented",
+  "expected_codes": [],
+  "expected_files": [
+   "15_Han_dung_nguyen_lieu_tren_anh.csv",
+   "08_Danh_sach_anh_nguon.csv"
+  ],
+  "expected_keywords": [
+   "anh_17"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_51",
+  "query": "vì sao trân châu bị hủy",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "07_Chuan_bi_va_huy_topping.csv",
+   "10_Quy_dinh_bao_quan_theo_anh.csv",
+   "15_Han_dung_nguyen_lieu_tren_anh.csv"
+  ],
+  "expected_keywords": [
+   "hết hạn sử dụng 4 giờ",
+   "4 giờ"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_52",
+  "query": "ai xác nhận kiểm kê",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "06_Kiem_ke.csv"
+  ],
+  "expected_keywords": [
+   "quản lý"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_53",
+  "query": "tranchau nau bao lau",
+  "query_type": "typo",
+  "expected_codes": [],
+  "expected_files": [
+   "13_Thoi_gian_so_che_theo_anh.csv",
+   "09_Cong_thuc_so_che_theo_me.csv"
+  ],
+  "expected_keywords": [
+   "35 phút",
+   "tp02"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_54",
+  "query": "thach dao bao quan",
+  "query_type": "unaccented",
+  "expected_codes": [
+   "TP04"
+  ],
+  "expected_files": [
+   "10_Quy_dinh_bao_quan_theo_anh.csv"
+  ],
+  "expected_keywords": [
+   "0+3 ngày",
+   "đổ bỏ cuối ngày"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_55",
+  "query": "hong tra u bao lau",
+  "query_type": "unaccented",
+  "expected_codes": [],
+  "expected_files": [
+   "13_Thoi_gian_so_che_theo_anh.csv"
+  ],
+  "expected_keywords": [
+   "ủ 10 phút"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_56",
+  "query": "trà xan ủ lạnh",
+  "query_type": "typo",
+  "expected_codes": [],
+  "expected_files": [
+   "13_Thoi_gian_so_che_theo_anh.csv",
+   "09_Cong_thuc_so_che_theo_me.csv"
+  ],
+  "expected_keywords": [
+   "tp07"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_57",
+  "query": "suar dac giu duoc 8 tieng ko",
+  "query_type": "typo",
+  "expected_codes": [],
+  "expected_files": [
+   "10_Quy_dinh_bao_quan_theo_anh.csv"
+  ],
+  "expected_keywords": [
+   "8 giờ"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_58",
+  "query": "syrup hat de va bo han dung",
+  "query_type": "unaccented",
+  "expected_codes": [],
+  "expected_files": [
+   "15_Han_dung_nguyen_lieu_tren_anh.csv"
+  ],
+  "expected_keywords": [
+   "hạt dẻ"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_59",
+  "query": "kem tươi đã làm bảo quản ra sao",
+  "query_type": "paraphrase",
+  "expected_codes": [
+   "TP01"
+  ],
+  "expected_files": [
+   "10_Quy_dinh_bao_quan_theo_anh.csv"
+  ],
+  "expected_keywords": [
+   "máy kem"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_60",
+  "query": "mứt xoài mở hộp rồi dùng được bao lâu",
+  "query_type": "paraphrase",
+  "expected_codes": [],
+  "expected_files": [
+   "15_Han_dung_nguyen_lieu_tren_anh.csv"
+  ],
+  "expected_keywords": [
+   "mứt xoài"
+  ],
+  "is_negative": false
+ },
+ {
+  "query_id": "HO_61",
+  "query": "cách làm bánh mì pate",
+  "query_type": "negative",
+  "expected_codes": [],
+  "expected_files": [],
+  "expected_keywords": [],
+  "is_negative": true
+ },
+ {
+  "query_id": "HO_62",
+  "query": "giá vé xem phim cuối tuần",
+  "query_type": "negative",
+  "expected_codes": [],
+  "expected_files": [],
+  "expected_keywords": [],
+  "is_negative": true
+ },
+ {
+  "query_id": "HO_63",
+  "query": "cách sửa máy lạnh bị chảy nước",
+  "query_type": "negative",
+  "expected_codes": [],
+  "expected_files": [],
+  "expected_keywords": [],
+  "is_negative": true
+ },
+ {
+  "query_id": "HO_64",
+  "query": "công thức sinh tố bơ",
+  "query_type": "negative",
+  "expected_codes": [],
+  "expected_files": [],
+  "expected_keywords": [],
+  "is_negative": true
+ },
+ {
+  "query_id": "HO_65",
+  "query": "lương nhân viên part-time bao nhiêu",
+  "query_type": "negative",
+  "expected_codes": [],
+  "expected_files": [],
+  "expected_keywords": [],
+  "is_negative": true
+ },
+ {
+  "query_id": "HO_66",
+  "query": "cách nấu cơm gà Hải Nam",
+  "query_type": "negative",
+  "expected_codes": [],
+  "expected_files": [],
+  "expected_keywords": [],
+  "is_negative": true
+ },
+ {
+  "query_id": "HO_67",
+  "query": "trà sữa Gong Cha có ngon không",
+  "query_type": "negative",
+  "expected_codes": [],
+  "expected_files": [],
+  "expected_keywords": [],
+  "is_negative": true
+ },
+ {
+  "query_id": "HO_68",
+  "query": "tỷ giá đô la hôm nay",
+  "query_type": "negative",
+  "expected_codes": [],
+  "expected_files": [],
+  "expected_keywords": [],
+  "is_negative": true
+ },
+ {
+  "query_id": "HO_69",
+  "query": "hướng dẫn pha cocktail mojito",
+  "query_type": "negative",
+  "expected_codes": [],
+  "expected_files": [],
+  "expected_keywords": [],
+  "is_negative": true
+ },
+ {
+  "query_id": "HO_70",
+  "query": "cách làm bánh flan caramen",
+  "query_type": "negative",
+  "expected_codes": [],
+  "expected_files": [],
+  "expected_keywords": [],
+  "is_negative": true
+ }
+]
