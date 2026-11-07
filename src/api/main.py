@@ -200,6 +200,20 @@ def backup(store_id: str = Depends(store_access), user: User = Depends(admin_use
                         background=BackgroundTask(path.unlink, missing_ok=True))
 
 
+class PurgeIn(BaseModel):
+    confirm: bool = Field(False, description='true để xóa thật; false chỉ xem số dòng sẽ xóa')
+
+
+@api.post('/v1/stores/{store_id}/sample-data/purge', tags=['system'])
+def purge_sample(body: PurgeIn, store_id: str = Depends(store_access), user: User = Depends(admin_user)):
+    """Remove the simulated history (sales 16/07–15/10 except 14/10, purchases, stock counts, topping log,
+    development plans). Backup zip first, one transaction, audit line. confirm=false only previews."""
+    from src.engine import sample_purge
+    if not body.confirm:
+        return {'preview': sample_purge.preview(), 'real_from': sample_purge.REAL_FROM.isoformat()}
+    return sample_purge.apply(user.username)
+
+
 # --- knowledge (all staff) -----------------------------------------------------------------------------------
 
 @api.get('/v1/stores/{store_id}/sop/search', tags=['knowledge'])

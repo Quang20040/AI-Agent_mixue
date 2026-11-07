@@ -16,7 +16,9 @@ from sqlalchemy import text
 
 from src.database import SessionLocal
 
-LIFETIME = timedelta(hours=12)
+# "Ghi nhớ đăng nhập": a session lives LOGIN_SESSION_DAYS (default 30) after its last use, then it expires.
+LIFETIME = timedelta(days=float(__import__('os').environ.get('LOGIN_SESSION_DAYS') or 30))
+COOKIE = 'mixue_session'
 QUERY_KEY = 's'
 
 
@@ -46,7 +48,7 @@ def create(username: str) -> str:
 
 def restore(token: str | None) -> dict[str, Any] | None:
     """The user dict verify_user() would return, or None for an unknown/expired token or inactive account."""
-    if not token or len(token) > 64:
+    if not isinstance(token, str) or not token or len(token) > 64:
         return None
     from src.auth import _get_role_metadata, normalize_role
     from src.models import User

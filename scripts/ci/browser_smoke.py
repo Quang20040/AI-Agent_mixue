@@ -14,6 +14,15 @@ with sync_playwright() as pw:
     page.wait_for_selector('[data-testid="stApp"]', timeout=90000)
     page.wait_for_selector('[data-testid="stTextInput"], input[type="password"]', timeout=90000)  # login form rendered over the websocket
     print('streamlit login page ok')
+    # Remembered login: quick login, then a reload (new websocket session) is still signed in; token not in the URL.
+    page.locator('[data-testid="stExpander"] summary').filter(has_text='Tài khoản dùng thử').first.click()
+    page.locator('.st-key-quick_login_manager button').click()
+    page.wait_for_selector('.st-key-main_navigation', timeout=90000)
+    assert 's=' not in page.url, page.url
+    assert any(c['name'] == 'mixue_session' for c in page.context.cookies()), 'no session cookie'
+    page.reload(wait_until='domcontentloaded')
+    page.wait_for_selector('.st-key-main_navigation', timeout=90000)
+    print('remembered login survives a reload')
     page.goto(BASE + '/ui/', wait_until='domcontentloaded')
     page.fill('input[name=u]', 'quanly')
     page.fill('input[name=p]', '123')

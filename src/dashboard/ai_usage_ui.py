@@ -48,3 +48,24 @@ def render_backup_panel():
         data, name = st.session_state["backup_zip"]
         st.download_button(f"⬇️ Tải {name} ({len(data) / 1024 / 1024:.1f} MB)", data, file_name=name,
                            mime="application/zip", key="download_backup")
+
+
+def render_sample_purge_panel(username: str):
+    """Owner/manager: remove the simulated history (backup first, one transaction, audit line)."""
+    from src.engine import sample_purge
+    st.markdown("#### 🧹 Xóa dữ liệu mô phỏng")
+    counts = sample_purge.preview()
+    total = sum(counts.values())
+    if not total:
+        st.caption(f"Không còn dữ liệu mô phỏng. Cơ sở dữ liệu chỉ chứa dữ liệu thật (từ {sample_purge.REAL_FROM:%d/%m/%Y}).")
+        return
+    st.caption(f"Lịch sử sinh ra để chạy thử dự báo, trước {sample_purge.REAL_FROM:%d/%m/%Y}. Giữ nguyên: tài khoản, thực đơn, "
+               "nguyên liệu, công thức, phiếu kho, báo cáo chốt ca đã duyệt và ngày 14/10 (số POS thật).")
+    st.dataframe(pd.DataFrame([{"Dữ liệu": sample_purge.LABELS[k], "Bảng": k, "Số dòng sẽ xóa": v} for k, v in counts.items()]),
+                 hide_index=True, width='stretch')
+    sure = st.checkbox(f"Tôi hiểu thao tác này xóa vĩnh viễn {total:,} dòng (có tự sao lưu trước)".replace(",", "."), key="purge_sure")
+    if st.button("Xóa dữ liệu mô phỏng", type="primary", disabled=not sure, key="purge_go"):
+        with st.spinner("Đang sao lưu rồi xóa…"):
+            result = sample_purge.apply(username)
+        st.cache_data.clear()
+        st.success(f"Đã xóa {sum(result['deleted'].values()):,} dòng. Bản sao lưu trước khi xóa: {result['backup']}".replace(",", "."))

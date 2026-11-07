@@ -165,6 +165,30 @@ def _runtime_js(href):
             + (HERE / 'ui_runtime.js').read_text(encoding='utf-8') + '\n}')
 
 
+_COOKIE_JS = """export default function(component) {
+  const op = component.data || {};
+  const secure = location.protocol === 'https:' ? '; Secure' : '';
+  if (op.set) document.cookie = 'mixue_session=' + encodeURIComponent(op.set) + '; Max-Age=' + op.max_age + '; Path=/; SameSite=Lax' + secure;
+  if (op.clear) document.cookie = 'mixue_session=; Max-Age=0; Path=/; SameSite=Lax' + secure;
+}"""
+
+
+def sync_session_cookie():
+    """Write or clear the remembered-login cookie in the browser (call once per run, after the login checks)."""
+    import streamlit.components.v2 as components
+    op = st.session_state.pop("_cookie_op", None)
+    components.component("mixue_session_cookie", js=_COOKIE_JS, isolate_styles=False)(
+        key="mixue_session_cookie", data=op or {})
+
+
+def forget_session():
+    """Logout / expiry: revoke the server-side session and clear the cookie on the next sync."""
+    from src import login_sessions
+    login_sessions.revoke(st.session_state.pop("_session_token", None) or st.query_params.get(login_sessions.QUERY_KEY))
+    st.query_params.pop(login_sessions.QUERY_KEY, None)
+    st.session_state["_cookie_op"] = {"clear": True}
+
+
 def _runtime_component(href):
     # registered on every run (registration belongs to the Streamlit runtime, not to this module)
     import streamlit.components.v2 as components
@@ -812,10 +836,12 @@ def render_menu_card(menu):
 
 
 def _apply_login_session(user, remember=True):
-    if remember:  # a reload brings the same user back (see src/login_sessions.py)
+    if remember:  # a reload or a new visit brings the same user back (cookie, see src/login_sessions.py)
         from src import login_sessions
         try:
-            st.query_params[login_sessions.QUERY_KEY] = login_sessions.create(user["username"])
+            token = login_sessions.create(user["username"])
+            st.session_state["_session_token"] = token
+            st.session_state["_cookie_op"] = {"set": token, "max_age": int(login_sessions.LIFETIME.total_seconds())}
         except Exception:  # never block a login on this convenience
             pass
     st.session_state["authenticated"] = True
@@ -901,8 +927,10 @@ def render_login_screen():
 
         with st.container(key="login_card"):
             with st.form("login_form", clear_on_submit=False):
-                username = st.text_input("Tên đăng nhập", key="login_username", placeholder="Nhập tên đăng nhập của bạn")
-                password = st.text_input("Mật khẩu", type="password", key="login_password", placeholder="Nhập mật khẩu")
+                username = st.text_input("Tên đăng nhập", key="login_username", placeholder="Nhập tên đăng nhập của bạn",
+                                         autocomplete="username")
+                password = st.text_input("Mật khẩu", type="password", key="login_password", placeholder="Nhập mật khẩu",
+                                         autocomplete="current-password")
                 submitted = st.form_submit_button("Đăng nhập vào Hệ thống 🚀", type="primary", use_container_width=True)
 
                 if submitted:

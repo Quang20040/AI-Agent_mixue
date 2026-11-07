@@ -110,14 +110,26 @@ except ValueError as error:
 # ==============================================================================
 # KIỂM TRA ĐĂNG NHẬP BẮT BUỘC (MANDATORY AUTHENTICATION)
 # ==============================================================================
+from src.dashboard.brand_ui import forget_session, sync_session_cookie
+
 if not st.session_state.get("authenticated", False):
     from src import login_sessions
     from src.dashboard.brand_ui import _apply_login_session
-    restored = login_sessions.restore(st.query_params.get(login_sessions.QUERY_KEY))
+    # Remembered login: the cookie (or an old ?s= link, moved into the cookie and out of the URL).
+    url_token = st.query_params.get(login_sessions.QUERY_KEY)
+    token = url_token or st.context.cookies.get(login_sessions.COOKIE)
+    restored = login_sessions.restore(token)
     if restored:
         _apply_login_session(restored, remember=False)
+        st.session_state["_session_token"] = token
+        if url_token:
+            st.query_params.pop(login_sessions.QUERY_KEY, None)
+            st.session_state["_cookie_op"] = {"set": token, "max_age": int(login_sessions.LIFETIME.total_seconds())}
     else:
         st.query_params.pop(login_sessions.QUERY_KEY, None)
+        if token:
+            st.session_state["_cookie_op"] = {"clear": True}
+        sync_session_cookie()
         render_login_screen()
         st.stop()
 
@@ -127,22 +139,25 @@ last_activity = st.session_state.get("last_activity")
 now_dt = datetime.now()
 if last_activity is not None and isinstance(last_activity, datetime):
     if (now_dt - last_activity).total_seconds() > SESSION_TIMEOUT_MINUTES * 60:
-        from src import login_sessions
-        login_sessions.revoke(st.query_params.get(login_sessions.QUERY_KEY))
-        st.query_params.pop(login_sessions.QUERY_KEY, None)
+        forget_session()
         for k in ["authenticated", "user", "username", "user_role", "user_name", "user_title", "user_badge", "must_change_password", "main_navigation", "last_activity"]:
             st.session_state.pop(k, None)
+        sync_session_cookie()
         st.warning(f"Phiên làm việc đã hết hạn do không hoạt động quá {SESSION_TIMEOUT_MINUTES} phút. Vui lòng đăng nhập lại.")
         render_login_screen()
         st.stop()
 
 st.session_state["last_activity"] = now_dt
+sync_session_cookie()
 
 # Refresh account permissions so edits, deactivation and deletion affect existing sessions.
 with SessionLocal() as account_db:
     account = account_db.get(User, st.session_state.get("username", ""))
     if not account or not account.is_active:
+        forget_session()
+        op = st.session_state.get("_cookie_op")
         st.session_state.clear()
+        st.session_state["_cookie_op"] = op
         st.query_params.clear()
         st.warning("Tài khoản không còn hoạt động. Vui lòng đăng nhập lại.")
         render_login_screen()
@@ -244,9 +259,7 @@ with st.sidebar:
     if st.button("Đăng xuất", key="btn_logout", icon=":material/logout:", use_container_width=True):
         agent.reset_conversation(start_new=False)
         st.session_state.pop('agent_pending_approval', None)
-        from src import login_sessions
-        login_sessions.revoke(st.query_params.get(login_sessions.QUERY_KEY))
-        st.query_params.pop(login_sessions.QUERY_KEY, None)
+        forget_session()
         for k in ["authenticated", "user", "username", "user_role", "user_name", "user_title", "user_badge", "must_change_password", "main_navigation", "chat_history_vi", "last_activity"]:
             st.session_state.pop(k, None)
         st.rerun()
@@ -1236,10 +1249,12 @@ with st.container(key="workspace"):
                 st.info("Hiện không có tài khoản nhân viên nào khác để reset.")
 
         st.divider()
-        from src.dashboard.ai_usage_ui import render_ai_usage_panel, render_backup_panel
+        from src.dashboard.ai_usage_ui import render_ai_usage_panel, render_backup_panel, render_sample_purge_panel
         render_ai_usage_panel()
         st.divider()
         render_backup_panel()
+        st.divider()
+        render_sample_purge_panel(st.session_state.get("username", ""))
 
     # Render Chatbot (Dedicated Fullscreen Tab when section == "💬 Tuyết Vương AI", or Floating Bottom-Right Button otherwise).
     if section == CHAT_PAGE:

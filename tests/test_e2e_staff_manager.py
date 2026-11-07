@@ -25,8 +25,10 @@ def _open(login_key=None, token=None):
 
 
 def _token(app):
-    value = app.query_params.get('s')
-    return value[0] if isinstance(value, list) else value
+    # The session token now lives in a cookie (set in the browser), not in the URL; the test replays it as an
+    # old-style ?s= link, which is still accepted and moved into the cookie.
+    assert not app.query_params.get('s'), 'token must not stay in the URL'
+    return app.session_state['_session_token'] if '_session_token' in app.session_state else None
 
 
 def _saved(day):
