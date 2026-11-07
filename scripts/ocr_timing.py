@@ -27,12 +27,16 @@ def fresh(src: Path, tag: str) -> Path:
 
 
 def set_day(page, iso):
-    box = page.locator('.st-key-shift_chosen_date_picker input:visible').first
-    box.click()
-    box.press('Control+a')
-    box.type(iso.replace('-', '/'))
-    box.press('Enter')
-    q.idle(page, 800)
+    page.evaluate("""iso => {
+        const el = document.querySelector('.st-key-shift_chosen_date_picker input');
+        const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+        set.call(el, iso);
+        el.dispatchEvent(new Event('input', {bubbles: true}));
+        el.dispatchEvent(new Event('change', {bubbles: true}));
+        el.dispatchEvent(new Event('blur', {bubbles: true}));
+    }""", iso)
+    q.idle(page, 1200)
+    return page.evaluate("document.querySelector('.st-key-shift_chosen_date_picker input').value")
 
 
 def read(page, files, pause=0.0, label=''):
@@ -67,7 +71,7 @@ def main():
             try:
                 q.quick_login(page, 'quick_login_manager')
                 q.nav(page, 'Chốt ca')
-                set_day(page, day)
+                print('day set to', set_day(page, day), flush=True)
                 rows.append(read(page, files, pause, label))
             except Exception as exc:  # noqa: BLE001
                 rows.append({'case': label, 'error': f'{type(exc).__name__}: {exc}'[:300]})
