@@ -139,6 +139,9 @@ jobs:
           curl -fsS -H "Authorization: Bearer $TOKEN" "http://localhost:8503/api/v1/stores/2132/stock-matrix?year=2026&month=10" > /dev/null
           curl -fsS -H "Authorization: Bearer $TOKEN" -o /tmp/backup.zip http://localhost:8503/api/v1/stores/2132/backup
           python -c "import zipfile;n=zipfile.ZipFile('/tmp/backup.zip').namelist();assert 'database/sales_daily.csv' in n, n;print('backup has', len(n), 'files')"
+          curl -fsS -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"confirm": true}' http://localhost:8503/api/v1/stores/2132/sample-data/purge | python -c 'import sys,json;r=json.load(sys.stdin);print("purged on postgres:", r["deleted"]);assert r["deleted"]["sales_daily"] > 3000'
+          docker exec pg psql -U postgres -d beverageops -tAc "select count(*) from sales_daily" | grep -qx 39
+          docker exec pg psql -U postgres -d beverageops -tAc "select count(*) from recipe_bom" | grep -qx 120
           pip install -q playwright && python -m playwright install --with-deps chromium > /dev/null
           python scripts/ci/browser_smoke.py http://localhost:8503
 
