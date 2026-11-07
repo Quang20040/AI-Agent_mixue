@@ -649,6 +649,19 @@ with st.container(key="workspace"):
                         for c in cols_show if c in stock_column_map
                     }
 
+                    # Editable cells must be numbers ("—" = nothing recorded yet), including last month's closing column.
+                    matrix_df = matrix_df.copy()
+                    for _col in stock_column_map:
+                        if _col in matrix_df.columns:
+                            matrix_df[_col] = pd.to_numeric(matrix_df[_col].replace("—", None), errors="coerce")
+                    _opening_col = find_opening_column(matrix_df.columns)
+                    if _opening_col in stock_col_config:
+                        stock_col_config[_opening_col] = st.column_config.NumberColumn(
+                            _opening_col + " ✏️", min_value=0.0, step=0.5, format="%.1f",
+                            help="Sửa được: tồn kho đúng cuối tháng trước. Ghi như lần kiểm kê ngày cuối tháng trước "
+                                 "và tính lại toàn bộ tháng này.")
+                        st.info(f"✏️ Cột **{_opening_col}** sửa được nếu tồn cuối tháng trước bị nhầm: gõ số đúng rồi bấm Lưu. "
+                                "Số này cũng hiện ở sổ tháng trước dưới dạng kiểm kê cuối tháng (Tồn thực tế / Chênh lệch).")
                     edited_matrix = st.data_editor(
                         matrix_df[cols_show],
                         use_container_width=True,

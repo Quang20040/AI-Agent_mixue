@@ -7,6 +7,7 @@ Tích hợp quy trình phê duyệt lệnh kho (Maker-Checker):
 """
 
 import io
+import calendar
 import math
 from pathlib import Path
 from functools import wraps
@@ -638,7 +639,23 @@ def update_stock_cell_manually(
 
     date_str, m_type = mapping[column_name]
     b_date = date.fromisoformat(date_str)
+    if m_type == "INITIAL":
+        # Correcting last month's closing stock: it becomes this month's opening balance, and the same figure is
+        # written as last month's end-of-month count so last month's sheet shows it (Tồn thực tế / Chênh lệch).
+        ok, msg = _write_cell(ingredient_id, b_date, "INITIAL", new_value, updated_by, column_name)
+        if ok:
+            _write_cell(ingredient_id, b_date, "ACTUAL_COUNT", new_value, updated_by, column_name)
+        return ok, msg
+    if m_type == "ACTUAL_COUNT" and b_date.day == calendar.monthrange(b_date.year, b_date.month)[1]:
+        # The end-of-month count is next month's opening balance.
+        ok, msg = _write_cell(ingredient_id, b_date, "ACTUAL_COUNT", new_value, updated_by, column_name)
+        if ok:
+            _write_cell(ingredient_id, b_date, "INITIAL", new_value, updated_by, column_name)
+        return ok, msg
+    return _write_cell(ingredient_id, b_date, m_type, new_value, updated_by, column_name)
 
+
+def _write_cell(ingredient_id, b_date, m_type, new_value, updated_by, column_name):
     # Xử lý các giá trị xóa / rỗng / NaN
     is_delete = False
     new_qty: float | None = None
@@ -694,7 +711,8 @@ def update_stock_cell_manually(
                 existing.status = "APPROVED"
                 existing.approved_by = updated_by
                 existing.approved_at = datetime.now()
-                existing.notes = f"Sửa trực tiếp bằng tay bởi {updated_by}"
+                existing.notes = (f"Điều chỉnh tồn cuối tháng bởi {updated_by}" if (m_type in ("INITIAL", "ACTUAL_COUNT") and b_date.day == calendar.monthrange(b_date.year, b_date.month)[1])
+                                  else f"Sửa trực tiếp bằng tay bởi {updated_by}")
             else:
                 new_rec = DailyStockMovement(
                     business_date=b_date,
@@ -705,7 +723,8 @@ def update_stock_cell_manually(
                     recorded_by=updated_by,
                     approved_by=updated_by,
                     approved_at=datetime.now(),
-                    notes=f"Nhập trực tiếp bằng tay bởi {updated_by}"
+                    notes=(f"Điều chỉnh tồn cuối tháng bởi {updated_by}" if (m_type in ("INITIAL", "ACTUAL_COUNT") and b_date.day == calendar.monthrange(b_date.year, b_date.month)[1])
+                           else f"Nhập trực tiếp bằng tay bởi {updated_by}")
                 )
                 db.add(new_rec)
             db.commit()
