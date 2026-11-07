@@ -43,7 +43,9 @@ def fingerprint(rows):
 
 def transfer(source, target, metadata):
     """One target transaction, preflight every table, compare every copied field."""
-    source_names = set(inspect(source).get_table_names()) - {'sqlite_sequence'}
+    # login_sessions is created on demand by src/login_sessions.py (not part of the ORM): sessions are not
+    # migrated, everyone signs in once more after the switch.
+    source_names = set(inspect(source).get_table_names()) - {'sqlite_sequence', 'login_sessions'}
     unknown = source_names - set(metadata.tables)
     if unknown:
         raise ValueError('UNSUPPORTED_SOURCE_TABLES: ' + ', '.join(sorted(unknown)))

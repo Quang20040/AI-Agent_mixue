@@ -43,6 +43,30 @@ def _sqlite_copy(src: Path, dst: Path) -> None:
         source.backup(target)
 
 
+def _dump_tables(zf: zipfile.ZipFile, manifest: dict) -> None:
+    """PostgreSQL (or any non-file database): every ORM table as CSV, plus the row counts."""
+    import csv
+    import io
+
+    from sqlalchemy import select
+
+    from src.database import Base, engine
+    import src.models  # noqa: F401
+    with engine.connect() as db:
+        for table in Base.metadata.sorted_tables:
+            buf = io.StringIO()
+            writer = csv.writer(buf)
+            writer.writerow(table.columns.keys())
+            count = 0
+            for row in db.execute(select(table)):
+                writer.writerow(['' if v is None else v for v in row])
+                count += 1
+            data = buf.getvalue().encode('utf-8')
+            name = f'database/{table.name}.csv'
+            zf.writestr(name, data)
+            manifest['files'].append({'path': name, 'sha256': hashlib.sha256(data).hexdigest(), 'bytes': len(data), 'rows': count})
+
+
 def build_export() -> Path:
     """Write a zip to a temporary file and return its path (the caller deletes it)."""
     manifest = {'version': 1, 'created_at': datetime.now(timezone.utc).isoformat(), 'files': []}
@@ -61,6 +85,10 @@ def build_export() -> Path:
                 digest = hashlib.sha256(f.read_bytes()).hexdigest()
                 zf.write(f, rel)
                 manifest['files'].append({'path': rel, 'sha256': digest, 'bytes': f.stat().st_size})
+        from src.database import DATABASE_URL
+        if not DATABASE_URL.startswith('sqlite:///'):
+            manifest['database'] = 'postgresql'
+            _dump_tables(zf, manifest)
         zf.writestr('manifest.json', json.dumps(manifest, ensure_ascii=False, indent=1))
     return out
 

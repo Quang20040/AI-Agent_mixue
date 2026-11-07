@@ -98,3 +98,56 @@ jobs:
       - name: Container logs
         if: always()
         run: docker logs app 2>&1 | tail -60 || true
+
+  postgres-migration-smoke:
+    # SQLite on the disk -> PostgreSQL on first start, verified; then the app runs on PostgreSQL.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t beverageops:ci .
+
+      - name: Shop running on SQLite (sample history kept, so every table has rows)
+        run: |
+          docker network create mixue
+          docker volume create mixue-data
+          docker run -d --name sqlite-app --network mixue -v mixue-data:/var/data -e PERSIST_DIR=/var/data \
+            -e APP_ENV=development -e APP_DEMO_MODE=true -e KEEP_SAMPLE_DATA=true -e LLM_ENABLED=false beverageops:ci
+          for i in $(seq 1 60); do docker exec sqlite-app curl -fsS http://localhost:8501/_stcore/health && break; sleep 2; done
+          docker rm -f sqlite-app
+
+      - name: Same disk + PostgreSQL -> one verified copy
+        run: |
+          docker run -d --name pg --network mixue -e POSTGRES_PASSWORD=ci -e POSTGRES_DB=beverageops postgres:16
+          for i in $(seq 1 30); do docker exec pg pg_isready -U postgres && break; sleep 2; done
+          docker run -d --name app --network mixue -p 8503:8501 -v mixue-data:/var/data -e PERSIST_DIR=/var/data \
+            -e DATABASE_URL=postgresql://postgres:ci@pg:5432/beverageops \
+            -e APP_ENV=development -e APP_DEMO_MODE=true -e LLM_ENABLED=false beverageops:ci
+          for i in $(seq 1 90); do curl -fsS http://localhost:8503/_stcore/health && break; sleep 2; done
+          docker logs app 2>&1 | grep -E "\[pg\]|OK$|Migration committed"
+          docker logs app 2>&1 | grep -q "Migration committed; all copied fields verified."
+          docker exec pg psql -U postgres -d beverageops -tAc "select count(*) from sales_daily" | grep -qv '^0$'
+          docker exec pg psql -U postgres -d beverageops -tAc "select count(*) from users"
+
+      - name: App works on PostgreSQL (API + browser)
+        run: |
+          TOKEN=$(curl -fsS -X POST http://localhost:8503/api/v1/auth/login -H 'Content-Type: application/json' \
+            -d '{"username":"quanly","password":"123"}' | python -c 'import sys,json;print(json.load(sys.stdin)["token"])')
+          curl -fsS -H "Authorization: Bearer $TOKEN" "http://localhost:8503/api/v1/stores/2132/sales/daily?days=7&end=2026-10-15" | python -c 'import sys,json;d=json.load(sys.stdin)["days"];assert any(r["pos_sku_revenue_vnd"] for r in d), d;print("sales/daily on postgres:", len(d), "days")'
+          curl -fsS -H "Authorization: Bearer $TOKEN" "http://localhost:8503/api/v1/stores/2132/stock-matrix?year=2026&month=10" > /dev/null
+          curl -fsS -H "Authorization: Bearer $TOKEN" -o /tmp/backup.zip http://localhost:8503/api/v1/stores/2132/backup
+          python -c "import zipfile;n=zipfile.ZipFile('/tmp/backup.zip').namelist();assert 'database/sales_daily.csv' in n, n;print('backup has', len(n), 'files')"
+          pip install -q playwright && python -m playwright install --with-deps chromium > /dev/null
+          python scripts/ci/browser_smoke.py http://localhost:8503
+
+      - name: Restart does not copy again
+        run: |
+          docker restart app
+          for i in $(seq 1 60); do curl -fsS http://localhost:8503/_stcore/health && break; sleep 2; done
+          docker logs app 2>&1 | grep "already holds data"
+
+      - name: Logs
+        if: always()
+        run: docker logs app 2>&1 | tail -80 || true

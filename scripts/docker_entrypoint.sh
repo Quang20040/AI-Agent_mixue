@@ -58,6 +58,11 @@ else
   fi
 fi
 
+# PostgreSQL: create the tables; the first start copies the shop's SQLite data over (verified, never overwrites).
+case "${DATABASE_URL:-}" in
+  postgres*) python scripts/bootstrap_postgres.py ;;
+esac
+
 # First boot on a server: create the owner account from OWNER_USERNAME / OWNER_INITIAL_PASSWORD.
 python scripts/provision_admin.py --from-env
 
