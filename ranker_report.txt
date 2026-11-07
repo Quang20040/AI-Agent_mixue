@@ -1,0 +1,10 @@
+questions: {'original': 30, 'heldout': 70}
+heuristic/original: Hit@1=91.7 Hit@3=95.8 Hit@5=95.8 MRR=0.931 Rejection=100.0
+heuristic/heldout: Hit@1=65.0 Hit@3=78.3 Hit@5=86.7 MRR=0.727 Rejection=10.0
+heuristic/all: Hit@1=72.6 Hit@3=83.3 Hit@5=89.3 MRR=0.786 Rejection=43.8
+learned_train_original_test_heldout: Hit@1=41.7 Hit@3=48.3 Hit@5=50.0 MRR=0.451 Rejection=100.0
+learned_cv5x10: Hit@1=70.2±1.5 Hit@3=80.4±1.9 Hit@5=86.1±1.3 MRR=0.760±0.010 Rejection=93.8±7.4
+weights: {'bm25:log1p': 1.128, 'tfidf_cos': 0.083, 'trig_sim': 0.418, 'coverage': 0.78, 'code_exact': 0.227, 'code_token': 0.521, 'title_boost': 0.504, 'recipe_match': 0.337, 'topping_rule': 0.218, 'storage_match': 0.361, 'storage_penalty': -0.038, 'image_match': 0.075, 'phrase_exact': 0.126, 'phrase_partial': -0.21, 'is_full_table': 0.319, 'is_log_row': -0.522}
+learned_semantic_cv5x10: Hit@1=83.6±1.7 Hit@3=89.2±1.4 Hit@5=89.5±1.6 MRR=0.864±0.015 Rejection=88.1±4.4
+weights_semantic: {'bm25:log1p': 0.692, 'tfidf_cos': -0.085, 'trig_sim': 0.261, 'coverage': 0.691, 'code_exact': 0.19, 'code_token': 0.557, 'title_boost': 0.388, 'recipe_match': 0.322, 'topping_rule': 0.217, 'storage_match': 0.266, 'storage_penalty': -0.019, 'image_match': 0.058, 'phrase_exact': 0.126, 'phrase_partial': -0.284, 'is_full_table': 0.262, 'is_log_row': 0.226, 'dense_cos': 1.876}
+wrote src/agent/multi_agent/sop_ranker.json
