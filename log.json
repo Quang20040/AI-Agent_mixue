@@ -1,0 +1,23 @@
+{
+ "e5-small": {
+  "repo": "intfloat/multilingual-e5-small",
+  "dim": 384,
+  "doc_seconds": 201.0,
+  "query_ms": 5.8,
+  "params_m": 117.7
+ },
+ "e5-base": {
+  "repo": "intfloat/multilingual-e5-base",
+  "dim": 768,
+  "doc_seconds": 674.9,
+  "query_ms": 21.3,
+  "params_m": 278.0
+ },
+ "minilm": {
+  "repo": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+  "dim": 384,
+  "doc_seconds": 193.8,
+  "query_ms": 4.9,
+  "params_m": 117.7
+ }
+}
