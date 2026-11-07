@@ -30,7 +30,7 @@ def test_manager_changes_ai_quantity_and_adds_an_item():
     plan_id = _draft()
     ok, msg = purchase_orders.update_quantities(plan_id, {'1': 7, '2': 1}, 'Quang', 'ADMIN')
     assert ok and '5 → 7' in msg
-    lines = {l['ingredient_id']: l for l in get_plan(plan_id)['lines']}
+    lines = {line['ingredient_id']: line for line in get_plan(plan_id)['lines']}
     assert lines['1']['packs_to_order'] == 7 and lines['1']['ai_packs'] == 5 and lines['1']['recommended_order_qty'] == 2800
     assert lines['2']['packs_to_order'] == 1 and lines['2']['edited']
     assert get_plan(plan_id)['edits'][0]['by'].startswith('Quang')
