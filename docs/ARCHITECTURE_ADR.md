@@ -462,6 +462,5 @@ Nếu chưa có câu trả lời, không đoán: lưu trạng thái `PENDING_POL
 
 ## 20. References within project
 
-- `01_PRD_BeverageOps_AI.md`
-- `03_Checkpoints_30_Ngay.md`
-- `04_Huong_Dan_Chuan_Bi_Du_Lieu.md`
+- [PRD.md](PRD.md)
+- [HUONG_DAN_CHUAN_BI_DU_LIEU.md](HUONG_DAN_CHUAN_BI_DU_LIEU.md)

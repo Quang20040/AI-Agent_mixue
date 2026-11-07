@@ -29,7 +29,7 @@ def main():
                  'processed_private', 'quality_reports', 'snapshots_private']:
         (ROOT / 'data' / name).mkdir(parents=True, exist_ok=True)
     # Extract the exact CSV contracts/examples supplied by document 04.
-    doc = (ROOT / '04_Huong_Dan_Chuan_Bi_Du_Lieu.md').read_text(encoding='utf-8')
+    doc = (ROOT / 'docs' / 'HUONG_DAN_CHUAN_BI_DU_LIEU.md').read_text(encoding='utf-8')
     sections = re.findall(r'### 3\.\d+\. `([^`]+\.csv)`(.*?)(?=\n### |\n## |\Z)', doc, re.S)
     for name, section in sections:
         example = re.search(r'```csv\n(.*?)```', section, re.S).group(1).strip() + '\n'

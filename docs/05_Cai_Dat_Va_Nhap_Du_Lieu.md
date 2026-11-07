@@ -1,7 +1,7 @@
 # Cài đặt môi trường và tạo bộ dữ liệu đầy đủ
 
 **Đã bổ sung mẫu tiếng Việt:** ưu tiên điền 7 file trong `DU_LIEU_CAN_NHAP` và đọc
-[hướng dẫn tiếng Việt](../HUONG_DAN_NHAP_LIEU.md). Công cụ kiểm tra đọc được cả mẫu
+[hướng dẫn tiếng Việt](HUONG_DAN_NHAP_LIEU.md). Công cụ kiểm tra đọc được cả mẫu
 tiếng Việt mới và mẫu tên cột kỹ thuật dưới đây. Hai bộ mẫu là hai lựa chọn nhập;
 không cần điền cả hai hoặc gộp chúng với nhau.
 

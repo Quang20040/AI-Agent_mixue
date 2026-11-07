@@ -209,6 +209,5 @@ ExpectedClosing = Opening + Received - ExpectedUsage - LoggedWaste + Adjustments
 
 ## 13. Tài liệu liên quan
 
-- `02_ARD_ADR_BeverageOps_AI.md`: kiến trúc, schema, công cụ Agent và các quyết định kỹ thuật.
-- `03_Checkpoints_30_Ngay.md`: backlog chi tiết 30 ngày full-time, checkpoints, phương án fallback.
-- `04_Huong_Dan_Chuan_Bi_Du_Lieu.md`: hợp đồng dữ liệu, ví dụ CSV, quy tắc làm sạch và đánh giá.
+- [ARCHITECTURE_ADR.md](ARCHITECTURE_ADR.md): kiến trúc, schema, công cụ Agent và các quyết định kỹ thuật.
+- [HUONG_DAN_CHUAN_BI_DU_LIEU.md](HUONG_DAN_CHUAN_BI_DU_LIEU.md): hợp đồng dữ liệu, ví dụ CSV, quy tắc làm sạch và đánh giá.

@@ -1,3 +1,0 @@
-﻿307	S101	assert
-  5	S110	try-except-pass
-Found 312 errors.

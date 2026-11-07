@@ -1029,7 +1029,7 @@ Bạn được trang bị 8 công cụ vận hành:
             "text": msg,
             "tool_called": "get_store_and_project_info",
             "raw_result": {"store_id": "2132", "store_name": "Mixue 39 Tôn Quang Phiệt", "manager": "Bùi Văn Quang", "owner": "Nguyễn Hạnh Chi"},
-            "evidence_refs": ["profile:Mixue_Store_2132", "docs:01_PRD_BeverageOps_AI.md"]
+            "evidence_refs": ["profile:Mixue_Store_2132", "docs:docs/PRD.md"]
         }
 
     def tool_get_sales_analytics(self, query: str = "") -> dict[str, Any]:

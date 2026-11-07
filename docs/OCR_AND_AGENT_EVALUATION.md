@@ -64,8 +64,6 @@ gian và kết quả từng tiêu chí. Không in khóa, ảnh hoặc toàn bộ
 50 trường hợp chưa qua hai người dùng cửa hàng review độc lập. Đây chưa phải
 bằng chứng chất lượng nghiệp vụ được nghiệm thu. Không gộp kết quả chế độ cơ
 bản và API thành một tỷ lệ; không đổi đáp án để che các lỗi đang tồn tại.
-`evaluate_golden.py` cũ đã kiểm tra cả công cụ và trạng thái, nhưng bộ dữ liệu
-cũ có nhiều giả định đã lỗi thời, cần rà soát trước khi dùng để nghiệm thu.
 
 ## Pilot
 

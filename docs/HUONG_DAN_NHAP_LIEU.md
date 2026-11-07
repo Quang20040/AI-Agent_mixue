@@ -1,7 +1,7 @@
 # BẮT ĐẦU NHẬP DỮ LIỆU TẠI ĐÂY
 
 Mở thư mục **DU_LIEU_CAN_NHAP**. Cả 7 file đều có tên và tiêu đề cột tiếng Việt.
-Thư mục **MAU_MINH_HOA** có ví dụ để nhìn cách điền; toàn bộ số liệu ở đó là giả lập.
+Thư mục **MAU_MINH_HOA** (tạo ra khi chạy `python scripts/setup_local.py`) có ví dụ để nhìn cách điền; toàn bộ số liệu ở đó là giả lập.
 Không sao chép các số ví dụ làm dữ liệu thật của cửa hàng.
 
 ## Điền lần lượt 7 file

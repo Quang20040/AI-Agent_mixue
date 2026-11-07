@@ -463,4 +463,4 @@ release_gates:
 
 **Bước tiếp theo:** Khi có quyền hợp lệ, chuẩn bị bốn file đầu tiên: `sales_daily.csv`, `menu_items.csv`, `recipe_bom.csv`, `topping_daily.csv`. Chạy validator, sau đó mới kết nối forecast/optimization. Các bảng nhập hàng và kiểm kê được đưa vào kế hoạch nhập khi đã xác nhận đủ đơn vị, timestamp và trạng thái.
 
-**Tài liệu liên quan:** `01_PRD_BeverageOps_AI.md`, `02_ARD_ADR_BeverageOps_AI.md`, `03_Checkpoints_30_Ngay.md`.
+**Tài liệu liên quan:** [PRD.md](PRD.md), [ARCHITECTURE_ADR.md](ARCHITECTURE_ADR.md).

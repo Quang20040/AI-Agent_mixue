@@ -4,8 +4,6 @@
 Lục tìm trên toàn bộ hệ thống file:
 - `docs/`: Sổ tay vận hành, quy chuẩn kiến trúc, tài liệu đào tạo 15 ngày.
 - `DU_LIEU_CAN_NHAP/`: 16 bảng dữ liệu quy chuẩn Mixue (SOP sơ chế mẻ, quy định bảo quản, hạn dùng, thời gian chế biến, quy tắc đường & topping).
-- `improvement-report/`: 13 báo cáo nghiệm thu cải tiến hệ thống Phase 3.
-- `whitebox-qa/` & `blackbox-qa/`: Toàn bộ phát hiện kiểm toán chất lượng và bảo mật.
 - Mã nguồn `src/` và schema dữ liệu khi người dùng hỏi về kiến trúc.
 
 Sử dụng Hybrid Search kết hợp BM25 + Character 3-gram + Reranker nhận diện thực thể (Local Hybrid Reranker)

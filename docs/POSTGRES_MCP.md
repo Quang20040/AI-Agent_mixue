@@ -31,7 +31,7 @@ Lệnh đầu kiểm tra discovery, không đọc số liệu. Lệnh sau kiểm
 
 ## Giới hạn
 
-Cập nhật triển khai 22/10/2026: đã chuyển dữ liệu thật sang PostgreSQL và kiểm tra MCP trên cùng số liệu, xem [POSTGRES_MIGRATION.md](POSTGRES_MIGRATION.md). Ghi chú chưa kết nối database thật bên dưới mô tả trạng thái trước lần triển khai này.
+Cập nhật triển khai 22/10/2026: đã chuyển dữ liệu thật sang PostgreSQL và kiểm tra MCP trên cùng số liệu, xem [POSTGRES.md](POSTGRES.md). Ghi chú chưa kết nối database thật bên dưới mô tả trạng thái trước lần triển khai này.
 
 MCP hiện phục vụ hai chức năng bán hàng; các tool kho, BOM và OCR vẫn dùng service ứng dụng. Nguồn MCP được gắn `backend=postgresql_mcp` và `source_refs`; đây là dấu vết nguồn truy vấn, không phải bảo đảm diễn giải ngôn ngữ của AI luôn đúng. Đã có kiểm thử protocol với dữ liệu tổng hợp; kết nối database thật phải được xác minh riêng.
 
