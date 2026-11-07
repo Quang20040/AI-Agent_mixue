@@ -42,6 +42,7 @@ a { color: var(--red); }
 .hero h2 { margin: 0 0 6px; font-size: 22px; }
 .hero p { margin: 0; opacity: .92; }
 .hero img { width: 96px; height: 96px; flex: none; }
+a.btn { text-decoration: none; color: var(--ink); display: inline-block; }
 .btn { border: 1px solid var(--line); background: #fff; padding: 9px 16px; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px; }
 .btn:hover { border-color: #D0D5DD; }
 .btn.primary { background: var(--red); border-color: var(--red); color: #fff; }

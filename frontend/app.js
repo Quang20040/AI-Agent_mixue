@@ -136,7 +136,7 @@ async function homePage() {
     const all = sales.days || [];
     const rows = all.filter(r => r.source !== 'Chưa có dữ liệu');
     const revenue = r => r.effective_revenue_vnd;
-    const cups = r => r.quantity_sold;
+    const cups = r => r.quantity_sold || null;  // shift closings carry money only; cups come from the POS export
     const last = rows[rows.length - 1] || {};
     const total = rows.reduce((s, r) => s + (Number(revenue(r)) || 0), 0);
     kpi.innerHTML = `
