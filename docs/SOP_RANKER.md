@@ -28,7 +28,8 @@ nó chỉ còn Hit@1 65% và **từ chối đúng 1/10** câu ngoài phạm vi �
 | Chỉnh tay, trên 70 câu mới | 65,0% | 78,3% | 0,727 | 10% |
 | Chỉnh tay, trên cả 100 câu (gồm 30 câu nó được chỉnh theo) | 72,6% | 83,3% | 0,786 | 43,8% |
 | **Học từ dữ liệu, 16 đặc trưng** (CV 5×10) | 70,2 ± 1,5% | 80,4 ± 1,9% | 0,760 | **93,8 ± 7,4%** |
-| Học + vector ngữ nghĩa (thử bằng multilingual-e5-base, CV 5×5) | 77,6 ± 1,2% | 86,9 ± 1,7% | — | 90,0 ± 3,1% |
+| **Học + vector ngữ nghĩa Gemini** (`gemini-embedding-001`, CV 5×10) — bản đang chạy | **83,6 ± 1,7%** | **89,2 ± 1,4%** | **0,864** | 88,1 ± 4,4% |
+| Học + vector multilingual-e5-base (thí nghiệm, CV 5×5) | 77,6 ± 1,2% | 86,9 ± 1,7% | — | 90,0 ± 3,1% |
 
 Thí nghiệm phụ (vector đơn thuần, không kết hợp): e5-small Hit@1 57%, e5-base 45%, MiniLM 27% — vector
 một mình kém hơn tìm theo từ khóa trên tài liệu chuyên ngành ngắn; giá trị nằm ở **kết hợp có học trọng số**.
