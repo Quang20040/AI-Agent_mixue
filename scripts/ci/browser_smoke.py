@@ -24,7 +24,11 @@ with sync_playwright() as pw:
     page.fill('#q', 'công thức trà sữa trân châu')
     page.click('#send')
     t = time.time()
-    page.wait_for_selector('details.trace', timeout=60000)
+    try:
+        page.wait_for_selector('details.trace', timeout=60000)
+    except Exception:
+        print('last bubble:', page.locator('.msg.bot .bubble').last.inner_text()[:500])
+        raise
     steps = page.locator('details.trace li').count()
     print(f'chat answered in {time.time() - t:.1f}s with {steps} trace steps')
     assert steps >= 2, steps
