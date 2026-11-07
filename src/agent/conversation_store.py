@@ -139,8 +139,11 @@ class ConversationStore:
     def connect(self):
         db = sqlite3.connect(self.path, timeout=15)
         try:
-            db.execute('PRAGMA journal_mode=WAL')
-            db.execute('PRAGMA busy_timeout=5000')
+            db.execute('PRAGMA busy_timeout=15000')
+            try:  # the switch needs exclusive access for a moment; a second session may be opening the file too
+                db.execute('PRAGMA journal_mode=WAL')
+            except sqlite3.OperationalError:
+                pass
             with db:
                 yield db
         finally:
