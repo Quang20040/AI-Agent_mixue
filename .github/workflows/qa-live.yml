@@ -27,9 +27,9 @@ jobs:
           pip install playwright
           python -m playwright install --with-deps chromium
       - name: OCR timing
-        if: github.event.inputs.mode == 'ocrtime'
+        if: startsWith(github.event.inputs.mode, 'ocr')
         run: |
-          pip install -q pillow && mkdir -p ocr_timing && cd scripts && python ocr_timing.py "${{ github.event.inputs.url || 'https://mixue-beverageops-demo.onrender.com' }}" ../ocr_timing || true
+          pip install -q pillow && mkdir -p ocr_timing && cd scripts && python ocr_timing.py "${{ github.event.inputs.url || 'https://mixue-beverageops-demo.onrender.com' }}" ../ocr_timing "${{ github.event.inputs.mode == 'ocrclean' && '15' || '0' }}" || true
           cd ../ocr_timing && rm -f *.jpg && git init -q -b ocr-timing
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -78,10 +78,10 @@ jobs:
         if: github.event.inputs.mode == 'shots'
         run: python scripts/report_shots.py "${{ github.event.inputs.url || 'https://mixue-beverageops-demo.onrender.com' }}" qa_live
       - name: Run QA
-        if: github.event.inputs.mode != 'shots' && github.event.inputs.mode != 'video' && github.event.inputs.mode != 'tts' && github.event.inputs.mode != 'ocrtime'
+        if: github.event.inputs.mode != 'shots' && github.event.inputs.mode != 'video' && github.event.inputs.mode != 'tts' && !startsWith(github.event.inputs.mode, 'ocr')
         run: python scripts/qa_live.py "${{ github.event.inputs.url || 'https://mixue-beverageops-demo.onrender.com' }}" qa_live "${{ github.event.inputs.mode || 'all' }}"
       - name: Publish to qa-results branch
-        if: always() && github.event.inputs.mode != 'video' && github.event.inputs.mode != 'tts' && github.event.inputs.mode != 'ocrtime'
+        if: always() && github.event.inputs.mode != 'video' && github.event.inputs.mode != 'tts' && !startsWith(github.event.inputs.mode, 'ocr')
         run: |
           [ -d qa_live ] || exit 0
           cd qa_live

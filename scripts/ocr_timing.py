@@ -10,6 +10,7 @@ from pathlib import Path
 from PIL import Image
 from playwright.sync_api import sync_playwright
 
+CLEANUP = int(sys.argv[3]) if len(sys.argv) > 3 else 0
 sys.argv = [sys.argv[0], sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else 'ocr_timing']
 import qa_live as q  # noqa: E402  (shares the login / navigation helpers)
 
@@ -39,6 +40,23 @@ def set_day(page, iso):
     return page.evaluate("document.querySelector('.st-key-shift_chosen_date_picker input').value")
 
 
+def remove_last(page, n):
+    """Take the photos this script added back off the day (they are always the last ones in the list)."""
+    removed = 0
+    for _ in range(n):
+        buttons = page.locator('[class*="st-key-ocr_rm_"] button')
+        if buttons.count() == 0:
+            break
+        buttons.last.click()
+        q.idle(page, 600)
+        removed += 1
+    return removed
+
+
+def count_images(page):
+    return page.locator('[class*="st-key-ocr_rm_"] button').count()
+
+
 def read(page, files, pause=0.0, label=''):
     page.locator('.st-key-shift_photo_uploader input[type=file]').first.set_input_files([str(f) for f in files])
     q.idle(page, 800)
@@ -56,11 +74,30 @@ def read(page, files, pause=0.0, label=''):
     summary = next((ln for ln in body.split('\n') if ln.startswith('Đọc xong')), '')
     calls = next((ln for ln in body.split('\n') if ln.startswith('Thời gian gọi AI')), '')
     q.shot(page, label)
+    remove_last(page, len(files))
     return {'case': label, 'photos': len(files), 'pause_before_click_s': pause, 'seconds_after_click': seconds,
             'app_summary': summary, 'model_calls': calls, 'error': '' if summary else body[body.find('Bằng chứng'):][:600]}
 
 
+def cleanup(n):
+    """One-off: remove the n photos earlier timing runs left on today's page of the manager account."""
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        page = q.new_page(browser, label='cleanup')
+        q.quick_login(page, 'quick_login_manager')
+        q.nav(page, 'Chốt ca')
+        before = count_images(page)
+        removed = remove_last(page, n) if before >= n else 0
+        after = count_images(page)
+        q.shot(page, 'cleanup_after')
+        (OUT / 'cleanup.json').write_text(json.dumps({'before': before, 'removed': removed, 'after': after}), encoding='utf-8')
+        print('cleanup', before, removed, after, flush=True)
+        browser.close()
+
+
 def main():
+    if CLEANUP:
+        return cleanup(CLEANUP)
     rows = []
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
@@ -74,7 +111,6 @@ def main():
             try:
                 q.quick_login(page, 'quick_login_manager')
                 q.nav(page, 'Chốt ca')
-                print('day set to', set_day(page, day), flush=True)
                 rows.append(read(page, files, pause, label))
             except Exception as exc:  # noqa: BLE001
                 rows.append({'case': label, 'error': f'{type(exc).__name__}: {exc}'[:300]})
