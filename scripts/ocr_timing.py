@@ -27,7 +27,7 @@ def fresh(src: Path, tag: str) -> Path:
 
 
 def set_day(page, iso):
-    box = page.locator('.st-key-shift_chosen_date_picker input').first
+    box = page.locator('.st-key-shift_chosen_date_picker input:visible').first
     box.click()
     box.press('Control+a')
     box.type(iso.replace('-', '/'))
