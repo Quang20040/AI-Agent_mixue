@@ -46,7 +46,10 @@ def read(page, files, pause=0.0, label=''):
         page.wait_for_timeout(int(pause * 1000))
     t = time.time()
     page.locator('.st-key-run_shift_ocr button').first.click()
-    page.locator('.px-read-summary, [data-testid="stAlert"]').first.wait_for(timeout=240000)
+    try:
+        page.locator('.px-read-summary').first.wait_for(timeout=240000)
+    except Exception:  # noqa: BLE001 - recorded below with the page text
+        pass
     q.idle(page, 500, limit=240)
     seconds = round(time.time() - t, 1)
     body = q.text(page)
@@ -54,7 +57,7 @@ def read(page, files, pause=0.0, label=''):
     calls = next((ln for ln in body.split('\n') if ln.startswith('Thời gian gọi AI')), '')
     q.shot(page, label)
     return {'case': label, 'photos': len(files), 'pause_before_click_s': pause, 'seconds_after_click': seconds,
-            'app_summary': summary, 'model_calls': calls, 'error': '' if summary else body[:300]}
+            'app_summary': summary, 'model_calls': calls, 'error': '' if summary else body[body.find('Bằng chứng'):][:600]}
 
 
 def main():
