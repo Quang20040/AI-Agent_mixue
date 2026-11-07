@@ -79,7 +79,7 @@ def test_delivery_recorded_by_staff_waits_for_the_manager():
 
 def test_purchase_page_draft_approve_then_receive_buttons():
     from test_e2e_staff_manager import _open
-    app = _open('quick_login_manager')
+    app = _open('quick_login_owner')   # other tests reset the manager's password
     app.radio(key='main_navigation').set_value('Nhập hàng').run()
     app.button(key='calc_po_btn_vi').click().run()
     assert not app.exception, app.exception
