@@ -45,6 +45,12 @@ def disable_live_models(monkeypatch):
     monkeypatch.setenv('APP_DEMO_MODE', 'true')
     monkeypatch.setenv('LLM_ENABLED', 'false')
     monkeypatch.setenv('WEATHER_ENABLED', 'false')
+    # Older OCR tests fake only the OpenAI-compatible reader, so they keep the compat-first order;
+    # tests/test_ocr_speed.py checks the native-first default.
+    monkeypatch.setenv('OCR_NATIVE_FIRST', '0')
+    import sys
+    if 'src.engine.vision_ocr' in sys.modules:
+        sys.modules['src.engine.vision_ocr']._COOLDOWN.clear()
 
 
 @pytest.fixture(autouse=True)

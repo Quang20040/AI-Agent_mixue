@@ -743,6 +743,12 @@ def _inline_refs(schema: dict[str, Any]) -> dict[str, Any]:
 OCR_TIMEOUT_SECONDS = float(os.environ.get('OCR_TIMEOUT_SECONDS') or 60)
 
 
+def _native_first() -> bool:
+    """OCR_NATIVE_FIRST=0 puts Gemini's native endpoint back after the OpenAI-compatible JSON modes."""
+    variables = {**dotenv_values(ROOT / '.env'), **os.environ}
+    return str(variables.get('OCR_NATIVE_FIRST', '1')).strip().lower() not in {'0', 'false', 'no', 'off'}
+
+
 def ocr_reasoning_effort() -> str:
     """How hard the vision model may think. Copying a page needs little reasoning; Gemini 3's default
     ('high') spent most of a 1-2 minute read thinking. none | low | medium | high."""
@@ -927,22 +933,29 @@ def _read_page(valid_images, sheet_key, shift_hint, target_date, cfg, model):
     else:
         plan = []
         for model_id in ocr_model_chain(cfg):
-            plan += [(model_id, mode) for mode in OCR_OUTPUT_MODES]
-            if is_gemini(cfg):
-                plan.append((model_id, 'gemini_native'))
+            # Gemini's own endpoint answers a page in seconds; through the OpenAI-compatible endpoint the strict
+            # schema has hung for the whole timeout (measured live: 3-6 s native vs 60 s strict), so native first.
+            if not is_gemini(cfg):
+                modes = OCR_OUTPUT_MODES
+            elif _native_first():
+                modes = ('gemini_native', *OCR_OUTPUT_MODES)
+            else:
+                modes = (*OCR_OUTPUT_MODES, 'gemini_native')
+            plan += [(model_id, mode) for mode in modes]
     started = time.monotonic()
     read_log: list[dict[str, Any]] = []
     outcome: Any = None
     skip_model: str | None = None
     for model_id, mode in plan:
-        if model_id is not None and model_id == skip_model and mode != 'gemini_native':
+        if model_id is not None and ((model_id == skip_model and mode != 'gemini_native') or _cooling(model_id)):
             continue
         if attempts and time.monotonic() - started > OCR_TIMEOUT_SECONDS * 1.6:
             break  # keep the whole wait bounded; report the last error
         t0 = time.monotonic()
+        at = round(t0 - started, 1)
         outcome = _read_with_mode(valid_images, mode, model, cfg, shift_hint, target_date, model_id)
-        read_log.append({'model': model_id or 'model', 'mode': mode, 'seconds': round(time.monotonic() - t0, 1),
-                         'ok': not isinstance(outcome, Exception)})
+        read_log.append({'model': model_id or 'model', 'mode': mode, 'at': at,
+                         'seconds': round(time.monotonic() - t0, 1), 'ok': not isinstance(outcome, Exception)})
         if not isinstance(outcome, Exception):
             logger.info('OCR read: %s / %s in %.1fs', model_id, mode, time.monotonic() - t0)
             break
@@ -953,6 +966,8 @@ def _read_page(valid_images, sheet_key, shift_hint, target_date, cfg, model):
         logger.warning('OCR provider call failed (mode=%s, model=%s): %s', mode, model_id, _provider_detail(outcome))
         if model is not None or status in {401, 403}:
             break  # injected reader, or a key problem no other model or path will fix
+        if status == 429 and model_id:
+            _cool_down(model_id)  # out of quota: the other photos and the next reads skip it straight away
         if status != 400:
             skip_model = model_id  # not a format problem: other JSON modes of this model will fail the same way
     if isinstance(outcome, Exception) or outcome is None:
@@ -973,6 +988,19 @@ def _read_page(valid_images, sheet_key, shift_hint, target_date, cfg, model):
     if isinstance(out, dict):
         out['read_log'] = read_log  # per-attempt model, output mode and seconds: where a slow read spent its time
     return out
+
+
+# Models that just answered 429 (quota or rate limit) are skipped for a while instead of costing every photo a call.
+_COOLDOWN: dict[str, float] = {}
+OCR_COOLDOWN_SECONDS = float(os.environ.get('OCR_COOLDOWN_SECONDS') or 60)
+
+
+def _cool_down(model_id: str) -> None:
+    _COOLDOWN[model_id] = time.monotonic() + OCR_COOLDOWN_SECONDS
+
+
+def _cooling(model_id: str) -> bool:
+    return _COOLDOWN.get(model_id, 0) > time.monotonic()
 
 
 _DAY_SHEETS: dict[tuple[str, str], tuple[Any, str]] = {}

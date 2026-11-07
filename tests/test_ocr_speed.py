@@ -89,3 +89,63 @@ def test_no_background_read_when_ai_reading_is_off(monkeypatch):
                                                                   api_key='x', allow_external_transfer=False))
     monkeypatch.setenv('OCR_PREFETCH', '0')
     assert not prefetch_reading(PHOTOS[0], settings=gemini())
+
+
+def _native_answer(reading):
+    class Resp:
+        status_code = 200
+        text = ''
+
+        def json(self):
+            return {'candidates': [{'content': {'parts': [{'text': reading}]}, 'finishReason': 'STOP'}]}
+    return Resp()
+
+
+def test_gemini_reads_go_to_the_native_endpoint_first(monkeypatch):
+    """Measured live: native 3-6 s per page, the compat endpoint's strict schema hung for the full 60 s."""
+    import json
+    import httpx
+    from src.engine.ocr_evaluation import benchmark_cases
+    reading = json.dumps(benchmark_cases()[0]['reading'], ensure_ascii=False)
+    monkeypatch.setenv('OCR_NATIVE_FIRST', '1')
+    monkeypatch.delenv('OCR_MODEL', raising=False)
+    compat = []
+    monkeypatch.setattr(vision_ocr, 'build_ocr_reader', lambda *a, **k: compat.append(1))
+    monkeypatch.setattr(httpx, 'post', lambda url, json=None, timeout=None, headers=None: _native_answer(reading))
+    monkeypatch.setattr(vision_ocr, '_DAY_SHEETS', {})
+    image = PHOTOS[0].parent / '20261014_pos_slip.jpg'
+    result = extract_image(image_path=image, shift_hint='CA_TOI', target_date='2026-10-14', settings=gemini())
+    assert result['status'] == 'NEEDS_REVIEW' and compat == []
+    assert [e['mode'] for e in result['read_log']] == ['gemini_native']
+
+
+def test_a_model_out_of_quota_is_skipped_for_the_next_photos(monkeypatch):
+    import json
+    import httpx
+    from src.engine.ocr_evaluation import benchmark_cases
+    reading = json.dumps(benchmark_cases()[0]['reading'], ensure_ascii=False)
+    monkeypatch.setenv('OCR_NATIVE_FIRST', '1')
+    monkeypatch.setenv('OCR_FALLBACK_MODELS', 'gemini-3.5-flash-lite')
+    monkeypatch.delenv('OCR_MODEL', raising=False)
+    urls = []
+
+    class Quota:
+        status_code = 429
+        text = '{"error": {"status": "RESOURCE_EXHAUSTED"}}'
+
+        def json(self):
+            return {'error': {'status': 'RESOURCE_EXHAUSTED', 'message': 'quota'}}
+
+    def post(url, json=None, timeout=None, headers=None):
+        urls.append(url.rsplit('/', 1)[1])
+        return Quota() if 'gemini-3.8-flash:' in url else _native_answer(reading)
+
+    monkeypatch.setattr(httpx, 'post', post)
+    monkeypatch.setattr(vision_ocr, 'build_ocr_reader', lambda *a, **k: (_ for _ in ()).throw(AssertionError('compat')))
+    monkeypatch.setattr(vision_ocr, '_DAY_SHEETS', {})
+    folder = PHOTOS[0].parent
+    extract_image(image_path=folder / '20261014_pos_slip.jpg', shift_hint='CA_TOI', target_date='2026-10-14', settings=gemini())
+    assert urls == ['gemini-3.8-flash:generateContent', 'gemini-3.5-flash-lite:generateContent']
+    urls.clear()
+    extract_image(image_path=PHOTOS[0], shift_hint='CA_SANG', target_date='2026-10-14', settings=gemini())
+    assert urls == ['gemini-3.5-flash-lite:generateContent']  # no second call to the model that just said 429
