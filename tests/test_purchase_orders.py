@@ -85,11 +85,32 @@ def test_purchase_page_draft_approve_then_receive_buttons():
     assert not app.exception, app.exception
     plan_id = app.session_state['po_plan_vi']['draft_plan_id']
     assert any(b.key == 'po_save_new' for b in app.button)
+    # other tests' approved orders count as "đang về", so the AI may suggest 0 everywhere: the manager types a number
+    first = str(get_plan(plan_id)['lines'][0]['ingredient_id'])
+    assert purchase_orders.update_quantities(plan_id, {first: 3}, 'Quang', "ADMIN")[0]
+    app.run()
     app.button(key='po_approve_new').click().run()
     assert not app.exception, app.exception
     assert get_plan(plan_id)['status'] == 'APPROVED'
     assert any(b.key == f'po_recv_go_{plan_id}' for b in app.button)   # "Đã nhận hàng" shows on the approved order
     app.button(key=f'po_recv_go_{plan_id}').click().run()
     assert not app.exception, app.exception
-    assert get_plan(plan_id)['status'] == 'RECEIVED'
+    assert get_plan(plan_id)['status'] == 'RECEIVED', [e.value for e in app.error]
     assert _movements(plan_id)
+
+
+def test_cannot_approve_an_all_zero_order():
+    from test_e2e_staff_manager import _open
+    app = _open('quick_login_owner')
+    app.radio(key='main_navigation').set_value('Nhập hàng').run()
+    app.button(key='calc_po_btn_vi').click().run()
+    plan = app.session_state['po_plan_vi']
+    plan_id = plan['draft_plan_id']
+    stored = get_plan(plan_id)
+    for line in stored['lines']:
+        line['packs_to_order'] = 0
+    save_plan(stored)
+    app.run()
+    app.button(key='po_approve_new').click().run()
+    assert get_plan(plan_id)['status'] == 'PENDING_APPROVAL'
+    assert any('chưa có mặt hàng' in e.value for e in app.error)

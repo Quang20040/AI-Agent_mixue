@@ -27,7 +27,11 @@ def render_draft_editor(agent, plan, role, user_name, username, key):
     lines = _sorted_lines(plan)
     frame = pd.DataFrame([{
         "Mã": line["ingredient_id"], "Nguyên liệu": line["ingredient_name"], "Ưu tiên": PRIORITY.get(line.get("priority"), ""),
-        "Tồn": f"{line.get('current_on_hand', 0):,.0f} {line.get('unit', '')}",
+        "Tồn sổ kho": (f"{line['on_hand_packs']:g} {line.get('carton_unit', 'thùng')}" if "on_hand_packs" in line
+                       else f"{line.get('current_on_hand', 0):,.0f} {line.get('unit', '')}")
+                      + (" ⚠️ âm" if line.get("negative_book_stock") else "")
+                      + ("" if line.get("on_hand_source", "sổ kho") == "sổ kho" else f" ({line.get('on_hand_source')})"),
+        "Đang về": int(line.get("coming_packs") or 0),
         "Đủ dùng (ngày)": line.get("days_of_stock_remaining"),
         "AI đề xuất": int(line.get("ai_packs", line.get("packs_to_order") or 0)),
         "Số đặt": int(line.get("packs_to_order") or 0),
@@ -35,7 +39,15 @@ def render_draft_editor(agent, plan, role, user_name, username, key):
     } for line in lines])
     admin = is_admin_role(role)
     st.caption("Sửa cột **Số đặt** nếu muốn đặt khác AI (ví dụ AI đề xuất 5 thùng, bạn muốn 7). "
-               "Mặt hàng AI để 0 vẫn thêm được. Số lượng tính theo nguyên thùng/kiện.")
+               "Mặt hàng AI để 0 vẫn thêm được. Số lượng tính theo nguyên thùng/kiện. "
+               "AI tính từ **tồn sổ kho** hôm nay và trừ hàng **đang về** của các đơn đã duyệt chưa nhận.")
+    unmapped = [line["ingredient_name"] for line in lines if line.get("on_hand_source") == "chưa ghép với sổ kho"]
+    if unmapped:
+        st.warning("Chưa ghép với dòng nào của sổ kho nên AI không biết tồn (tính như hết hàng): "
+                   + ", ".join(unmapped) + ". Kiểm tra số đặt trước khi duyệt.")
+    if any(line.get("negative_book_stock") for line in lines):
+        st.warning("Có mặt hàng tồn sổ kho bị âm (xuất nhiều hơn nhập): nên kiểm kê và sửa tồn đầu kỳ trên sổ kho, "
+                   "AI đang coi các mặt hàng này là hết hàng.")
     edited = st.data_editor(
         frame, key=f"po_edit_{key}", hide_index=True, width="stretch",
         disabled=True if not admin else [c for c in frame.columns if c != "Số đặt"],
@@ -59,6 +71,9 @@ def render_draft_editor(agent, plan, role, user_name, username, key):
         if ok:
             st.rerun()
     if c2.button("✍️ Lưu & ký duyệt", key=f"po_approve_{key}", type="primary", width="stretch"):
+        if total <= 0:
+            st.error("Đơn chưa có mặt hàng nào (tổng 0 thùng). Nhập **Số đặt** cho ít nhất một mặt hàng, hoặc bấm Từ chối.")
+            return
         if changed:
             ok, msg = purchase_orders.update_quantities(plan["plan_id"], changed, user_name, role)
             if not ok:

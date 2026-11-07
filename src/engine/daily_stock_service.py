@@ -23,7 +23,7 @@ from src.database import Base, SessionLocal, engine
 from src.models import DailyStockMovement, Ingredient, User
 from src.runtime_settings import demo_enabled
 from src.engine.storage_lock import FileTransactionLock
-from src.engine.stock_matrix import column_map_for_period
+from src.engine.stock_matrix import column_map_for_period, today_vn
 
 # Đảm bảo bảng luôn tồn tại
 Base.metadata.create_all(bind=engine)
@@ -900,3 +900,27 @@ def generate_excel_export(year: int | None = None, month: int | None = None) -> 
     out = io.BytesIO()
     wb.save(out)
     return out.getvalue()
+
+
+def ledger_balances(as_of: date | None = None) -> dict[str, float]:
+    """Book stock per ingredient on a day, in the ledger's units (cartons/packs), same rule as the stock sheet:
+    the latest opening balance (INITIAL) on or before the day, plus approved stock-in, minus approved stock-out after it.
+    Ingredients without any opening balance are left out (their stock is unknown, not zero)."""
+    as_of = as_of or today_vn()
+    db = SessionLocal()
+    try:
+        rows = (db.query(DailyStockMovement)
+                .filter(DailyStockMovement.status == "APPROVED", DailyStockMovement.business_date <= as_of)
+                .order_by(DailyStockMovement.business_date, DailyStockMovement.id).all())
+    finally:
+        db.close()
+    balances: dict[str, float] = {}
+    for movement in rows:
+        ing = str(movement.ingredient_id)
+        if movement.movement_type == "INITIAL":
+            balances[ing] = float(movement.quantity)
+        elif ing in balances and movement.movement_type == "IN":
+            balances[ing] += float(movement.quantity)
+        elif ing in balances and movement.movement_type == "OUT":
+            balances[ing] -= float(movement.quantity)
+    return balances

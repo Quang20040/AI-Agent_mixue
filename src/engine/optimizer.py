@@ -254,33 +254,71 @@ class OptimizerEngine:
             (~daily_demand_df["ingredient_group"].isin(in_house_groups))
         ]
 
-        # Get latest stock counts as on-hand inventory
+        # On hand = book stock from the stock ledger on the order day (opening balance + approved in − out, in
+        # cartons), converted to base units with the carton spec; goods ordered and approved but not received yet
+        # count as coming. The old stock_counts table is only a fallback for items the ledger has never opened.
+        from src.engine.daily_stock_service import ledger_balances
+        from src.engine.plan_service import list_plans
+        ledger = ledger_balances(target_date)
         latest_date = self.db.query(func.max(StockCount.business_date)).scalar()
-        stk_rows = self.db.query(
-            StockCount.ingredient_id,
-            StockCount.quantity_counted,
-            StockCount.unit
-        ).filter(StockCount.business_date == latest_date).all()
-        on_hand_map = {r[0]: float(r[1]) for r in stk_rows}
+        counted = {r[0]: float(r[1]) for r in self.db.query(StockCount.ingredient_id, StockCount.quantity_counted)
+                   .filter(StockCount.business_date == latest_date).all()} if latest_date else {}
+        in_transit: dict[str, int] = {}
+        recent = (datetime.combine(target_date, datetime.min.time()) - pd.Timedelta(days=14)).isoformat()
+        for order in list_plans("REPLENISHMENT_PO"):
+            # approved in the last two weeks and not received yet; older ones are stale, not "on the way"
+            if order.get("status") == "APPROVED" and str(order.get("approved_at") or "") >= recent:
+                for line in order.get("lines", []):
+                    in_transit[str(line["ingredient_id"])] = in_transit.get(str(line["ingredient_id"]), 0) + int(line.get("packs_to_order") or 0)
 
         cycle_days = lead_time_days + review_period_days
         po_lines = []
 
+        # Recipe codes → stock-sheet items, so the order (and the delivery that comes back) lands on the sheet's rows.
+        from src.engine.stock_mapping import stock_id
+        catalog = {i.ingredient_id: i for i in self.db.query(Ingredient).all()}
+        merged_rows: dict[str, dict] = {}
         for _, row in raw_demand.iterrows():
+            target = stock_id(row["ingredient_id"]) or row["ingredient_id"]
+            entry = merged_rows.setdefault(target, {
+                "ingredient_id": target,
+                "ingredient_name": catalog[target].ingredient_name if target in catalog else row["ingredient_name"],
+                "ingredient_group": catalog[target].ingredient_group if target in catalog else row["ingredient_group"],
+                "unit": row["unit"], "theoretical_qty": 0.0, "recipe_ids": [],
+                "mapped": target != row["ingredient_id"] or target.isdigit()})
+            entry["theoretical_qty"] += float(row["theoretical_qty"])
+            entry["recipe_ids"].append(row["ingredient_id"])
+
+        for row in merged_rows.values():
             ing_id = row["ingredient_id"]
             ing_name = row["ingredient_name"]
             group = row["ingredient_group"]
             unit = row["unit"]
             daily_req = float(row["theoretical_qty"])
 
-            on_hand = on_hand_map.get(ing_id, 0.0)
+            spec = MIXUE_CARTON_SPECS.get(str(ing_id))
+            pack_size_for_stock = float(spec["carton_size"]) if spec else float(DEFAULT_PACK_SIZES.get(unit, 1000.0))
+            if str(ing_id) in ledger:
+                on_hand_packs = ledger[str(ing_id)]
+                on_hand_source = "sổ kho"
+            elif ing_id in counted:
+                on_hand_packs = counted[ing_id] / pack_size_for_stock
+                on_hand_source = "kiểm kê"
+            elif not row["mapped"]:
+                on_hand_packs = 0.0
+                on_hand_source = "chưa ghép với sổ kho"
+            else:
+                on_hand_packs = 0.0
+                on_hand_source = "sổ kho chưa có tồn đầu kỳ"
+            coming_packs = in_transit.get(str(ing_id), 0)
+            on_hand = max(0.0, on_hand_packs) * pack_size_for_stock
 
             # Cycle projection
             cycle_demand = daily_req * cycle_days
             safety_stock = daily_req * lead_time_days * (safety_factor - 1.0)
             target_stock = cycle_demand + safety_stock
 
-            net_req = max(0.0, target_stock - on_hand)
+            net_req = max(0.0, target_stock - on_hand - coming_packs * pack_size_for_stock)
 
             # Tra cứu quy cách thùng / kiện chuẩn Mixue (nguyên số, không lẻ)
             spec = MIXUE_CARTON_SPECS.get(str(ing_id))
@@ -316,6 +354,11 @@ class OptimizerEngine:
                 "unit": unit,
                 "daily_demand": round(daily_req, 1),
                 "current_on_hand": round(on_hand, 1),
+                "on_hand_packs": round(on_hand_packs, 2),
+                "on_hand_source": on_hand_source,
+                "coming_packs": coming_packs,
+                "negative_book_stock": on_hand_packs < 0,
+                "recipe_ids": row["recipe_ids"],
                 "days_of_stock_remaining": round(days_of_stock, 1),
                 "lead_time_days": lead_time_days,
                 "pack_size": pack_size,
