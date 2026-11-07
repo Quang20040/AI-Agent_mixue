@@ -46,7 +46,7 @@ def embed_texts(texts: list[str], task: str, api_key: str, model: str | None = N
                 req['title'] = titles[start + i]
             requests.append(req)
         resp = httpx.post(API.format(model=model), json={'requests': requests}, timeout=timeout,
-                          headers={'x-goog-api-key': api_key})
+                          headers={'x-goog-api-key': api_key.strip()})
         if resp.status_code != 200:
             raise RuntimeError(f'embedding HTTP {resp.status_code}')
         out += [e['values'] for e in resp.json()['embeddings']]

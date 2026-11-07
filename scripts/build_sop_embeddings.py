@@ -20,7 +20,7 @@ from src.engine.sop_embeddings import embed_model, embed_texts, vectors_path  # 
 
 
 def main():
-    key = os.environ.get('GEMINI_API_KEY')
+    key = (os.environ.get('GEMINI_API_KEY') or '').strip()  # pasted secrets often end with a newline
     if not key:
         sys.exit('GEMINI_API_KEY is not set')
     agent = RepoDocsAgent(ROOT)
