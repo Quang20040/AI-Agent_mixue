@@ -5,7 +5,9 @@ import json
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from tieng_viet import TEP, COT, chuan_hoa
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from src.tieng_viet import TEP, COT, chuan_hoa  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 KEYS = {

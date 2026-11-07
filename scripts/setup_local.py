@@ -2,7 +2,9 @@
 from pathlib import Path
 import re
 import secrets
-from tieng_viet import tao_mau
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from src.tieng_viet import tao_mau  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 

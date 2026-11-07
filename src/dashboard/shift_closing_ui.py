@@ -623,37 +623,6 @@ def show_evidence(extracted: dict) -> None:
             st.text(extracted.get('raw_text_extracted', ''))
 
 
-def render_staff_submissions(user_role: str, user_name: str):
-    """Manager inbox: reports staff checked and sent. Opening one starts the LangGraph approval."""
-    agent = st.session_state.get('operations_agent')
-    if agent is None:
-        return
-    user_id = st.session_state.get('username', user_name)
-    submissions = agent.list_staff_submissions(user_role, user_name, user_id=user_id)
-    if not submissions:
-        return
-    with st.container(border=True, key='ocr_staff_inbox'):
-        st.markdown(f'<div class="px-card-title">📥 Nhân viên gửi chờ duyệt · {len(submissions)}</div>', unsafe_allow_html=True)
-        for sub in submissions:
-            meta = sub.get('meta') or {}
-            fields = sub.get('fields') or {}
-            total = fields.get('total_collected_vnd')
-            edited = meta.get('suggestions_edited') or []
-            suggested = meta.get('suggested_fields') or []
-            info, action = st.columns([4, 1.2], vertical_alignment='center')
-            info.markdown(
-                f"**{sub.get('shift_code') or '—'} · {sub.get('business_date') or '—'}** — gửi bởi "
-                f"{meta.get('submitted_by_name') or sub.get('user_id')} · tổng thu "
-                f"{'{:,.0f} đ'.format(total).replace(',', '.') if total is not None else '—'}  \n"
-                f"<small>{sub['draft_id']} · {len(suggested)} ô điền theo gợi ý"
-                f"{f', nhân viên đã sửa {len(edited)} ô' if edited else ''}</small>", unsafe_allow_html=True)
-            if action.button('Mở & duyệt', key=f"open_sub_{sub['draft_id']}", type='primary', use_container_width=True):
-                result = agent.open_staff_submission(sub['draft_id'], user_role, user_name, user_id=user_id)
-                st.session_state['agent_pending_approval'] = result.get('pending_approval')
-                st.session_state['approval_notice'] = result.get('text')
-                st.rerun()
-
-
 def render_day_reports(day_reports, chosen_date, is_admin):
     """Approved shifts of the chosen day, with the original evidence photos on demand."""
     st.markdown(f'<div class="px-card-title">Các ca trong ngày {chosen_date:%d/%m/%Y}</div>', unsafe_allow_html=True)

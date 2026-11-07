@@ -338,15 +338,6 @@ class ConversationStore:
         item['ocr_result'] = json.loads(item.pop('ocr_result_json') or '{}')
         return item
 
-    def latest_attachment_id(self, owner: str, ident: str) -> str | None:
-        self.require_owned(owner, ident)
-        with self.connect() as db:
-            row = db.execute(
-                'SELECT file_id FROM chat_attachments WHERE owner=? AND conversation_id=? ORDER BY created_at DESC LIMIT 1',
-                (owner, ident),
-            ).fetchone()
-        return row[0] if row else None
-
     def update_attachment_ocr(self, owner: str, ident: str, file_id: str, ocr_result: dict[str, Any]) -> None:
         self.require_owned(owner, ident)
         doc_type = str(ocr_result.get('document_type', 'unknown'))
@@ -702,24 +693,6 @@ class ConversationStore:
             ).fetchall()
         paths = dict(rows)
         return [paths[f] for f in file_ids if f in paths and Path(paths[f]).is_file()]
-
-    def set_ocr_draft_status(self, owner: str, ident: str, status: str) -> dict[str, Any] | None:
-        self.require_owned(owner, ident)
-        current = self.get_active_ocr_draft(owner, ident)
-        if not current:
-            return None
-        stamp = datetime.now(timezone.utc).isoformat()
-        with self.connect() as db:
-            db.execute(
-                'UPDATE ocr_shift_drafts SET status=?, updated_at=? WHERE draft_id=? AND owner=? AND conversation_id=?',
-                (status, stamp, current['draft_id'], owner, ident),
-            )
-            db.row_factory = sqlite3.Row
-            row = db.execute(
-                'SELECT * FROM ocr_shift_drafts WHERE draft_id=? AND owner=? AND conversation_id=?',
-                (current['draft_id'], owner, ident),
-            ).fetchone()
-        return self._deserialize_draft(row) if row else None
 
     def resolve_ocr_draft(
         self,

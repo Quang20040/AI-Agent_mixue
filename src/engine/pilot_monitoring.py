@@ -18,9 +18,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import statistics
-import time
 from collections import defaultdict
-from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -37,38 +35,6 @@ MODEL_PRICING = {
 
 # Empirical manual baseline for shift closing without AI (seconds)
 MANUAL_BASELINE_SHIFT_CLOSING_SECONDS = 210.0  # 3.5 minutes per shift
-
-
-@dataclass
-class RateLimitBucket:
-    timestamps: list[float] = field(default_factory=list)
-
-    def is_allowed(self, max_requests: int, window_seconds: float) -> bool:
-        now = time.monotonic()
-        cutoff = now - window_seconds
-        self.timestamps = [t for t in self.timestamps if t > cutoff]
-        if len(self.timestamps) >= max_requests:
-            return False
-        self.timestamps.append(now)
-        return True
-
-
-class RateLimiter:
-    """Sliding-window in-memory rate limiter per store/user/IP."""
-
-    def __init__(self, max_requests_per_minute: int = 60, max_requests_per_hour: int = 1000):
-        self.max_per_minute = max_requests_per_minute
-        self.max_per_hour = max_requests_per_hour
-        self._minute_buckets: dict[str, RateLimitBucket] = defaultdict(RateLimitBucket)
-        self._hour_buckets: dict[str, RateLimitBucket] = defaultdict(RateLimitBucket)
-
-    def check_rate_limit(self, identifier: str) -> tuple[bool, str]:
-        """Check if request is within quota. Returns (allowed, reason)."""
-        if not self._minute_buckets[identifier].is_allowed(self.max_per_minute, 60.0):
-            return False, f"Vượt quá giới hạn {self.max_per_minute} yêu cầu/phút. Vui lòng đợi trong giây lát."
-        if not self._hour_buckets[identifier].is_allowed(self.max_per_hour, 3600.0):
-            return False, f"Vượt quá hạn mức {self.max_per_hour} yêu cầu/giờ."
-        return True, "OK"
 
 
 class PilotMonitoringService:

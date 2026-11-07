@@ -6,7 +6,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from scripts.tieng_viet import COT, TEP, chuan_hoa
+from src.tieng_viet import COT, TEP, chuan_hoa
 from src.database import Base, SessionLocal, engine
 from src.models import (
     Ingredient,

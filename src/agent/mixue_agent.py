@@ -1247,64 +1247,6 @@ Bạn được trang bị 8 công cụ vận hành:
             "evidence_refs": [f"shift_reports:{target_date}", f"pos_slip:{target_date}", f"signed_by:{signer}"]
         }
 
-    def tool_search_project_kb(self, query: str, is_admin: bool = True) -> dict[str, Any] | None:
-        """Tool: Tra cứu thông tin sâu trong cơ sở dữ liệu dự án khi người dùng hỏi các câu hỏi chung."""
-        q_norm = _normalize_vn(query)
-
-        # 1. Tìm trong MenuItem
-        menus = self.db.query(MenuItem).all()
-        matched_m = None
-        for m in menus:
-            if _normalize_vn(m.sku_id) in q_norm or _normalize_vn(m.sku_name) in q_norm:
-                matched_m = m
-                break
-
-        if matched_m:
-            return self.tool_decode_recipe_or_sticker(matched_m.sku_id)
-
-        # 2. Tìm trong Ingredient
-        if is_admin:
-            ings = self.db.query(Ingredient).all()
-            for i in ings:
-                i_name_norm = _normalize_vn(i.ingredient_name)
-                i_id_norm = _normalize_vn(i.ingredient_id)
-                matched_id = (len(i_id_norm) >= 3 and i_id_norm in q_norm) or bool(re.search(rf"\b{re.escape(i_id_norm)}\b", q_norm))
-                matched_name = len(i_name_norm) >= 4 and i_name_norm in q_norm
-                if matched_name or matched_id:
-                    shelf = i.shelf_life_rule_id if i.shelf_life_rule_id else "Theo HSD bao bì"
-                    cost = float(i.unit_cost_vnd) if i.unit_cost_vnd else 0.0
-                    msg = (
-                        f"### 📦 Thông Tin Nguyên Liệu: {i.ingredient_name}\n\n"
-                        f"- **Mã nguyên liệu:** `{i.ingredient_id}`\n"
-                        f"- **Đơn vị sử dụng quầy:** `{i.base_unit}`\n"
-                        f"- **Nhóm nguyên liệu:** `{i.ingredient_group}`\n"
-                        f"- **Quy chuẩn bảo quản / HSD:** **{shelf}**\n"
-                        f"- **Chi phí đơn vị:** {cost:,.0f} đ / {i.base_unit}"
-                    )
-                    return {
-                        "text": msg,
-                        "tool_called": "ingredient_lookup",
-                        "raw_result": {"id": i.ingredient_id, "name": i.ingredient_name},
-                        "evidence_refs": ["table:ingredients", f"ingredient:{i.ingredient_id}"]
-                    }
-
-        # 3. Lục tìm tài liệu & báo cáo repo (RepoDocsAgent)
-        hits = self.multi_agent.docs_agent.search(query, top_k=2)
-        if hits and hits[0]["score"] > 2.0:
-            doc = hits[0]
-            msg = f"### 📚 Trích Xuất Tài Liệu & Quy Chuẩn Dự Án: {doc['title']}\n\n"
-            msg += f"- **Nguồn tài liệu:** `{doc['file_path']}` (Phân loại: `{doc['category']}`)\n\n"
-            msg += f"> {doc['content']}\n"
-            return {
-                "text": msg,
-                "tool_called": "search_project_kb",
-                "raw_result": doc,
-                "evidence_refs": [f"file:{doc['file_path']}"],
-                "status": "SUCCESS"
-            }
-
-        return None
-
     def _format_sales_response(self, res: dict[str, Any], query: str = "", sub_intent: str | None = None, prefix: str = "") -> tuple[str, str]:
         """Định dạng phản hồi bán hàng đúng trọng tâm câu hỏi của người dùng (Hỏi gì trả lời đấy).
         
@@ -1601,26 +1543,6 @@ Bạn được trang bị 8 công cụ vận hành:
         self._ensure_store().feedback(self._conversation_owner(actor), self._conversation_id, message_id, rating)
 
     # --- CROSS-CHAT USER PREFERENCES (VIEW, EDIT, DELETE; NO PRIVILEGE ESCALATION) ---
-
-    def get_user_preferences(self, user_role: str = "MANAGER", user_name: str = "Quản lý", *, user_id=None) -> list[dict[str, Any]]:
-        actor = self._actor(user_role, user_name, user_id)
-        owner = self._conversation_owner(actor)
-        return self._ensure_store().get_preferences(owner, store_id=actor.store_id, user_id=actor.user_id)
-
-    def set_user_preference(self, pref_key: str, pref_value: str, user_role: str = "MANAGER", user_name: str = "Quản lý", *, user_id=None, source_text: str = "") -> dict[str, Any]:
-        actor = self._actor(user_role, user_name, user_id)
-        owner = self._conversation_owner(actor)
-        return self._ensure_store().set_preference(
-            owner, store_id=actor.store_id, user_id=actor.user_id,
-            pref_key=pref_key, pref_value=pref_value, source_text=source_text,
-        )
-
-    def delete_user_preference(self, pref_key: str | None, user_role: str = "MANAGER", user_name: str = "Quản lý", *, user_id=None) -> dict[str, Any]:
-        actor = self._actor(user_role, user_name, user_id)
-        owner = self._conversation_owner(actor)
-        return self._ensure_store().delete_preference(
-            owner, store_id=actor.store_id, user_id=actor.user_id, pref_key=pref_key,
-        )
 
     @property
     def current_conversation_id(self) -> str:

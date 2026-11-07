@@ -14,6 +14,7 @@ Phân quyền 2 cấp độ:
 
 import hashlib
 import re
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -70,12 +71,6 @@ def page_group(page: str) -> str:
     if page in ADMIN_ONLY_PAGES:
         return "admin"
     return "home"
-
-STAFF_PAGES: list[str] = STAFF_OFFICIAL_PAGES
-
-
-
-import secrets
 
 
 def hash_password(password: str, salt: str | None = None) -> str:
@@ -327,12 +322,6 @@ def get_allowed_pages(role: str) -> list[str]:
     if normalize_role(r) == 'STAFF_OFFICIAL':
         return STAFF_OFFICIAL_PAGES
     return []
-
-
-def can_manage_inventory(role: str) -> bool:
-    """Kiểm tra quyền truy cập Sổ Thẻ Kho Xuất - Nhập - Tồn (Chủ quán, Quản lý và Nhân viên chính thức)."""
-    r = (role or "").strip().upper()
-    return is_admin_role(r) or r in ("STAFF", "STAFF_OFFICIAL")
 
 
 def can_access_page(role: str, page_name: str) -> bool:

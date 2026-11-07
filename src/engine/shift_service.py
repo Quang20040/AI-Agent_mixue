@@ -148,92 +148,6 @@ def _save_raw_shift_data(data: list[dict[str, Any]]) -> bool:
             return False
 
 
-def _get_seed_shift_reports() -> list[dict[str, Any]]:
-    """Khởi tạo dữ liệu thực tế mẫu từ các bức ảnh sổ chốt ngày 14/10/2026 của cửa hàng Mixue 39 Tôn Quang Phiệt."""
-    return [
-        {
-            "id": "SHIFT_20261014_SANG",
-            "business_date": "2026-10-14",
-            "shift_code": "CA_SANG",
-            "shift_name": "1. Ca sáng bàn giao (8h-13h)",
-            "cash_vnd": 653000,
-            "cash_diff_vnd": 0,
-            "bank_transfer_vnd": 1591000,
-            "bank_transfer_formula": "962 + 629",
-            "shopee_food_vnd": 16000,
-            "grab_food_vnd": 30000,
-            "be_food_vnd": 0,
-            "petty_cash_kept_vnd": 1000000,
-            "expenses_vnd": 0,
-            "expenses_details": [],
-            "total_collected_vnd": 2328000,
-            "signed_by": "Hà",
-            "notes": "Ca sáng bàn giao két 1,000,000đ và tổng tiền thu về 2,328k.",
-            "image_filename": "20261014_ca_sang_chieu.jpg",
-            "image_path": str(SHIFT_PHOTOS_DIR / "20261014_ca_sang_chieu.jpg"),
-            "status": "APPROVED",
-            "created_by": "ha_bar",
-            "created_at": "2026-10-14T13:05:00+07:00"
-        },
-        {
-            "id": "SHIFT_20261014_CHIEU",
-            "business_date": "2026-10-14",
-            "shift_code": "CA_CHIEU",
-            "shift_name": "2. Ca chiều bàn giao (13h-18h)",
-            "cash_vnd": 2014000,
-            "cash_diff_vnd": 20000,
-            "bank_transfer_vnd": 3861000,
-            "bank_transfer_formula": "1630 + 1221 + 1010",
-            "shopee_food_vnd": 83000,
-            "grab_food_vnd": 95000,
-            "be_food_vnd": 0,
-            "petty_cash_kept_vnd": 1000000,
-            "expenses_vnd": 0,
-            "expenses_details": [],
-            "total_collected_vnd": 6090000,
-            "signed_by": "Nhi",
-            "notes": "Tiền mặt dư 20k. Bàn giao két 1,000,000đ. Tổng thu về ca chiều 6,090k.",
-            "image_filename": "20261014_ca_sang_chieu.jpg",
-            "image_path": str(SHIFT_PHOTOS_DIR / "20261014_ca_sang_chieu.jpg"),
-            "status": "APPROVED",
-            "created_by": "nhi_bar",
-            "created_at": "2026-10-14T18:10:00+07:00"
-        },
-        {
-            "id": "SHIFT_20261014_TOI",
-            "business_date": "2026-10-14",
-            "shift_code": "CA_TOI",
-            "shift_name": "3. Ca tối & Chốt tổng hợp cả ngày (18h-23h)",
-            "cash_vnd": 3260000,
-            "cash_diff_vnd": 35000,
-            "bank_transfer_vnd": 6377000,
-            "bank_transfer_formula": "4725 + 1652",
-            "shopee_food_vnd": 115000,
-            "grab_food_vnd": 104000,
-            "be_food_vnd": 0,
-            "petty_cash_kept_vnd": 1000000,
-            "expenses_vnd": 56000,
-            "expenses_details": [
-                {"item": "Tiền ship sạc đt hotline", "amount": 41000},
-                {"item": "Ship đơn", "amount": 15000}
-            ],
-            "total_collected_vnd": 9877000,
-            "signed_by": "An",
-            "notes": "Dư 35k tiền mặt. Đã trừ 56k chi phí (41k sạc đt + 15k ship). An chốt sổ và cầm tiền mặt.",
-            "image_filename": "20261014_ca_toi_tong_ket.jpg",
-            "image_path": str(SHIFT_PHOTOS_DIR / "20261014_ca_toi_tong_ket.jpg"),
-            "pos_slip_image": "20261014_pos_slip.jpg",
-            "pos_revenue_vnd": 10119000,
-            "pos_discounts_vnd": -217000,
-            "pos_collected_vnd": 9877137,
-            "variance_pos_vnd": -137,
-            "status": "APPROVED",
-            "created_by": "an_quanly",
-            "created_at": "2026-10-14T23:25:00+07:00"
-        }
-    ]
-
-
 def build_ocr_field_edits(extracted: dict[str, Any], confirmed_values: dict[str, int | None]) -> dict[str, Any]:
     """Compare OCR reading against user-confirmed values to build field-level audit & evaluation log."""
     readings = extracted.get("field_readings") or {}
@@ -386,15 +300,6 @@ def latest_shift_report_date() -> date:
         except ValueError:
             continue
     return max(dates) if dates else datetime.now(timezone(timedelta(hours=7))).date()
-
-
-def get_shift_report_by_id(report_id: str) -> dict[str, Any] | None:
-    """Tìm một báo cáo ca theo ID."""
-    data = _load_raw_shift_data()
-    for r in data:
-        if r.get("id") == report_id or r.get("shift_id") == report_id:
-            return r
-    return None
 
 
 def save_or_update_shift_report(

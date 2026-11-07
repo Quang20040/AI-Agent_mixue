@@ -55,36 +55,6 @@ class BOMEngine:
         df["quantity_sold"] = df["quantity_sold"].astype(int)
         return df
 
-    def get_daily_revenue_breakdown(self, start_date=None, end_date=None):
-        """Aggregate daily revenue, cups sold, AOV, DoD growth, and top-selling SKU per day."""
-        sales_df = self.get_sales_summary(start_date=start_date, end_date=end_date)
-        if sales_df.empty:
-            return pd.DataFrame()
-
-        dow_map = {
-            0: "Thứ 2", 1: "Thứ 3", 2: "Thứ 4", 3: "Thứ 5",
-            4: "Thứ 6", 5: "Thứ 7", 6: "Chủ Nhật"
-        }
-
-        daily = sales_df.groupby("business_date").agg({
-            "revenue_vnd": "sum",
-            "quantity_sold": "sum"
-        }).reset_index().sort_values(by="business_date", ascending=True)
-
-        daily["date_dt"] = pd.to_datetime(daily["business_date"])
-        daily["day_of_week"] = daily["date_dt"].dt.dayofweek.map(dow_map)
-        daily["avg_price_per_cup"] = (daily["revenue_vnd"] / daily["quantity_sold"]).round(0)
-        daily["dod_growth_pct"] = (daily["revenue_vnd"].pct_change() * 100).round(1).fillna(0.0)
-
-        top_sku_per_day = {}
-        for b_date, grp in sales_df.groupby("business_date"):
-            best_row = grp.sort_values(by="quantity_sold", ascending=False).iloc[0]
-            top_sku_per_day[b_date] = f"{best_row['sku_name']} ({int(best_row['quantity_sold'])} ly)"
-
-        daily["top_seller"] = daily["business_date"].map(top_sku_per_day)
-        daily.drop(columns=["date_dt"], inplace=True)
-        return daily
-
     def calculate_theoretical_consumption(self, start_date=None, end_date=None):
         """BOM Explosion: Explode daily sales into theoretical ingredient usage."""
         query = self.db.query(

@@ -8,7 +8,7 @@ from functools import lru_cache
 from html import escape
 from pathlib import Path
 from src.runtime_settings import demo_enabled, setting
-from src.dashboard.sales_view import business_today, daily_window
+from src.dashboard.sales_view import business_today
 
 import streamlit as st
 
@@ -209,24 +209,6 @@ def _motion_component():
     return components.component('mixue_gsap_motion', js=javascript, isolate_styles=False)
 
 
-def render_brand_hero(login=False):
-    subtitle = 'Một chút ngọt ngào. Một ngày thật vui.' if login else 'Cùng Tuyết Vương chăm chút từng món ngon và bắt đầu một ca làm việc thật hứng khởi.'
-    st.html(f'''<section class="mixue-stage {'login-stage' if login else ''}" aria-label="Chào mừng đến Mixue">
-    <div class="stage-orbit orbit-one"></div><div class="stage-orbit orbit-two"></div><button class="stage-motion-toggle" type="button" aria-pressed="false">Bật chuyển động</button>
-    <div class="stage-copy"><span class="stage-eyebrow">ICE CREAM &amp; TEA · SINCE 1997</span>
-    <h1><span>Thêm ngọt ngào.</span><br><em>Thêm niềm vui.</em></h1>
-    <p>{subtitle}</p><div class="stage-chips"><span>✦ Pha chế chuẩn vị</span><span>♡ Đồng hành mỗi ngày</span></div>
-    {'' if login else '<a class="stage-cta" href="#mixue-menu">Khám phá thực đơn <span>↗</span></a>'}
-    <div class="stage-foot">MIXUE BEVERAGEOPS <span>39 TÔN QUANG PHIỆT ↗</span></div></div>
-    <div class="stage-gallery"><span class="gallery-word" aria-hidden="true">SWEET!</span><div class="stage-sparkles" aria-hidden="true">{''.join(f'<i style="--i:{i}">✦</i>' for i in range(9))}</div>
-    <figure class="photo-card photo-main" data-tilt><img src="{asset('ice-cream.png')}" alt="Kem ốc quế Mixue và Tuyết Vương"><figcaption>Kem tươi Mixue <span>01 / SWEET CLASSIC</span></figcaption></figure>
-    <figure class="photo-card photo-secondary" data-tilt><img src="{asset('lemonade.png')}" alt="Nước chanh tươi Mixue"><figcaption>Tươi mát mỗi ngày <span>02 / FRESH LEMON</span></figcaption></figure>
-    <div class="stage-stamp">MADE WITH<br><b>LOVE ♡</b></div>
-    <div class="stage-mascot"><img src="{asset('snow-king-reference.png')}" alt="Linh vật Tuyết Vương"><span>Xin chào,<br><b>mình là Tuyết Vương!</b></span></div>
-    </div></section>''')
-    st.markdown('<div class="mixue-ribbon" aria-hidden="true"><div>' + '<span>YOU LOVE ME ♡ I LOVE YOU</span><span> MIXUE ICE CREAM &amp; TEA ✦ </span>' * 4 + '</div></div>', unsafe_allow_html=True)
-
-
 def product_photo(sku, name):
     """Explicit SKU mapping; never substitute a different drink by category."""
     return product_images().get(sku, {}).get('file', 'snow-king-reference.png')
@@ -245,10 +227,6 @@ def menu_group(sku):
     return {'DK': 'Kem', 'TS': 'Trà sữa', 'THQ': 'Trà trái cây', 'ST': 'Sữa trái cây', 'CF': 'Cà phê'}.get(''.join(c for c in sku if c.isalpha()), 'Khác')
 
 
-NAV_ICONS = {
-    'Trang chủ': '🏠', 'Báo cáo & kho': '📊', 'Dự báo': '📈', 'Sơ chế': '🥣', 'Nhập hàng': '📦',
-    'Tem & công thức': '📋', '👥 Quản lý nhân viên': '👥', '💬 Tuyết Vương AI': '💬', '📸 Chốt ca & OCR': '📸',
-}
 NAV_LABELS = {
     'Báo cáo & kho': 'Doanh thu & Kho hàng', 'Tem & công thức': 'Công thức & Mã tem ly', 'Dự báo': 'Dự báo bán hàng',
     'Sơ chế': 'Chuẩn bị & Nấu topping', 'Nhập hàng': 'Đặt hàng nguyên liệu', '👥 Quản lý nhân viên': 'Quản lý nhân viên',
@@ -373,14 +351,6 @@ def render_page_hero(page, user_name=''):
     <div class="mx-hero-art" aria-hidden="true"><span class="mx-orbit"></span><span class="mx-orbit second"></span><span class="mx-spark s1">✦</span><span class="mx-spark s2">✧</span><span class="mx-spark s3">♡</span><div class="mx-bubble">“{bubble}”</div><span class="mx-hero-drink" style="background-image:url('{asset('milk-tea.png')}')"></span>{snow_king_image(144)}</div></section>''', unsafe_allow_html=True)
 
 
-def _delta(cur, prev):
-    if not prev:
-        return ''
-    pct = (cur - prev) / prev * 100
-    cls, arrow = ('mx-up', '↑') if pct >= 0 else ('mx-down', '↓')
-    return f'<em><span class="{cls}">{arrow} {abs(pct):.0f}%</span> so với hôm qua</em>'
-
-
 def render_kpi_cards(items):
     """items: list of (icon, label, value, footnote_html)."""
     cards = ''.join(f'<div class="mx-kpi" data-tilt><div class="mx-kpi-ico tone-{i % 4}">{ui_icon(ico)}</div><div><small>{escape(lbl)}</small>'
@@ -388,41 +358,8 @@ def render_kpi_cards(items):
     st.markdown(f'<div class="mx-kpis">{cards}</div>', unsafe_allow_html=True)
 
 
-def render_revenue_chart(sales, days=7):
-    daily = daily_window(sales, days=days)
-    known = daily[daily['available']]
-    top = float(known['revenue'].max()) if not known.empty else 1.0
-    top = top or 1.0
-    fmt = lambda v: f'{v:,.0f}'.replace(',', '.')
-    bars = []
-    for day, row in daily.iterrows():
-        if not row['available']:
-            bars.append(f'<div class="mx-bar mx-bar-missing" aria-label="{day:%d/%m}: Chưa có kết quả"><span>Chưa có</span></div>')
-        else:
-            bars.append(f'<div class="mx-bar" tabindex="0" aria-label="{day:%d/%m}: {fmt(row.revenue)} đồng"><span class="mx-bar-tip">{fmt(row.revenue)} đ<br>{row.cups:.0f} ly</span><i style="height:{max(row.revenue / top * 85, 2):.0f}%"></i></div>')
-    axis = ''.join(f'<span>{day:%d/%m}</span>' for day in daily.index)
-    total = f"{fmt(known['revenue'].sum())} <small>đ</small>" if len(known) == days else 'Chưa có kết quả' if known.empty else 'Chưa đủ dữ liệu'
-    st.markdown(f'''<div class="mx-card mx-revenue"><div class="mx-card-heading"><h3>{ui_icon('chart')} Doanh thu {days} ngày gần nhất</h3><span class="mx-tag">Đến hôm nay</span></div>
-    <div class="mx-revenue-total">{total}</div><p class="mx-caption">{daily.index[0]:%d/%m} – {daily.index[-1]:%d/%m/%Y} · Đã cập nhật {len(known)}/{days} ngày</p>
-    <div class="mx-chart">{''.join(bars)}</div><div class="mx-axis">{axis}</div><p class="mx-caption">Ngày chưa nhập dữ liệu hiển thị “Chưa có”, không tính thành 0.</p></div>''', unsafe_allow_html=True)
-
-
 def page_link(page, label):
     return f'<button class="mx-text-link" type="button" data-command-page="{escape(nav_label(page))}">{escape(label)} <span>↗</span></button>'
-
-
-PILLARS = (
-    ('📸 Chốt ca & OCR', 'pillar_open_ocr', 'TRỤ CỘT 1', '📸 Verifiable Vision OCR',
-     'Đọc sổ chốt ca viết tay và hóa đơn POS có kiểm chứng.',
-     ['Tách vùng 🧾 POS / ✍️ sổ tay / ảnh ghép', 'Kiểm tra ảnh mờ trước khi tin số',
-      'Không tự nhân 1.000 · không tự cộng 962 + 629', 'Gắn cờ uncertain + review_reason',
-      'Đối soát số học chéo sổ tay ↔ POS', 'Benchmark 7 nhóm lỗi OCR']),
-    ('💬 Tuyết Vương AI', 'pillar_open_chat', 'TRỤ CỘT 2', '💬 Stateful AI Operations Agent',
-     'LangGraph + Human-in-the-Loop + RBAC, trả lời dựa trên bằng chứng.',
-     ['Đồ thị 6 node: guard · model/offline · authorize · tools · approval', 'interrupt() chờ Quản lý duyệt DRAFT_OCR / PLAN_*',
-      'Lưu vết SqliteSaver (checkpoints.sqlite)', 'Chặn ảo giác số liệu: MISSING_EVIDENCE',
-      'RBAC phía máy chủ, không tin lời tự nhận', 'Gửi ảnh chốt ca ngay trong khung chat']),
-)
 
 
 @st.cache_data(ttl=600, show_spinner=False)
@@ -542,116 +479,6 @@ def render_home_greeting(agent, user_role, user_name):
     <img class="px-mascot" src="{asset('snow-king-cutout.png')}" alt="Linh vật Tuyết Vương"></div></section>''', unsafe_allow_html=True)
 
 
-def render_pillars(user_role):
-    """The two technical pillars of the thesis, with live status, first on the home page."""
-    from src.auth import get_allowed_pages
-    pages = get_allowed_pages(user_role)
-    visible = [p for p in PILLARS if p[0] in pages]
-    if not visible:
-        return
-    state = st.session_state.get('_home_state') or {}
-    st.markdown('<div class="px-section-head"><h2>2 trụ cột kỹ thuật</h2>'
-                '<span>Mọi số liệu ghi sổ đều qua bằng chứng và người phê duyệt</span></div>', unsafe_allow_html=True)
-    summary = state.get('summary') or {}
-    columns = st.columns(len(visible), gap='medium')
-    for column, (page, key, tag, title, lead, bullets) in zip(columns, visible):
-        with column, st.container(border=True, key=f'{key}_card'):
-            if key == 'pillar_open_ocr':
-                icon, heading = ui_icon('camera'), 'Verifiable Vision OCR'
-                variance = summary.get('variance_pos_vnd')
-                closed_today = state.get('reports', 0)
-                stats = [('Ca đã chốt hôm nay', f'{closed_today}/3', None),
-                         ('Lệch POS ↔ sổ hôm nay', f"{variance:+,.0f} đ".replace(',', '.').replace('-', '−')
-                          if closed_today and variance is not None else '—', None),
-                         ('Số sai không bị gắn cờ', f"{state.get('bench_raw', '—')} → {state.get('bench_verified', '—')}", None)]
-                draft = state.get('draft')
-                badge = (f'<span class="px-pill warn">{len(draft.get("missing_fields") or [])} trường chờ xác nhận</span>' if draft
-                         else '<span class="px-pill ok">Không có dự thảo treo</span>')
-                extra = ('<p>Tách vùng 🧾 POS và ✍️ sổ tay, kiểm tra ảnh mờ, không tự nhân 1.000, không tự cộng '
-                         '<code class="px-code">962 + 629</code>, đối soát cộng ngang.</p>')
-            else:
-                icon, heading = ui_icon('chat'), 'Tuyết Vương AI · LangGraph Agent'
-                pending = state.get('pending_approval')
-                waiting = (1 if pending else 0) + state.get('plans_waiting', 0) + state.get('staff_waiting', 0)
-                stats = [('Phê duyệt đang chờ', str(waiting), waiting),
-                         ('Công cụ được phép', str(state.get('tools_allowed', '—')), state.get('tools_allowed')),
-                         ('Chế độ', 'AI Online' if state.get('online') else 'Offline', None)]
-                badge = ('<span class="px-pill red">⏸ 1 interrupt đang chờ</span>' if pending
-                         else '<span class="px-pill slate">Không có interrupt</span>')
-                nodes = ['guard', 'model / offline', 'authorize', 'tools', 'approval ⏸' if pending else 'approval']
-                chain = '<span class="px-arrow" aria-hidden="true">→</span>'.join(
-                    f'<span class="px-node{" stop" if n.endswith("⏸") else ""}">{n}</span>' for n in nodes)
-                extra = (f'<div class="px-chain" aria-label="Đồ thị LangGraph">{chain}</div>'
-                         '<p>Gửi ảnh chốt ca ngay trong chat, sửa số bằng lời, Quản lý bấm Phê duyệt mới ghi sổ. '
-                         'RBAC kiểm tra ở máy chủ, thiếu bằng chứng thì không kết luận.</p>')
-            cells = ''.join(
-                f'<div class="px-stat"><small>{escape(label)}</small><b' + (f' data-count="{count}"' if isinstance(count, int) else '') + f'>{escape(value)}</b></div>'
-                for label, value, count in stats)
-            st.markdown(f'''<div class="px-pillar"><div class="px-pillar-head"><span class="px-pillar-icon">{icon}</span>
-            <div style="flex:1"><span class="px-eyebrow">{tag}</span><h3>{escape(heading)}</h3></div>{badge}</div>
-            <div class="px-stats">{cells}</div>{extra}</div>''', unsafe_allow_html=True)
-            label = 'Mở Chốt ca & Đối soát OCR →' if key == 'pillar_open_ocr' else 'Mở Tuyết Vương AI →'
-            with st.container(horizontal=True, key=f'{key}_actions'):
-                st.button(label, key=key, type='primary', width='content', on_click=navigate_to, args=(page,))
-                if key == 'pillar_open_chat':
-                    st.button('Xem phê duyệt đang chờ', key='pillar_view_pending', width='content',
-                              on_click=navigate_to, args=(page,))
-
-
-def render_home_kpis(sales, menu):
-    """Today's figures (realtime). A day without data says so; past days are looked up on their own pages."""
-    from src.engine.shift_service import get_all_shift_reports
-    number = lambda value: f'{value:,.0f}'.replace(',', '.')
-    state = st.session_state.get('_home_state') or {}
-    today_d = business_today()
-    day = today_d.isoformat()
-    label_day = f'{today_d:%d/%m}'
-    cards = []
-    rows = sales.iloc[0:0]
-    last_sales_day = None
-    if not sales.empty:
-        frame = sales.copy()
-        frame['business_date'] = frame['business_date'].astype(str).str[:10]
-        rows = frame[frame['business_date'] == day]
-        last_sales_day = frame['business_date'].max()
-    if not rows.empty:
-        top = rows.groupby('sku_name')['quantity_sold'].sum().sort_values(ascending=False)
-        cards += [(f'Doanh thu POS hôm nay · {label_day}', f"{number(rows['revenue_vnd'].sum())} đ", 'Nguồn: sales_daily', ''),
-                  ('Số ly bán hôm nay', f"{number(rows['quantity_sold'].sum())} ly",
-                   f'{escape(top.index[0])} dẫn đầu · {int(top.iloc[0])} ly' if len(top) else '', '')]
-    else:
-        latest = last_sales_day or ''
-        shift_days = [str(r.get('business_date'))[:10] for r in get_all_shift_reports()
-                      if r.get('status', 'APPROVED') == 'APPROVED' and r.get('business_date')]
-        latest_shift = max(shift_days, default='')
-        if latest_shift > latest:
-            hint = f'Ngày gần nhất có số: {latest_shift[8:10]}/{latest_shift[5:7]} (chốt ca đã duyệt)'
-        elif latest:
-            hint = f'Ngày gần nhất có số: {latest[8:10]}/{latest[5:7]}'
-        else:
-            hint = 'Chưa nhập dữ liệu bán hàng'
-        cards += [(f'Doanh thu POS hôm nay · {label_day}', 'Chưa có số', escape(hint), 'muted'),
-                  ('Số ly bán hôm nay', 'Chưa có số', 'Cập nhật khi nhập doanh thu POS', 'muted')]
-    summary = state.get('summary') or {}
-    reports = get_all_shift_reports(day)
-    if reports:
-        signer = next((r.get('signed_by') for r in reversed(reports) if r.get('signed_by')), '')
-        variance = summary.get('variance_pos_vnd') or 0
-        cards += [(f'Tổng thu sổ chốt ca · {label_day}', f"{number(summary.get('total_collected_vnd') or 0)} đ",
-                   f'{len(reports)}/3 ca đã duyệt' + (f' · ký: {escape(signer)}' if signer else ''), ''),
-                  ('Lệch so với thực thu POS', f"{number(variance).replace('-', '−')} đ",
-                   f"POS {number(summary.get('pos_collected_vnd') or 0)} đ · " + ('trong ngưỡng' if abs(variance) < 50_000 else 'cần kiểm tra'),
-                   'ok' if abs(variance) < 50_000 else 'bad')]
-    else:
-        last = state.get('last_closed')
-        cards += [(f'Tổng thu sổ chốt ca · {label_day}', 'Chưa chốt ca nào',
-                   'Ngày gần nhất đã chốt: ' + f'{last:%d/%m}' if last and last != today_d else 'Chốt ca ở trang OCR', 'muted'),
-                  ('Lệch so với thực thu POS', '—', 'Có khi ca tối đã chốt cùng phiếu POS', 'muted')]
-    html = ''.join(f'<div class="px-kpi"><small>{escape(label)}</small><b class="px-num {tone}">{escape(value)}</b><span>{note}</span></div>'
-                   for label, value, note, tone in cards)
-    st.markdown(f'<section class="px-kpis" aria-label="Số liệu hôm nay">{html}</section>', unsafe_allow_html=True)
-
-
 def render_shortcuts(user_role):
     from src.auth import get_allowed_pages
     pages = get_allowed_pages(user_role)
@@ -674,32 +501,6 @@ def forecast_snapshot(target_date):
         return engine.forecast_demand(target_date=target_date, model='auto')
     finally:
         engine.close()
-
-
-def render_home_overview(menu, sales):
-    """Read-only overview of actual sales, pending stock requests and D+1 demand."""
-    from src.engine.daily_stock_service import get_pending_requests
-    requests = get_pending_requests()
-    with st.container(key='home_analytics'):
-        left, right = st.columns([1.12, 1], gap='medium')
-        with left:
-            render_revenue_chart(sales)
-        with right:
-            rows = ''.join(f'<div class="mx-request"><span class="mx-list-icon tone-2">{ui_icon("box")}</span><div><b>{escape(r["ingredient_name"])}</b><small>{escape(r["type_vi"])} · {r["quantity"]:g} · {escape(r["recorded_by"])}</small></div><span class="mx-status">Chờ duyệt</span></div>' for r in requests[:4])
-            if not rows:
-                rows = '<div class="mx-all-clear"><span>✓</span><b>Mọi yêu cầu đã được xử lý</b><p>Bạn đã sẵn sàng cho một ca làm thật tốt!</p></div>'
-            st.markdown(f'<section class="mx-card mx-approvals"><div class="mx-card-heading"><h3>{ui_icon("clock")} Yêu cầu chờ phê duyệt <em>{len(requests)}</em></h3>{page_link("Báo cáo & kho", "Xem tất cả")}</div><p class="mx-caption">Theo dõi các lệnh kho cần bạn xử lý</p>{rows}<div class="mx-approval-foot"><i></i> Chỉ ghi sổ khi được quản lý phê duyệt</div></section>', unsafe_allow_html=True)
-
-    today = business_today()
-    latest = max(sales['business_date']) if not sales.empty else None
-    target = today + timedelta(days=1)
-    forecast = forecast_snapshot(target) if latest == today else sales.iloc[:0]
-    top_forecast = forecast.sort_values('predicted_qty', ascending=False).head(3) if not forecast.empty else forecast
-    product_rows = ''.join(f'<div class="mx-product-row"><img src="{asset(product_photo(r.sku_id, r.sku_name))}" alt="" loading="lazy"><span>{escape(r.sku_name)}</span><b>{r.predicted_qty:,.0f} <small>ly</small></b></div>' for r in top_forecast.itertuples())
-    total_label = f"{forecast['predicted_qty'].sum():,.0f} <small>ly dự kiến</small>" if not forecast.empty else 'Chưa đủ dữ liệu dự báo'
-    tops = sales[sales['business_date'] == today].groupby(['sku_id', 'sku_name'])['quantity_sold'].sum().sort_values(ascending=False).head(3)
-    best_rows = ''.join(f'<div class="mx-product-row"><span class="mx-rank">{i+1:02}</span><img src="{asset(product_photo(sku, name))}" alt="" loading="lazy"><span>{escape(name)}</span><b>{qty:,.0f} <small>ly</small></b></div>' for i, ((sku, name), qty) in enumerate(tops.items()))
-    st.markdown(f'''<div class="mx-summary-grid"><section class="mx-card"><div class="mx-card-heading"><h3>{ui_icon('trend')} Nhu cầu ngày kế tiếp</h3><span class="mx-tag">{target:%d/%m}</span></div><div class="mx-summary-number">{total_label}</div><p class="mx-caption">Trung bình trượt 7 ngày · dựa trên dữ liệu đến {latest.strftime('%d/%m/%Y') if latest else 'chưa có'}</p>{product_rows}{page_link('Dự báo', 'Khám phá dự báo')}</section><section class="mx-card"><div class="mx-card-heading"><h3>{ui_icon('star')} Món được yêu thích</h3><span class="mx-tag">{today:%d/%m}</span></div><p class="mx-caption">Top 3 sản phẩm theo số ly bán ra</p>{best_rows or '<p>Chưa có kết quả hôm nay.</p>'}{page_link('Tem & công thức', 'Tra cứu công thức')}</section><section class="mx-card mx-ai-note"><div class="mx-card-heading"><h3>{ui_icon('chat')} Một chút gợi ý từ AI</h3><span>✦</span></div><div class="mx-ai-intro">{snow_king_image(62)}<p>Một ngày vận hành tốt<br>bắt đầu từ sự chuẩn bị.</p></div><p>Xem dự báo, kiểm tra nguyên liệu và chuẩn bị topping trước giờ cao điểm cùng Tuyết Vương nhé!</p>{page_link('💬 Tuyết Vương AI', 'Trò chuyện với Tuyết Vương')}</section></div>''', unsafe_allow_html=True)
 
 
 def _SwitchToChatTab():
@@ -1008,60 +809,7 @@ def _render_chat_evidence(refs):
         st.caption(' · '.join(labels))
 
 
-EFFECT_VI = {'read': 'chỉ đọc', 'draft': 'tạo bản nháp', 'approval': 'cần Quản lý duyệt'}
-GUARD_VI = {'PROMPT_INJECTION_DEFENSE': 'cố đổi hướng dẫn của trợ lý (prompt injection)',
-            'CREDENTIAL_EXFILTRATION_DEFENSE': 'đòi mật khẩu / API key',
-            'PRIVILEGE_ESCALATION_DEFENSE': 'đòi nâng quyền tài khoản'}
-
-
-def trace_steps(trace, mode=None) -> list[str]:
-    """The agent's run as plain-language steps: guardrail, model, permission check, tools, approval."""
-    def fmt_args(args):
-        if not args:
-            return ''
-        return ', '.join(f'{k}={v}' for k, v in args.items())
-    steps = []
-    for ev in trace or []:
-        node = ev.get('node')
-        if node == 'guard':
-            if ev.get('result') == 'blocked':
-                steps.append(f"🛡️ **Guardrail chặn** — {GUARD_VI.get(ev.get('category'), ev.get('category', 'vi phạm quy định'))}; không gọi AI, không gọi tool.")
-            elif ev.get('result') == 'direct_reply':
-                steps.append('🛡️ **Guardrail:** câu chào hỏi / hỏi danh tính → trả lời trực tiếp, không gọi AI.')
-            elif ev.get('forced_tool'):
-                steps.append(f"🛡️ **Guardrail:** hợp lệ · máy chủ chọn sẵn tool `{ev['forced_tool']}` (không để AI tự chọn).")
-            else:
-                steps.append('🛡️ **Guardrail:** câu hỏi hợp lệ (không chứa prompt injection, đòi bí mật hay nâng quyền).')
-        elif node == 'model':
-            tokens = f" · {ev.get('input_tokens', 0):,} → {ev.get('output_tokens', 0):,} token".replace(',', '.') if ev.get('input_tokens') else ''
-            if ev.get('requested'):
-                steps.append(f"🧠 **Mô hình `{ev.get('model', 'AI')}`** quyết định gọi tool: " + ', '.join(f'`{t}`' for t in ev['requested']) + tokens)
-            else:
-                steps.append(f"🧠 **Mô hình `{ev.get('model', 'AI')}`** soạn câu trả lời từ kết quả tool{tokens}")
-        elif node == 'authorize':
-            if ev.get('result') == 'denied':
-                steps.append(f"🔐 **Kiểm tra quyền:** vai trò `{ev.get('role')}` không được dùng `{ev.get('tool')}` → dừng.")
-            else:
-                for call in ev.get('calls') or []:
-                    steps.append(f"🔐 **Kiểm tra quyền** (`{ev.get('role')}`): cho phép `{call['tool']}` — quyền {call.get('permission')}, "
-                                 f"{EFFECT_VI.get(call.get('effect'), call.get('effect'))}; tham số đã kiểm tra kiểu.")
-                if ev.get('result') == 'invalid_args':
-                    steps.append('🔐 Tham số AI đưa sai kiểu → trả lỗi lại cho mô hình, không chạy tool.')
-        elif node == 'tools':
-            args = fmt_args(ev.get('args'))
-            extra = ' · '.join(x for x in (ev.get('summary'), f"{ev['sources']} nguồn" if ev.get('sources') else '') if x)
-            steps.append(f"🔧 **Tool `{ev.get('tool')}`**({args}) → `{ev.get('status')}` · {ev.get('duration_ms', 0)} ms" + (f' · {extra}' if extra else ''))
-        elif node == 'approval':
-            steps.append(f"⏸️ **Chờ duyệt:** thao tác ghi sổ dừng lại cho Quản lý xác nhận → `{ev.get('status')}`.")
-        elif node == 'grounded_response':
-            steps.append('📌 **Trả lời theo đúng số liệu tool trả về** (không để mô hình tự viết lại con số).')
-        elif node == 'router':
-            steps.append(f"🧭 **Bộ định tuyến:** xử lý trực tiếp bằng `{ev.get('tool')}`.")
-        elif node == 'offline_rules':
-            steps.append(f"📴 **Chế độ offline** ({ev.get('result')}) → bộ luật tra cứu cục bộ `{ev.get('tool') or '—'}` trả lời.")
-    if not steps and mode:
-        steps.append(f'Chế độ: `{mode}`.')
-    return steps
+from src.agent.trace_format import trace_steps  # noqa: E402
 
 
 def render_agent_trace(trace, mode=None):

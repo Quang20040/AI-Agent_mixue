@@ -9,14 +9,12 @@ Quản lý:
 """
 
 from typing import Any
-from datetime import date, timedelta
 from src.database import SessionLocal
 from src.models import MenuItem, RecipeBOM, Ingredient
 from src.engine.bom_engine import BOMEngine
 from src.engine.forecasting import ForecastingEngine
 from src.engine.optimizer import OptimizerEngine
 from src.engine.validator import IndependentPlanValidator
-from src.engine.plan_service import save_plan
 
 SUGAR_MAP = {
     "0": "0% (Không đường)",
@@ -360,59 +358,6 @@ class OperationsBOMAgent:
             "standard_bar_rule": " | ".join(bar_rules),
             "rules_list": bar_rules,
             "evidence_ref": f"sticker_rules:{clean_code}"
-        }
-
-    def compute_topping_prep_plan(self, target_date: str | None = None, buffer_pct: float = 0.10) -> dict[str, Any]:
-        """Tính toán kế hoạch nấu mẻ trân châu & topping cho ngày tới."""
-        t_date = target_date or (date.today() + timedelta(days=1)).isoformat()
-        prep_draft = self.opt_engine.generate_topping_prep_plan(target_date=t_date, buffer_pct=buffer_pct)
-        validation_res = self.validator.validate_prep_plan(prep_draft)
-
-        saved = save_plan({
-            "plan_type": "PREP_TOPPING",
-            "target_date": t_date,
-            "status": "DRAFT",
-            "requires_manager_approval": True,
-            "created_by": "Tuyết Vương AI",
-            "data": prep_draft,
-            "validation": validation_res
-        })
-
-        return {
-            "status": "SUCCESS",
-            "target_date": t_date,
-            "draft_plan_id": saved["plan_id"],
-            "requires_manager_approval": True,
-            "verification": validation_res,
-            "prep_items": prep_draft.get("prep_items", []),
-            "evidence_ref": f"plan_prep:{t_date}"
-        }
-
-    def compute_replenishment_po_plan(self, target_date: str | None = None, lead_time_days: int = 2) -> dict[str, Any]:
-        """Tính toán đơn đặt hàng bổ sung nguyên liệu (PO) làm tròn theo kiện/thùng."""
-        t_date = target_date or (date.today() + timedelta(days=1)).isoformat()
-        po_draft = self.opt_engine.generate_replenishment_orders(target_date=t_date, lead_time_days=lead_time_days)
-        validation_res = self.validator.validate_replenishment_orders(po_draft)
-
-        saved = save_plan({
-            "plan_type": "PURCHASE_ORDER",
-            "target_date": t_date,
-            "status": "DRAFT",
-            "requires_manager_approval": True,
-            "created_by": "Tuyết Vương AI",
-            "data": po_draft,
-            "validation": validation_res
-        })
-
-        return {
-            "status": "SUCCESS",
-            "target_date": t_date,
-            "draft_plan_id": saved["plan_id"],
-            "requires_manager_approval": True,
-            "verification": validation_res,
-            "po_items": po_draft.get("orders", []),
-            "total_estimated_cost": po_draft.get("total_estimated_cost", 0),
-            "evidence_ref": f"plan_po:{t_date}"
         }
 
     def get_sop_prep_guide(self, query: str) -> dict[str, Any] | None:

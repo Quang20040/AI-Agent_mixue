@@ -1,4 +1,4 @@
-from src.dashboard.brand_ui import trace_steps
+from src.agent.trace_format import trace_steps
 
 
 def test_trace_is_explained_step_by_step():

@@ -213,17 +213,6 @@ def cached_backtest(_engine, as_of_iso):
     return _engine.run_backtest(as_of=_date.fromisoformat(as_of_iso))
 
 
-def quick_chart(df, x, y, kind, color):
-    """A plain Vega-Lite spec: st.line_chart/bar_chart build and validate an Altair chart on every run (~0.1 s each)."""
-    data = pd.DataFrame({x: pd.to_datetime(df[x]).dt.strftime("%Y-%m-%d"), y: df[y]})
-    st.vega_lite_chart(data, {
-        "mark": {"type": kind, "color": color, "tooltip": True, **({"point": True} if kind == "line" else {})},
-        "encoding": {"x": {"field": x, "type": "temporal", "title": None, "axis": {"format": "%d/%m"}},
-                     "y": {"field": y, "type": "quantitative", "title": None}},
-        "height": 260,
-    }, use_container_width=True)
-
-
 @st.fragment
 def render_live_home():
     render_home(get_cached_menu_list(), get_cached_sales(), user_role=user_role)
@@ -271,7 +260,7 @@ render_mobile_navigation(allowed_tabs, section)
 
 if is_admin and section not in (OCR_PAGE, "Trang chủ"):
     # Everything waiting for a manager is on the home page; say so wherever the manager is.
-    from src.dashboard.approval_center import pending_items
+    from src.engine.approvals import pending_items
     _waiting = pending_items(agent, user_role, user_name, st.session_state.get("username", user_name))
     if _waiting:
         def _open_inbox():

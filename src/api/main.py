@@ -152,7 +152,7 @@ def sales_daily(days: int = Query(7, ge=1, le=92), end: date | None = None, stor
                 user: User = Depends(admin_user)):
     """One recorded revenue figure per day (approved shift closing, else POS) — the same numbers as the app."""
     from datetime import timedelta
-    from src.dashboard.sales_view import business_today
+    from src.engine.stock_matrix import today_vn as business_today
     from src.engine.revenue import daily_revenue
     last = end or business_today()
     frame = daily_revenue(last - timedelta(days=days - 1), last)
@@ -255,7 +255,7 @@ async def ocr_read(files: list[UploadFile] = File(..., description='1–5 ảnh 
 
 @api.get('/v1/stores/{store_id}/approvals', tags=['approvals'])
 def approvals(store_id: str = Depends(store_access), user: User = Depends(admin_user)):
-    from src.dashboard.approval_center import pending_items
+    from src.engine.approvals import pending_items
     return _plain(pending_items(agent_for(user), user.role, user.name, user.username))
 
 
@@ -266,12 +266,12 @@ class DecisionIn(BaseModel):
 @api.post('/v1/stores/{store_id}/approvals/{kind}/{item_id}', tags=['approvals'])
 def decide(body: DecisionIn, kind: str = Path(..., pattern='^(shift|stock|plan)$'), item_id: str = Path(..., max_length=80),
            store_id: str = Depends(store_access), user: User = Depends(admin_user)):
-    from src.dashboard.approval_center import _decide, pending_items
+    from src.engine.approvals import decide, pending_items
     agent = agent_for(user)
     items = [i for i in pending_items(agent, user.role, user.name, user.username) if i['kind'] == kind and i['id'] == item_id]
     if not items:
         raise HTTPException(404, 'Không có mục chờ duyệt này (có thể đã được xử lý).')
-    return {'messages': _decide(agent, items, body.approve, user.role, user.name, user.username)}
+    return {'messages': decide(agent, items, body.approve, user.role, user.name, user.username)}
 
 
 # --- purchase orders (manager) -----------------------------------------------------------------------------
@@ -327,7 +327,7 @@ class ChatIn(BaseModel):
 def chat(body: ChatIn, store_id: str = Depends(store_access), user: User = Depends(current_user)):
     """Ask the assistant. A reply with `pending_approval` waits for POST .../chat/approval (manager accounts)."""
     result = agent_for(user).process_query(body.message, user.role, user.name, user_id=user.username)
-    from src.dashboard.brand_ui import trace_steps
+    from src.agent.trace_format import trace_steps
     out = {k: result.get(k) for k in ('text', 'tool_called', 'evidence_refs', 'pending_approval', 'execution_mode', 'trace')}
     out['steps'] = trace_steps(result.get('trace'), result.get('execution_mode'))
     return _plain(out)
@@ -336,7 +336,7 @@ def chat(body: ChatIn, store_id: str = Depends(store_access), user: User = Depen
 @api.post('/v1/stores/{store_id}/chat/approval', tags=['assistant'])
 def chat_approval(body: DecisionIn, store_id: str = Depends(store_access), user: User = Depends(admin_user)):
     result = agent_for(user).resume_approval(body.approve, user.role, user.name, user_id=user.username)
-    from src.dashboard.brand_ui import trace_steps
+    from src.agent.trace_format import trace_steps
     return _plain({**{k: result.get(k) for k in ('text', 'tool_called', 'evidence_refs', 'trace')},
                    'steps': trace_steps(result.get('trace'), result.get('execution_mode'))})
 

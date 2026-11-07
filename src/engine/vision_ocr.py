@@ -56,10 +56,6 @@ SHIFT_COMPONENT_FIELDS = (
     'be_food_vnd',
 )
 
-DOCUMENT_SOURCES = ('pos_receipt', 'handwritten_ledger', 'both_conflicting', 'not_applicable', 'unknown')
-DOCUMENT_TYPES = ('pos_receipt', 'handwritten_ledger', 'composite', 'non_financial', 'unreadable', 'unknown')
-
-
 class MoneyReading(BaseModel):
     model_config = ConfigDict(extra='forbid')
     value: int | None = Field(default=None, strict=True)
