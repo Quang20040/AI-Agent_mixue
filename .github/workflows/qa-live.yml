@@ -22,7 +22,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Embedding experiment
+        if: github.event.inputs.mode == 'mlexp'
+        run: |
+          pip install -q sentence-transformers numpy
+          python scripts/mlexp/embed.py mlexp_out
+          cd mlexp_out && git init -q -b ml-exp
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -q -m "Embeddings for ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" HEAD:ml-exp
       - name: Install
+        if: github.event.inputs.mode != 'mlexp'
         run: |
           pip install playwright
           python -m playwright install --with-deps chromium
@@ -78,10 +89,10 @@ jobs:
         if: github.event.inputs.mode == 'shots'
         run: python scripts/report_shots.py "${{ github.event.inputs.url || 'https://mixue-beverageops-demo.onrender.com' }}" qa_live
       - name: Run QA
-        if: github.event.inputs.mode != 'shots' && github.event.inputs.mode != 'video' && github.event.inputs.mode != 'tts' && !startsWith(github.event.inputs.mode, 'ocr')
+        if: github.event.inputs.mode != 'shots' && github.event.inputs.mode != 'video' && github.event.inputs.mode != 'tts' && !startsWith(github.event.inputs.mode, 'ocr') && github.event.inputs.mode != 'mlexp'
         run: python scripts/qa_live.py "${{ github.event.inputs.url || 'https://mixue-beverageops-demo.onrender.com' }}" qa_live "${{ github.event.inputs.mode || 'all' }}"
       - name: Publish to qa-results branch
-        if: always() && github.event.inputs.mode != 'video' && github.event.inputs.mode != 'tts' && !startsWith(github.event.inputs.mode, 'ocr')
+        if: always() && github.event.inputs.mode != 'video' && github.event.inputs.mode != 'tts' && !startsWith(github.event.inputs.mode, 'ocr') && github.event.inputs.mode != 'mlexp'
         run: |
           [ -d qa_live ] || exit 0
           cd qa_live
