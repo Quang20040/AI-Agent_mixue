@@ -133,7 +133,8 @@ def _built_css_url() -> str | None:
     css = _brand_css()
     digest = hashlib.sha256(css.encode()).hexdigest()[:12]
     # inside the file, image URLs are relative to the stylesheet (static/_build/), not to the page
-    css_file = css.replace('app/static/', '../')
+    import re
+    css_file = re.sub(r'(?<![/\w])app/static/', '../', css)  # absolute /app/static/ URLs stay as they are
     target = STATIC_DIR / '_build' / f'app-{digest}.css'
     try:
         if not target.is_file():
