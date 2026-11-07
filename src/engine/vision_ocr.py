@@ -17,7 +17,8 @@ import logging
 import os
 import re
 import time
-from concurrent.futures import ThreadPoolExecutor
+import threading
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -738,7 +739,15 @@ def _inline_refs(schema: dict[str, Any]) -> dict[str, Any]:
     return resolve(schema)
 
 
-OCR_TIMEOUT_SECONDS = float(os.environ.get('OCR_TIMEOUT_SECONDS') or 110)
+# With thinking held at 'low' a page reads in ~10-30 s; past this the next model in the chain is faster.
+OCR_TIMEOUT_SECONDS = float(os.environ.get('OCR_TIMEOUT_SECONDS') or 60)
+
+
+def ocr_reasoning_effort() -> str:
+    """How hard the vision model may think. Copying a page needs little reasoning; Gemini 3's default
+    ('high') spent most of a 1-2 minute read thinking. none | low | medium | high."""
+    variables = {**dotenv_values(ROOT / '.env'), **os.environ}
+    return (variables.get('OCR_REASONING_EFFORT') or 'low').strip().lower()
 # Tried in order when the configured model fails (retired, overloaded, out of quota, rejects the request).
 DEFAULT_GEMINI_FALLBACKS = ('gemini-3.8-flash', 'gemini-3.5-flash-lite')
 
@@ -760,8 +769,10 @@ def is_gemini(cfg: AgentSettings) -> bool:
 
 def build_ocr_reader(cfg: AgentSettings, mode: str = 'json_schema_strict', model_id: str | None = None):
     """The configured vision model, bound to the JSON extraction format for `mode`."""
+    effort = ocr_reasoning_effort() if is_gemini(cfg) else cfg.reasoning_effort
     reader = cfg.model_copy(update={'model': model_id or ocr_model_id(cfg), 'max_output_tokens': 12000, 'max_retries': 0,
-                                    'model_timeout': OCR_TIMEOUT_SECONDS, 'run_timeout': OCR_TIMEOUT_SECONDS}).build_model()
+                                    'model_timeout': OCR_TIMEOUT_SECONDS, 'run_timeout': OCR_TIMEOUT_SECONDS,
+                                    'reasoning_effort': effort}).build_model()
     if mode == 'json_object':
         response_format: dict[str, Any] = {'type': 'json_object'}
     else:
@@ -859,7 +870,7 @@ def extract_image(
         def read_one(item):
             return extract_image(image_bytes=item[0], shift_hint=shift_hint, target_date=target_date, settings=cfg, model=model)
 
-        with ThreadPoolExecutor(max_workers=2) as pool:
+        with ThreadPoolExecutor(max_workers=len(valid_images)) as pool:  # photos are read side by side
             results = list(pool.map(read_one, valid_images))
         if not shift_hint:
             # No shift chosen: pick one shift for all images (readings are cached, so this costs no model calls).
@@ -867,17 +878,45 @@ def extract_image(
             if found:
                 from src.engine.day_sheet import SHIFTS
                 shift_hint = next(s for s in SHIFTS if s in found)
-                with ThreadPoolExecutor(max_workers=2) as pool:
+                with ThreadPoolExecutor(max_workers=len(valid_images)) as pool:
                     results = list(pool.map(read_one, valid_images))
         return merge_image_extractions(results, names=[item[1] for item in valid_images],
                                        shas=[item[3] for item in valid_images], shift_hint=shift_hint, target_date=target_date)
 
-    attempts: list[str] = []
     # One reading covers every shift on the page: switching the shift on screen re-uses it.
     sheet_key = (valid_images[0][3], ocr_model_id(cfg)) if model is None else None
     if sheet_key and sheet_key in _DAY_SHEETS:
         sheet, model_name = _DAY_SHEETS[sheet_key]
         return _from_day_sheet(sheet, valid_images, shift_hint, target_date, ['cache'], model_name)
+    if sheet_key:
+        with _INFLIGHT_LOCK:
+            pending = _INFLIGHT.get(sheet_key)
+            mine = pending is None
+            if mine:
+                pending = _INFLIGHT[sheet_key] = Future()
+        if not mine:
+            # The same photo is already being read (prefetch after upload, or another session): wait for it.
+            try:
+                pending.result(timeout=OCR_TIMEOUT_SECONDS * 2)
+            except Exception:  # noqa: BLE001 - the reader that failed reports its own error; read again here
+                pass
+            if sheet_key in _DAY_SHEETS:
+                sheet, model_name = _DAY_SHEETS[sheet_key]
+                return _from_day_sheet(sheet, valid_images, shift_hint, target_date, ['cache'], model_name)
+            return extract_image(image_bytes=valid_images[0][0], shift_hint=shift_hint, target_date=target_date,
+                                 settings=cfg)
+        try:
+            return _read_page(valid_images, sheet_key, shift_hint, target_date, cfg, model)
+        finally:
+            with _INFLIGHT_LOCK:
+                _INFLIGHT.pop(sheet_key, None)
+            pending.set_result(True)
+    return _read_page(valid_images, sheet_key, shift_hint, target_date, cfg, model)
+
+
+def _read_page(valid_images, sheet_key, shift_hint, target_date, cfg, model):
+    """Ask the model chain to transcribe one photo (or read an injected reader's answer)."""
+    attempts: list[str] = []
     if model is not None:
         plan = [(None, None)]
     else:
@@ -922,6 +961,36 @@ def extract_image(
 
 
 _DAY_SHEETS: dict[tuple[str, str], tuple[Any, str]] = {}
+_INFLIGHT: dict[tuple[str, str], Future] = {}
+_INFLIGHT_LOCK = threading.Lock()
+_PREFETCH = ThreadPoolExecutor(max_workers=3, thread_name_prefix='ocr-prefetch')
+
+
+def prefetch_reading(image_path: str | Path, target_date: str | None = None,
+                     settings: AgentSettings | None = None) -> bool:
+    """Start reading a just-uploaded photo in the background, so 'Đọc ảnh bằng AI' finds it done or under way.
+    Only when live reading is allowed; OCR_PREFETCH=0 turns it off. Returns whether a read was queued."""
+    variables = {**dotenv_values(ROOT / '.env'), **os.environ}
+    if str(variables.get('OCR_PREFETCH', '1')).strip().lower() in {'0', 'false', 'no', 'off'}:
+        return False
+    cfg = settings or AgentSettings.from_env()
+    if not (cfg.llm_enabled and cfg.allow_external_transfer):
+        return False
+    try:
+        data = Path(image_path).read_bytes()
+    except OSError:
+        return False
+    if (hashlib.sha256(data).hexdigest(), ocr_model_id(cfg)) in _DAY_SHEETS:
+        return False
+    _PREFETCH.submit(_quiet_read, data, target_date, cfg)
+    return True
+
+
+def _quiet_read(data, target_date, cfg):
+    try:
+        extract_image(image_bytes=data, target_date=target_date, settings=cfg)
+    except Exception:  # noqa: BLE001 - a background read never breaks the page; the button reads again
+        logger.exception('OCR prefetch failed')
 
 
 def _from_day_sheet(sheet, valid_images, shift_hint, target_date, attempts, model_name):
@@ -1020,6 +1089,9 @@ class GeminiNativeReader:
             'contents': [{'role': 'user', 'parts': parts}],
             'generationConfig': {'responseMimeType': 'application/json', 'temperature': 0, 'maxOutputTokens': 16000},
         }
+        level = {'none': 'minimal'}.get(ocr_reasoning_effort(), ocr_reasoning_effort())
+        if self.model_id.startswith('gemini-3') and level in {'minimal', 'low', 'medium', 'high'}:
+            body['generationConfig']['thinkingConfig'] = {'thinkingLevel': level}
         url = f'https://generativelanguage.googleapis.com/v1beta/models/{self.model_id}:generateContent'
         try:
             response = httpx.post(url, json=body, timeout=OCR_TIMEOUT_SECONDS,

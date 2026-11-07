@@ -18,6 +18,7 @@ from pathlib import Path
 import pandas as pd
 
 from src.engine.image_upload import UploadError, save_photo, thumbnail
+from src.engine.vision_ocr import prefetch_reading
 
 import streamlit as st
 
@@ -278,6 +279,8 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                             continue
                         if str(save_path) not in day_images:
                             day_images.append(str(save_path))
+                        # Start reading now; by the time staff press "Đọc ảnh bằng AI" it is done or under way.
+                        prefetch_reading(save_path, chosen_d_str)
                     if rejected:
                         _save_workspace(username, st.session_state.get('ocr_day_images', {}))
                         st.session_state['ocr_upload_errors'] = rejected
@@ -311,8 +314,11 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                 if st.button(btn_ocr_title, key='run_shift_ocr', disabled=image_digest == 'none',
                              help='Mỗi ảnh chỉ gửi cho AI một lần; một lần đọc lấy số của mọi ca trong ảnh, '
                                   'đổi ca sẽ hiện số của ca đó mà không đọc lại.'):
+                    started = time.monotonic()
                     with st.spinner(f"Đang đọc {num_imgs} ảnh chứng từ…" if num_imgs > 1 else 'Đang đọc nội dung ảnh…'):
                         results[cache_key] = read_shift(curr_shift_code)
+                    if isinstance(results[cache_key], dict):
+                        results[cache_key]['read_seconds'] = round(time.monotonic() - started, 1)
                     if (results[cache_key] or {}).get('status') == 'NEEDS_REVIEW':
                         st.session_state.setdefault('ocr_day_read', {})[chosen_d_str] = image_digest
                     st.session_state.ocr_review_started = time.time()
@@ -357,7 +363,8 @@ def render_shift_closing_view(user_role: str, user_name: str, is_admin: bool = F
                     empty = sum(1 for name in vocr.FIELD_LABELS
                                 if extracted.get(name) is None and name not in suggestions_now)
                     balanced = consistency.get('is_consistent', True)
-                    parts = [f"Đọc xong {extracted.get('image_count', 1)} ảnh",
+                    took = extracted.get('read_seconds')
+                    parts = [f"Đọc xong {extracted.get('image_count', 1)} ảnh" + (f" trong {took:g} giây" if took else ''),
                              f"<b>{yellow}</b> ô vàng cần kiểm tra" if yellow else 'không có ô cần kiểm tra',
                              f"{empty} ô trống" if empty else '',
                              '⚖️ cộng ngang khớp' if balanced else '⚖️ <b>cộng ngang lệch</b>']

@@ -26,6 +26,9 @@ class AgentSettings(BaseModel):
     max_retries: int = Field(default=0, ge=0, le=3)
     max_history_messages: int = Field(default=40, ge=6, le=200)
     max_output_tokens: int = Field(default=1400, ge=128, le=4096)
+    # Gemini 3 thinks at "high" unless told otherwise, which made chat and photo reads take minutes.
+    # '' = provider default; Gemini accepts none (minimal) | low | medium | high.
+    reasoning_effort: str = ''
     # Defaults honour the same environment variables as from_env(), so directly built
     # settings (tests, scripts) never fall back to the shared store by accident.
     checkpoint_path: str = Field(default_factory=lambda: os.environ.get('AGENT_CHECKPOINT_PATH')
@@ -43,7 +46,7 @@ class AgentSettings(BaseModel):
             'model_timeout': 'LLM_TIMEOUT_SECONDS', 'run_timeout': 'AGENT_TIMEOUT_SECONDS',
             'max_tool_calls': 'AGENT_MAX_TOOL_CALLS', 'max_model_calls': 'AGENT_MAX_MODEL_CALLS',
             'max_retries': 'AGENT_MAX_RETRIES', 'max_history_messages': 'AGENT_MAX_HISTORY_MESSAGES',
-            'max_output_tokens': 'LLM_MAX_OUTPUT_TOKENS',
+            'max_output_tokens': 'LLM_MAX_OUTPUT_TOKENS', 'reasoning_effort': 'LLM_REASONING_EFFORT',
             'checkpoint_path': 'AGENT_CHECKPOINT_PATH', 'audit_path': 'AGENT_AUDIT_PATH',
         }
         config = {field: values[key] for field, key in mapping.items() if values.get(key) not in (None, '')}
@@ -61,6 +64,8 @@ class AgentSettings(BaseModel):
             config['base_url'] = 'https://openrouter.ai/api/v1'
         elif provider in {'gemini', 'google', 'google_genai'} and not config.get('base_url'):
             config['base_url'] = 'https://generativelanguage.googleapis.com/v1beta/openai/'
+        if provider in {'gemini', 'google', 'google_genai'} and 'reasoning_effort' not in config:
+            config['reasoning_effort'] = 'low'  # picking a tool needs little thinking; 'high' cost tens of seconds
         return cls(**config)
 
     def build_model(self):
@@ -87,4 +92,6 @@ class AgentSettings(BaseModel):
             # Gemini 3 rejects follow-up calls unless each tool call's thought signature is sent back.
             from src.agent.gemini_compat import http_clients
             kwargs['http_client'], kwargs['http_async_client'] = http_clients(kwargs['timeout'])
+        if self.reasoning_effort and self.provider in {'gemini', 'google', 'google_genai', 'openai'}:
+            kwargs['reasoning_effort'] = self.reasoning_effort
         return init_chat_model(self.model, model_provider=provider, **kwargs)
