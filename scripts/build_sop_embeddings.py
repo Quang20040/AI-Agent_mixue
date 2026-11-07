@@ -25,8 +25,8 @@ def main():
         sys.exit('GEMINI_API_KEY is not set')
     agent = RepoDocsAgent(ROOT)
     chunks = [c for c in agent.chunks if c.category == 'SOP_QUY_CHUAN' and not c.file_path.endswith(LOG_TABLES)]
-    docs = embed_texts([c.content[:6000] for c in chunks], 'RETRIEVAL_DOCUMENT', key,
-                       titles=[c.title[:200] for c in chunks])
+    docs = embed_texts([c.content[:2000] for c in chunks], 'RETRIEVAL_DOCUMENT', key,
+                       titles=[c.title[:200] for c in chunks], batch=20, retries=8)
     out = vectors_path()
     out.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(out, ids=np.array([c.chunk_id for c in chunks]), vectors=docs.astype(np.float16),
@@ -34,7 +34,7 @@ def main():
     cases = []
     for name in ('sop_retrieval_benchmark.json', 'sop_retrieval_heldout.json'):
         cases += json.loads((ROOT / 'tests' / 'fixtures' / name).read_text(encoding='utf-8'))
-    qv = embed_texts([c['query'] for c in cases], 'RETRIEVAL_QUERY', key)
+    qv = embed_texts([c['query'] for c in cases], 'RETRIEVAL_QUERY', key, batch=20, retries=8)
     np.savez_compressed(out.with_name(f'benchmark_queries_{embed_model()}.npz'),
                         ids=np.array([c['query_id'] for c in cases]), vectors=qv.astype(np.float16))
     print(f'{len(chunks)} chunks and {len(cases)} questions embedded with {embed_model()} -> {out.relative_to(ROOT)}')

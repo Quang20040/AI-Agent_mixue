@@ -32,23 +32,32 @@ def vectors_path(model: str | None = None) -> Path:
 
 
 def embed_texts(texts: list[str], task: str, api_key: str, model: str | None = None, timeout: float = 30.0,
-                titles: list[str] | None = None) -> np.ndarray:
+                titles: list[str] | None = None, batch: int = 100, retries: int = 0) -> np.ndarray:
     """Unit-length vectors for `texts`. task: RETRIEVAL_DOCUMENT or RETRIEVAL_QUERY. Raises on any error."""
     import httpx
     model = model or embed_model()
     out = []
-    for start in range(0, len(texts), 100):
+    for start in range(0, len(texts), batch):
         requests = []
-        for i, text in enumerate(texts[start:start + 100]):
+        for i, text in enumerate(texts[start:start + batch]):
             req: dict[str, Any] = {'model': f'models/{model}', 'content': {'parts': [{'text': text}]},
                                    'taskType': task, 'outputDimensionality': DIM}
             if titles and task == 'RETRIEVAL_DOCUMENT':
                 req['title'] = titles[start + i]
             requests.append(req)
-        resp = httpx.post(API.format(model=model), json={'requests': requests}, timeout=timeout,
-                          headers={'x-goog-api-key': api_key.strip()})
+        for attempt in range(retries + 1):
+            resp = httpx.post(API.format(model=model), json={'requests': requests}, timeout=timeout,
+                              headers={'x-goog-api-key': api_key.strip()})
+            if resp.status_code == 429 and attempt < retries:
+                time.sleep(min(60, 15 * (attempt + 1)))  # free tier: per-minute quota
+                continue
+            break
         if resp.status_code != 200:
-            raise RuntimeError(f'embedding HTTP {resp.status_code}')
+            try:
+                detail = resp.json().get('error', {}).get('message', '')[:300]
+            except ValueError:
+                detail = ''
+            raise RuntimeError(f'embedding HTTP {resp.status_code} {detail}')
         out += [e['values'] for e in resp.json()['embeddings']]
     v = np.asarray(out, dtype=np.float32)
     v /= np.maximum(np.linalg.norm(v, axis=1, keepdims=True), 1e-12)  # truncated dimensions are not unit length
