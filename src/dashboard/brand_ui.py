@@ -131,10 +131,10 @@ def _built_css_url() -> str | None:
     instead of receiving ~130 KB of CSS with every interaction. None when the folder is not writable."""
     import hashlib
     css = _brand_css()
-    digest = hashlib.sha256(css.encode()).hexdigest()[:12]
     # inside the file, image URLs are relative to the stylesheet (static/_build/), not to the page
     import re
     css_file = re.sub(r'(?<![/\w])app/static/', '../', css)  # absolute /app/static/ URLs stay as they are
+    digest = hashlib.sha256(css_file.encode()).hexdigest()[:12]  # name changes with content: no stale browser copy
     target = STATIC_DIR / '_build' / f'app-{digest}.css'
     try:
         if not target.is_file():
