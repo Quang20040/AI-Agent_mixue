@@ -26,6 +26,15 @@ def fresh(src: Path, tag: str) -> Path:
     return out
 
 
+def set_day(page, iso):
+    box = page.locator('.st-key-shift_chosen_date_picker input').first
+    box.click()
+    box.press('Control+a')
+    box.type(iso.replace('-', '/'))
+    box.press('Enter')
+    q.idle(page, 800)
+
+
 def read(page, files, pause=0.0, label=''):
     page.locator('.st-key-shift_photo_uploader input[type=file]').first.set_input_files([str(f) for f in files])
     q.idle(page, 800)
@@ -38,24 +47,27 @@ def read(page, files, pause=0.0, label=''):
     seconds = round(time.time() - t, 1)
     body = q.text(page)
     summary = next((ln for ln in body.split('\n') if ln.startswith('Đọc xong')), '')
+    calls = next((ln for ln in body.split('\n') if ln.startswith('Thời gian gọi AI')), '')
     q.shot(page, label)
     return {'case': label, 'photos': len(files), 'pause_before_click_s': pause, 'seconds_after_click': seconds,
-            'app_summary': summary, 'error': '' if summary else body[:300]}
+            'app_summary': summary, 'model_calls': calls, 'error': '' if summary else body[:300]}
 
 
 def main():
     rows = []
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
-        for label, files, pause in [
-            ('one_photo_click_now', [fresh(PHOTOS[0], 'a')], 0),
-            ('three_photos_click_now', [fresh(p, 'b') for p in PHOTOS], 0),
-            ('one_photo_after_30s', [fresh(PHOTOS[1], 'c')], 30),
-        ]:
+        stamp = time.strftime('%H%M%S')
+        for (label, files, pause), day in zip([
+            ('one_photo_click_now', [fresh(PHOTOS[0], 'a' + stamp)], 0),
+            ('three_photos_click_now', [fresh(p, 'b' + stamp) for p in PHOTOS], 0),
+            ('one_photo_after_30s', [fresh(PHOTOS[1], 'c' + stamp)], 30),
+        ], ('2026-12-01', '2026-12-02', '2026-12-03')):
             page = q.new_page(browser, label=label)
             try:
                 q.quick_login(page, 'quick_login_manager')
                 q.nav(page, 'Chốt ca')
+                set_day(page, day)
                 rows.append(read(page, files, pause, label))
             except Exception as exc:  # noqa: BLE001
                 rows.append({'case': label, 'error': f'{type(exc).__name__}: {exc}'[:300]})
