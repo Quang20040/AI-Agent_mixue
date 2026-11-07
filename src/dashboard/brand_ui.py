@@ -1,5 +1,6 @@
 """Mixue presentation components; business data comes from the existing engines."""
 import base64
+import os
 import json
 import unicodedata
 from datetime import datetime, timedelta, timezone
@@ -93,18 +94,80 @@ def asset(name):
     return _FALLBACK_SVG
 
 
-def install_brand():
+# Animations off by default: they kept phones busy and slowed every page switch. UI_MOTION=1 brings back GSAP.
+MOTION = str(os.environ.get('UI_MOTION', '0')).strip().lower() in {'1', 'true', 'on', 'yes'}
+STATIC_CSS = """
+/* Static UI: no decorative animation or transition (Streamlit's own spinners keep theirs). */
+html:not(.mixue-motion-on) *:not([data-testid="stSpinner"]):not([data-testid="stSpinner"] *):not(.stSpinner *):not([data-testid="stStatusWidget"] *),
+html:not(.mixue-motion-on) *::before, html:not(.mixue-motion-on) *::after {
+  animation: none !important; transition: none !important; scroll-behavior: auto !important;
+}
+html:not(.mixue-motion-on) .stage-motion-toggle, html:not(.mixue-motion-on) .login-atmosphere,
+html:not(.mixue-motion-on) .stage-sparkles, html:not(.mixue-motion-on) .stage-orbit,
+html:not(.mixue-motion-on) .px-flake, html:not(.mixue-motion-on) .login-motion-toggle { display: none !important; }
+"""
+
+
+@lru_cache(maxsize=1)
+def _brand_css() -> str:
+    """All app stylesheets in load order, image placeholders filled in."""
+    parts = []
     css_path = HERE / 'brand.css'
     if css_path.is_file():
-        css = css_path.read_text(encoding='utf-8').replace('__MIXUE_BACKGROUND_PATTERN__', asset('brand-pattern.svg')).replace('__MIXUE_LOGIN_SCENE__', asset('login-snow-world-v1.png')).replace('__MIXUE_LOGIN_MOBILE_SCENE__', asset('login-snow-world-mobile-v1.png'))
-        st.html('<style>' + css + '</style>')
-    mockup_path = HERE / 'mockup.css'
-    if mockup_path.is_file():
-        st.html('<style>' + mockup_path.read_text(encoding='utf-8') + '</style>')
-    st.html('<style>' + (HERE / 'dashboard.css').read_text(encoding='utf-8') + '</style>')
-    # Redesign layer (two thesis pillars first); loaded last so it wins over older rules.
-    st.html('<style>' + (HERE / 'pillars.css').read_text(encoding='utf-8') + '</style>')
-    _motion_component()(key='mixue_motion_controller')
+        parts.append(css_path.read_text(encoding='utf-8').replace('__MIXUE_BACKGROUND_PATTERN__', asset('brand-pattern.svg'))
+                     .replace('__MIXUE_LOGIN_SCENE__', asset('login-snow-world-v1.png'))
+                     .replace('__MIXUE_LOGIN_MOBILE_SCENE__', asset('login-snow-world-mobile-v1.png')))
+    for name in ('mockup.css', 'dashboard.css', 'pillars.css'):  # redesign layer last so it wins over older rules
+        if (HERE / name).is_file():
+            parts.append((HERE / name).read_text(encoding='utf-8'))
+    if not MOTION:
+        parts.append(STATIC_CSS)
+    return '\n'.join(parts)
+
+
+@lru_cache(maxsize=1)
+def _built_css_url() -> str | None:
+    """Write the combined stylesheet once per process into the static folder; the browser downloads and caches it
+    instead of receiving ~130 KB of CSS with every interaction. None when the folder is not writable."""
+    import hashlib
+    css = _brand_css()
+    digest = hashlib.sha256(css.encode()).hexdigest()[:12]
+    # inside the file, image URLs are relative to the stylesheet (static/_build/), not to the page
+    css_file = css.replace('app/static/', '../')
+    target = STATIC_DIR / '_build' / f'app-{digest}.css'
+    try:
+        if not target.is_file():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            tmp = target.with_suffix('.tmp')
+            tmp.write_text(css_file, encoding='utf-8')
+            tmp.replace(target)
+    except OSError:
+        return None
+    return f'app/static/_build/{target.name}'
+
+
+def install_brand():
+    href = _built_css_url()
+    # First run of a browser session: inline CSS so the first paint is styled while the <link> loads.
+    if href is None or st.session_state.get('_mixue_css_linked') != href:
+        st.html('<style>' + _brand_css() + '</style>')
+        st.session_state['_mixue_css_linked'] = href
+    if MOTION:
+        _motion_component()(key='mixue_motion_controller')
+    else:
+        _runtime_component(href)(key='mixue_ui_runtime')
+
+
+@lru_cache(maxsize=4)
+def _runtime_js(href):
+    return ('export default function() {\nwindow.__mixueCss = ' + json.dumps([href] if href else []) + ';\n'
+            + (HERE / 'ui_runtime.js').read_text(encoding='utf-8') + '\n}')
+
+
+def _runtime_component(href):
+    # registered on every run (registration belongs to the Streamlit runtime, not to this module)
+    import streamlit.components.v2 as components
+    return components.component('mixue_ui_runtime', js=_runtime_js(href), isolate_styles=False)
 
 
 def _motion_component():
@@ -113,7 +176,8 @@ def _motion_component():
     scripts = [HERE / 'assets' / 'gsap.min.js', HERE / 'assets' / 'ScrollTrigger.min.js', HERE / 'motion.js']
     # UMD's browser branch writes window.window, a readonly property in ES modules.
     # Use its supported CommonJS branch, then expose only the two library handles.
-    javascript = ('export default function() {\nif (!window.gsap) { (function(){var exports = {}, module = {exports}, define;\n'
+    javascript = ('export default function() {\ndocument.documentElement.classList.add("mixue-motion-on");\n'
+                  'if (!window.gsap) { (function(){var exports = {}, module = {exports}, define;\n'
                   + scripts[0].read_text(encoding='utf-8') + '\n;window.gsap = exports.gsap;\n'
                   + scripts[1].read_text(encoding='utf-8') + '\n;window.ScrollTrigger = exports.ScrollTrigger;\n})(); }\n'
                   + scripts[2].read_text(encoding='utf-8') + '\n}')
