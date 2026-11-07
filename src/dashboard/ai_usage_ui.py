@@ -34,3 +34,17 @@ def render_ai_usage_panel(days: int = 7):
     if df.estimated.any():
         notes.append("Token của tra cứu vector là ước tính (API không trả số token).")
     st.caption(' '.join(notes))
+
+
+def render_backup_panel():
+    st.markdown("#### 💾 Sao lưu dữ liệu")
+    st.caption("Một file .zip gồm cơ sở dữ liệu, báo cáo chốt ca, ảnh chứng từ, lịch sử chat, nhật ký kiểm toán và "
+               "chi phí AI. Nên tải về trước mỗi lần nâng cấp / chuyển máy chủ.")
+    if st.button("Tạo bản sao lưu", key="make_backup"):
+        from src.engine.data_export import export_bytes
+        with st.spinner("Đang đóng gói dữ liệu…"):
+            st.session_state["backup_zip"] = export_bytes()
+    if st.session_state.get("backup_zip"):
+        data, name = st.session_state["backup_zip"]
+        st.download_button(f"⬇️ Tải {name} ({len(data) / 1024 / 1024:.1f} MB)", data, file_name=name,
+                           mime="application/zip", key="download_backup")

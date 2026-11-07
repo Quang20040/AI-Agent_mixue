@@ -1236,8 +1236,10 @@ with st.container(key="workspace"):
                 st.info("Hiện không có tài khoản nhân viên nào khác để reset.")
 
         st.divider()
-        from src.dashboard.ai_usage_ui import render_ai_usage_panel
+        from src.dashboard.ai_usage_ui import render_ai_usage_panel, render_backup_panel
         render_ai_usage_panel()
+        st.divider()
+        render_backup_panel()
 
     # Render Chatbot (Dedicated Fullscreen Tab when section == "💬 Tuyết Vương AI", or Floating Bottom-Right Button otherwise).
     if section == CHAT_PAGE:

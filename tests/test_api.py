@@ -16,8 +16,8 @@ def bearer(username):
 
 def test_health_and_openapi():
     assert client.get('/api/v1/health').json()['status'] == 'ok'
-    paths = client.get('/openapi.json').json()['paths']
-    assert '/api/v1/stores/{store_id}/sales' in paths and '/api/v1/stores/{store_id}/ocr/read' in paths
+    paths = client.get('/api/openapi.json').json()['paths']
+    assert '/v1/stores/{store_id}/sales' in paths and '/v1/stores/{store_id}/ocr/read' in paths
 
 
 def test_requests_without_a_valid_token_are_refused():
@@ -69,3 +69,7 @@ def test_photo_reading_returns_a_suggestion_and_saves_nothing(monkeypatch):
 def test_chat_approval_needs_a_manager():
     assert client.post('/api/v1/stores/2132/chat/approval', json={'approve': True},
                        headers=bearer('nhanvien')).status_code == 403
+
+
+def test_backup_download_is_manager_only():
+    assert client.get('/api/v1/stores/2132/backup', headers=bearer('nhanvien')).status_code == 403

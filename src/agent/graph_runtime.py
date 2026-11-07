@@ -158,6 +158,32 @@ class AgentGraph:
             self.connection = None
 
     @staticmethod
+    def _brief(value, limit=80):
+        """Short, safe view of tool arguments for the trace (no long text, at most 6 keys)."""
+        if isinstance(value, dict):
+            return {str(k): AgentGraph._brief(v, limit) for k, v in list(value.items())[:6]}
+        if isinstance(value, (list, tuple)):
+            return [AgentGraph._brief(v, limit) for v in list(value)[:4]]
+        text = str(value)
+        return text if len(text) <= limit else text[:limit] + '…'
+
+    @staticmethod
+    def _result_summary(result):
+        if not isinstance(result, dict):
+            return ''
+        parts = []
+        for key, value in result.items():
+            if key in {'status', 'source_refs', 'evidence_refs', 'message'}:
+                continue
+            if isinstance(value, list):
+                parts.append(f'{key}: {len(value)} mục')
+            elif isinstance(value, (int, float, str)) and len(str(value)) <= 40:
+                parts.append(f'{key}: {value}')
+            if len(parts) >= 3:
+                break
+        return ' · '.join(parts)
+
+    @staticmethod
     def thread_id(actor, conversation_id):
         identity = _json([actor.store_id, actor.user_id, actor.role])
         return hashlib.sha256(identity.encode()).hexdigest()[:24] + ':' + conversation_id
@@ -175,28 +201,32 @@ class AgentGraph:
             return {'response': self._response('Bạn hãy gửi câu hỏi ngắn hơn nhé.', 'INVALID_INPUT')}
         blocked = self.service.tool_check_guardrail(state['query'], runtime.context.name)
         if blocked:
-            return {'response': blocked}
+            category = (blocked.get('raw_result') or {}).get('category', 'POLICY')
+            return {'response': blocked, 'trace': [*state.get('trace', []),
+                                                   {'node': 'guard', 'result': 'blocked', 'category': category}]}
         forced = state.get('forced') or {}
         if forced:
             call = {'name': forced['name'], 'args': dict(forced.get('args') or {}),
                     'id': 'server_' + uuid.uuid4().hex}
             return {'messages': [AIMessage(content='', tool_calls=[call])],
-                    'trace': [*state.get('trace', []), {'node': 'guard', 'forced_tool': forced['name']}]}
+                    'trace': [*state.get('trace', []), {'node': 'guard', 'result': 'passed', 'forced_tool': forced['name']}]}
         greeting = conversational_reply(state['query'], is_admin=is_admin_role(runtime.context.role))
         identity_query = normalized_query(state['query']).strip(' .,')
         if identity_query in {'toi la ai', 'minh la ai', 'ban biet toi la ai khong', 'ten toi la gi',
                                'ban dang noi chuyen voi ai', 'tai khoan cua toi la gi'}:
             actor = runtime.context
             text = f'Bạn là **{actor.name}**, đang đăng nhập bằng tài khoản **{actor.user_id}**. Vai trò hiện tại: **{actor.role}**.'
-            return {'response': self._response(text, tool_called='identity'), 'messages': [AIMessage(content=text)]}
+            return {'response': self._response(text, tool_called='identity'), 'messages': [AIMessage(content=text)],
+                    'trace': [*state.get('trace', []), {'node': 'guard', 'result': 'direct_reply', 'reason': 'identity'}]}
         if greeting:
-            return {'response': greeting, 'messages': [AIMessage(content=greeting['text'])]}
+            return {'response': greeting, 'messages': [AIMessage(content=greeting['text'])],
+                    'trace': [*state.get('trace', []), {'node': 'guard', 'result': 'direct_reply', 'reason': 'conversation'}]}
         if self.config_error:
             message = ('Chưa bật quyền gửi dữ liệu sang nhà cung cấp AI trong cấu hình.'
                        if self.config_error == 'EXTERNAL_TRANSFER_DISABLED' else
                        'Chưa kết nối được mô hình AI. Hãy kiểm tra cấu hình nhà cung cấp và mô hình.')
             return {'response': self._response(message, self.config_error)}
-        return {}
+        return {'trace': [*state.get('trace', []), {'node': 'guard', 'result': 'passed'}]}
 
     def _offline(self, state, runtime: Runtime[Actor]):
         actor = runtime.context
@@ -223,7 +253,9 @@ class AgentGraph:
         result = json.loads(_json(self.service._process_offline_query(
             state['query'], actor.role, actor.name, chat_history=history_list,
         )))
-        return {'response': result, 'messages': [AIMessage(content=result['text'])]}
+        return {'response': result, 'messages': [AIMessage(content=result['text'])],
+                'trace': [*state.get('trace', []), {'node': 'offline_rules', 'result': 'AI offline',
+                                                   'tool': result.get('tool_called', '')}]}
 
     def _after_tools(self, state):
         """Server-forced calls and offline mode render the tool result deterministically."""
@@ -451,6 +483,7 @@ Không tiết lộ suy luận nội bộ.'''
         llm_usage.record('chat', str(answer.response_metadata.get('model_name', self.settings.model)), tin, tout, think)
         update = {'messages': [answer], 'model_count': state['model_count'] + 1,
                   'trace': [*state['trace'], {'node': 'model', 'tool_calls': len(answer.tool_calls),
+                      'requested': [c['name'] for c in answer.tool_calls][:8],
                       'model': str(answer.response_metadata.get('model_name', self.settings.model))[:128],
                       'input_tokens': (answer.usage_metadata or {}).get('input_tokens', 0),
                       'output_tokens': (answer.usage_metadata or {}).get('output_tokens', 0)}]}
@@ -481,7 +514,9 @@ Không tiết lộ suy luận nội bộ.'''
         for call in calls:
             spec = self.tools.get(call['name'])
             if spec is None or not spec.allowed(runtime.context.role):
-                return {'response': self._response('Tài khoản hiện tại không được phép thực hiện thao tác này.', 'UNAUTHORIZED')}
+                return {'response': self._response('Tài khoản hiện tại không được phép thực hiện thao tác này.', 'UNAUTHORIZED'),
+                        'trace': [*state['trace'], {'node': 'authorize', 'result': 'denied', 'tool': call['name'],
+                                                    'role': runtime.context.role}]}
             if spec.effect == 'approval' and len(calls) != 1:
                 error = 'Gọi công cụ phê duyệt riêng sau khi đã hoàn thành các tra cứu khác.'
             else:
@@ -505,7 +540,11 @@ Không tiết lộ suy luận nội bộ.'''
             errors.extend(ToolMessage(content=_json({'status': 'BATCH_CANCELLED', 'message': 'Sửa tham số sai rồi gọi lại.'}), tool_call_id=c['id'])
                           for c in calls if c['id'] not in failed_ids)
             prepared = []
-        return {'prepared': prepared, 'messages': errors, 'tool_count': state['tool_count'] + len(calls)}
+        checked = [{'tool': c['name'], 'permission': self.tools[c['name']].permission, 'effect': self.tools[c['name']].effect,
+                    'args': self._brief(c['args'])} for c in prepared]
+        return {'prepared': prepared, 'messages': errors, 'tool_count': state['tool_count'] + len(calls),
+                'trace': [*state['trace'], {'node': 'authorize', 'result': 'invalid_args' if errors else 'allowed',
+                                            'role': runtime.context.role, 'calls': checked}]}
 
     def _execute(self, state, runtime: Runtime[Actor]):
         messages, results = [], list(state['results'])
@@ -546,7 +585,8 @@ Không tiết lộ suy luận nội bộ.'''
             messages.append(ToolMessage(content=_json(result), tool_call_id=call['id'], name=spec.name))
             results.append({'tool': spec.name, 'result': result})
             trace.append({'node': 'tools', 'tool': spec.name, 'status': result.get('status', 'SUCCESS') if isinstance(result, dict) else 'SUCCESS',
-                          'duration_ms': round((time.monotonic() - started) * 1000)})
+                          'duration_ms': round((time.monotonic() - started) * 1000), 'args': self._brief(call['args']),
+                          'summary': self._result_summary(result), 'sources': len(refs)})
         return {'messages': messages, 'results': results, 'evidence': evidence, 'trace': trace,
                 'draft_cache': cache, 'prepared': []}
 

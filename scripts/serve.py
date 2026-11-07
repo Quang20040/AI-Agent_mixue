@@ -53,9 +53,43 @@ def log_memory(every=60):
     threading.Thread(target=loop, daemon=True, name='memory-log').start()
 
 
+def asgi_app():
+    """One server, one port: the Streamlit app at /, the REST API at /api (docs /api/docs), the web frontend at /ui.
+
+    All three share this process, so they share the database, the disk and the loaded models."""
+    import streamlit as st
+    from starlette.responses import RedirectResponse
+    from starlette.routing import Mount, Route
+    from starlette.staticfiles import StaticFiles
+
+    from src.api.main import api
+    routes = [Route('/ui', lambda request: RedirectResponse(request.url.path + '/')),
+              Mount('/ui', app=StaticFiles(directory=os.path.join(ROOT, 'frontend'), html=True)),
+              Mount('/api', app=api)]
+    return st.App(os.path.join(ROOT, 'src', 'dashboard', 'app.py'), routes=routes)
+
+
+def _arg(name, default):
+    for item in sys.argv[1:]:
+        if item.startswith(f'--server.{name}='):
+            return item.split('=', 1)[1]
+    return default
+
+
 if __name__ == '__main__':
     preload()
     log_memory()
+    if os.environ.get('APP_SERVER', 'asgi').strip().lower() != 'streamlit':
+        try:
+            app = asgi_app()
+        except Exception as exc:  # noqa: BLE001 - never lose the shop app because the API failed to load
+            print(f'[serve] API/frontend not mounted ({exc.__class__.__name__}: {exc}); Streamlit only', flush=True)
+        else:
+            import uvicorn
+            print('[serve] Streamlit at /, REST API at /api (docs /api/docs), web frontend at /ui', flush=True)
+            uvicorn.run(app, host=_arg('address', '0.0.0.0'), port=int(_arg('port', os.environ.get('PORT', 8501))),
+                        proxy_headers=True, forwarded_allow_ips='*', log_level='warning')
+            sys.exit(0)
     from streamlit.web import cli
 
     sys.argv = ['streamlit', 'run', os.path.join(ROOT, 'src', 'dashboard', 'app.py'), *sys.argv[1:]]

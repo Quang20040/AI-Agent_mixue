@@ -1,6 +1,7 @@
 """BeverageOps REST API (FastAPI) — the backend for any frontend (web, mobile, POS integration).
 
-Run:   uvicorn src.api.main:app --host 0.0.0.0 --port 8000      docs: /docs (Swagger), /openapi.json
+Run:   uvicorn src.api.main:app --port 8000   (standalone)  ·  or inside the app server: uvicorn serve:app
+       docs: /api/docs (Swagger), /api/openapi.json
 
 It calls the same engine as the Streamlit app (same database, rules and AI), so both can run side by side.
 Every business route is scoped to a store: /api/v1/stores/{store_id}/... Today the deployment serves one store
@@ -32,7 +33,8 @@ STORE_ID = os.environ.get('STORE_ID', '2132')
 STORES = {STORE_ID: {'store_id': STORE_ID, 'code': f'MX-{STORE_ID}', 'name': 'Mixue 39 Tôn Quang Phiệt'}}
 MAX_PHOTOS, MAX_PHOTO_BYTES = 5, 25 * 1024 * 1024
 
-app = FastAPI(title='BeverageOps AI API', version=API_VERSION,
+# `api` is mounted at /api: inside the Streamlit server (serve.py) or by `app` below for a standalone run.
+api = FastAPI(title='BeverageOps AI API', version=API_VERSION, docs_url='/docs', openapi_url='/openapi.json',
               description='REST API cho vận hành cửa hàng Mixue: doanh thu, kho, dự báo, tra cứu SOP, '
                           'đọc ảnh chốt ca (gợi ý), phê duyệt và trợ lý AI.')
 
@@ -105,12 +107,12 @@ class LoginIn(BaseModel):
     password: str = Field(..., max_length=128)
 
 
-@app.get('/api/v1/health', tags=['system'])
+@api.get('/v1/health', tags=['system'])
 def health():
     return {'status': 'ok', 'version': API_VERSION}
 
 
-@app.post('/api/v1/auth/login', tags=['auth'])
+@api.post('/v1/auth/login', tags=['auth'])
 def login(body: LoginIn):
     user = verify_user(body.username, body.password)
     if not user:
@@ -121,77 +123,100 @@ def login(body: LoginIn):
                      'is_admin': is_admin_role(user['role'])}}
 
 
-@app.post('/api/v1/auth/logout', tags=['auth'])
+@api.post('/v1/auth/logout', tags=['auth'])
 def logout(authorization: str | None = Header(default=None)):
     login_sessions.revoke((authorization or '').removeprefix('Bearer ').strip())
     return {'ok': True}
 
 
-@app.get('/api/v1/me', tags=['auth'])
+@api.get('/v1/me', tags=['auth'])
 def me(user: User = Depends(current_user)):
     return {**user.model_dump(), 'stores': list(STORES.values())}
 
 
-@app.get('/api/v1/stores', tags=['stores'])
+@api.get('/v1/stores', tags=['stores'])
 def stores(user: User = Depends(current_user)):
     return list(STORES.values())
 
 
 # --- data (manager) ------------------------------------------------------------------------------------------
 
-@app.get('/api/v1/stores/{store_id}/sales', tags=['sales'])
+@api.get('/v1/stores/{store_id}/sales', tags=['sales'])
 def sales(start: date | None = None, end: date | None = None, store_id: str = Depends(store_access),
           user: User = Depends(admin_user)):
     return _plain(agent_for(user).tool_get_daily_sales(start and start.isoformat(), (end or start) and (end or start).isoformat()))
 
 
-@app.get('/api/v1/stores/{store_id}/shift-revenue', tags=['sales'])
+@api.get('/v1/stores/{store_id}/sales/daily', tags=['sales'])
+def sales_daily(days: int = Query(7, ge=1, le=92), end: date | None = None, store_id: str = Depends(store_access),
+                user: User = Depends(admin_user)):
+    """One recorded revenue figure per day (approved shift closing, else POS) — the same numbers as the app."""
+    from datetime import timedelta
+    from src.dashboard.sales_view import business_today
+    from src.engine.revenue import daily_revenue
+    last = end or business_today()
+    frame = daily_revenue(last - timedelta(days=days - 1), last)
+    return {'days': _plain(frame)}
+
+
+@api.get('/v1/stores/{store_id}/shift-revenue', tags=['sales'])
 def shift_revenue(q: str = Query('hôm nay', description='Ví dụ: "ca tối 14/10"'), store_id: str = Depends(store_access),
                   user: User = Depends(admin_user)):
     return _plain(agent_for(user).tool_get_shift_revenue(q))
 
 
-@app.get('/api/v1/stores/{store_id}/inventory', tags=['inventory'])
+@api.get('/v1/stores/{store_id}/inventory', tags=['inventory'])
 def inventory(store_id: str = Depends(store_access), user: User = Depends(admin_user)):
     return _plain(agent_for(user).tool_get_inventory_position())
 
 
-@app.get('/api/v1/stores/{store_id}/stock-matrix', tags=['inventory'])
+@api.get('/v1/stores/{store_id}/stock-matrix', tags=['inventory'])
 def stock_matrix(year: int = Query(..., ge=2020, le=2100), month: int = Query(..., ge=1, le=12),
                  store_id: str = Depends(store_access), user: User = Depends(admin_user)):
     from src.engine.daily_stock_service import get_stock_matrix_df
     return {'year': year, 'month': month, 'rows': _plain(get_stock_matrix_df(year, month))}
 
 
-@app.get('/api/v1/stores/{store_id}/forecast', tags=['forecast'])
+@api.get('/v1/stores/{store_id}/forecast', tags=['forecast'])
 def forecast(target_date: date | None = None, horizon_days: int = Query(1, ge=1, le=14),
              store_id: str = Depends(store_access), user: User = Depends(admin_user)):
     return _plain(agent_for(user).tool_forecast_demand(target_date and target_date.isoformat(), horizon_days))
 
 
-@app.get('/api/v1/stores/{store_id}/ai-usage', tags=['system'])
+@api.get('/v1/stores/{store_id}/ai-usage', tags=['system'])
 def ai_usage(days: int = Query(7, ge=1, le=90), store_id: str = Depends(store_access), user: User = Depends(admin_user)):
     from src.engine import llm_usage
     return llm_usage.summary(days)
 
 
+@api.get('/v1/stores/{store_id}/backup', tags=['system'])
+def backup(store_id: str = Depends(store_access), user: User = Depends(admin_user)):
+    """Zip of all shop data (database, shift reports, photos, chats, audit, AI usage) with SHA-256 manifest."""
+    from starlette.background import BackgroundTask
+    from starlette.responses import FileResponse
+    from src.engine.data_export import build_export
+    path = build_export()
+    return FileResponse(path, media_type='application/zip', filename=f'beverageops_backup_{date.today():%Y%m%d}.zip',
+                        background=BackgroundTask(path.unlink, missing_ok=True))
+
+
 # --- knowledge (all staff) -----------------------------------------------------------------------------------
 
-@app.get('/api/v1/stores/{store_id}/sop/search', tags=['knowledge'])
+@api.get('/v1/stores/{store_id}/sop/search', tags=['knowledge'])
 def sop_search(q: str = Query(..., min_length=1, max_length=300), top_k: int = Query(3, ge=1, le=10),
                store_id: str = Depends(store_access), user: User = Depends(current_user)):
     hits = agent_for(user).multi_agent.docs_agent.search(q, top_k=top_k, category_filter='SOP_QUY_CHUAN')
     return [{'title': h['title'], 'content': h['content'], 'score': h['score'], 'citation': h['citation']} for h in hits]
 
 
-@app.get('/api/v1/stores/{store_id}/recipes/{code}', tags=['knowledge'])
+@api.get('/v1/stores/{store_id}/recipes/{code}', tags=['knowledge'])
 def recipe(code: str = Path(..., max_length=40), store_id: str = Depends(store_access), user: User = Depends(current_user)):
     return _plain(agent_for(user).tool_decode_recipe_or_sticker(code))
 
 
 # --- photo reading (suggestion only) -------------------------------------------------------------------------
 
-@app.post('/api/v1/stores/{store_id}/ocr/read', tags=['shift closing'])
+@api.post('/v1/stores/{store_id}/ocr/read', tags=['shift closing'])
 async def ocr_read(files: list[UploadFile] = File(..., description='1–5 ảnh sổ / phiếu POS'),
                    business_date: date = Form(...), shift: str | None = Form(None, description='CA_SANG | CA_CHIEU | CA_TOI'),
                    store_id: str = Depends(store_access), user: User = Depends(current_user)):
@@ -214,7 +239,7 @@ async def ocr_read(files: list[UploadFile] = File(..., description='1–5 ảnh 
 
 # --- approvals (manager) -------------------------------------------------------------------------------------
 
-@app.get('/api/v1/stores/{store_id}/approvals', tags=['approvals'])
+@api.get('/v1/stores/{store_id}/approvals', tags=['approvals'])
 def approvals(store_id: str = Depends(store_access), user: User = Depends(admin_user)):
     from src.dashboard.approval_center import pending_items
     return _plain(pending_items(agent_for(user), user.role, user.name, user.username))
@@ -224,7 +249,7 @@ class DecisionIn(BaseModel):
     approve: bool
 
 
-@app.post('/api/v1/stores/{store_id}/approvals/{kind}/{item_id}', tags=['approvals'])
+@api.post('/v1/stores/{store_id}/approvals/{kind}/{item_id}', tags=['approvals'])
 def decide(body: DecisionIn, kind: str = Path(..., pattern='^(shift|stock|plan)$'), item_id: str = Path(..., max_length=80),
            store_id: str = Depends(store_access), user: User = Depends(admin_user)):
     from src.dashboard.approval_center import _decide, pending_items
@@ -241,14 +266,23 @@ class ChatIn(BaseModel):
     message: str = Field(..., min_length=1, max_length=4000)
 
 
-@app.post('/api/v1/stores/{store_id}/chat', tags=['assistant'])
+@api.post('/v1/stores/{store_id}/chat', tags=['assistant'])
 def chat(body: ChatIn, store_id: str = Depends(store_access), user: User = Depends(current_user)):
     """Ask the assistant. A reply with `pending_approval` waits for POST .../chat/approval (manager accounts)."""
     result = agent_for(user).process_query(body.message, user.role, user.name, user_id=user.username)
-    return _plain({k: result.get(k) for k in ('text', 'tool_called', 'evidence_refs', 'pending_approval', 'execution_mode')})
+    from src.dashboard.brand_ui import trace_steps
+    out = {k: result.get(k) for k in ('text', 'tool_called', 'evidence_refs', 'pending_approval', 'execution_mode', 'trace')}
+    out['steps'] = trace_steps(result.get('trace'), result.get('execution_mode'))
+    return _plain(out)
 
 
-@app.post('/api/v1/stores/{store_id}/chat/approval', tags=['assistant'])
+@api.post('/v1/stores/{store_id}/chat/approval', tags=['assistant'])
 def chat_approval(body: DecisionIn, store_id: str = Depends(store_access), user: User = Depends(admin_user)):
     result = agent_for(user).resume_approval(body.approve, user.role, user.name, user_id=user.username)
-    return _plain({k: result.get(k) for k in ('text', 'tool_called', 'evidence_refs')})
+    from src.dashboard.brand_ui import trace_steps
+    return _plain({**{k: result.get(k) for k in ('text', 'tool_called', 'evidence_refs', 'trace')},
+                   'steps': trace_steps(result.get('trace'), result.get('execution_mode'))})
+
+
+app = FastAPI(title='BeverageOps AI API (standalone)', docs_url=None, redoc_url=None, openapi_url=None)
+app.mount('/api', api)

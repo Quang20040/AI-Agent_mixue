@@ -1670,6 +1670,7 @@ Bạn được trang bị 8 công cụ vận hành:
                 "tool_called": "confirm_ocr_draft",
                 "raw_result": res,
                 "evidence_refs": [],
+                "trace": [{"node": "router", "result": "ocr_draft_cancelled", "tool": "confirm_ocr_draft"}],
             }
 
         routed = self._route_ocr_intent(user_query, q_norm, active_ocr)
@@ -1678,7 +1679,8 @@ Bạn được trang bị 8 công cụ vận hành:
             store.append(owner, self._conversation_id, "user", user_query)
             store.append(owner, self._conversation_id, "assistant", text, [])
             return {"text": text, "tool_called": routed.get("tool_called", "ocr_guidance"),
-                    "raw_result": {"status": "SUCCESS"}, "evidence_refs": [], "execution_mode": "direct_reply"}
+                    "raw_result": {"status": "SUCCESS"}, "evidence_refs": [], "execution_mode": "direct_reply",
+                    "trace": [{"node": "router", "result": "direct_reply", "tool": routed.get("tool_called", "ocr_guidance")}]}
 
         # Persist the visible transcript independently from the model's bounded context.
         forced = routed.get("forced_call") if routed else None
@@ -1703,6 +1705,9 @@ Bạn được trang bị 8 công cụ vận hành:
                 user_query, actor.role, actor.name, chat_history=history_msgs,
             )
             offline_fallback["execution_mode"] = "offline_fallback"
+            offline_fallback["trace"] = [*(result.get("trace") or []),
+                                         {"node": "offline_rules", "result": raw_status,
+                                          "tool": offline_fallback.get("tool_called", "")}]
             result = offline_fallback
         store.append(owner, self._conversation_id, 'user', user_query)
         store.append(owner, self._conversation_id, 'assistant', result['text'], result.get('evidence_refs'))

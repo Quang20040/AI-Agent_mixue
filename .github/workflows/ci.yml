@@ -71,6 +71,12 @@ jobs:
           test "$(docker exec app stat -c %U /proc/1)" = appuser   # app runs unprivileged
           # Images are served as cached static files (not base64 inside every page).
           curl -fsS -o /dev/null -w "static image %{http_code} %{content_type} %{size_download}B\n" http://localhost:8501/app/static/snow-king-cutout.webp
+          # Same port also serves the REST API and the web frontend.
+          curl -fsS http://localhost:8501/api/v1/health
+          curl -fsS -o /dev/null -w "api docs %{http_code}\n" http://localhost:8501/api/docs
+          curl -fsS http://localhost:8501/ui/ | grep -q 'app.js'
+          curl -fsS -o /dev/null -w "frontend js %{http_code} %{content_type}\n" http://localhost:8501/ui/app.js
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8501/api/v1/me)" = 401
           # The page itself must initialise (store identity, DB, agent), not just the health endpoint.
           docker exec -w /app -e PYTHONPATH=/app app python -c "from src.database import SessionLocal; from src.runtime_settings import resolve_store_id; db = SessionLocal(); print('store', resolve_store_id(db))"
 

@@ -81,7 +81,7 @@ def test_model_tool_model_and_sources(factory):
     assert result['evidence_refs'] == ['table:test']
     assert isinstance(model.inputs[1][-1], ToolMessage)
     assert json.loads(model.inputs[1][-1].content)['value'] == 42
-    assert [event['node'] for event in result['trace']] == ['model', 'tools', 'model']
+    assert [event['node'] for event in result['trace']] == ['guard', 'model', 'authorize', 'tools', 'model']
 
 
 def test_failed_tool_sources_are_not_supporting_evidence(factory):
