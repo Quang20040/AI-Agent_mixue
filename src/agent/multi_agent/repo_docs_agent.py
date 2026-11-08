@@ -17,6 +17,7 @@ import hashlib
 import logging
 from pathlib import Path
 import re
+import sys
 import threading
 from typing import Any
 import unicodedata
@@ -94,7 +95,8 @@ VI_SYNONYM_EXPANSIONS: dict[str, list[str]] = {
 
 def _tokenize(text: str) -> list[str]:
     norm = _normalize(text).replace("_", " ")
-    return [w for w in re.findall(r"\w+", norm) if len(w) > 1]
+    # Interned: the same few thousand words repeat across ~5,000 chunks; one shared copy each saves RAM.
+    return [sys.intern(w) for w in re.findall(r"\w+", norm) if len(w) > 1]
 
 
 def _expand_semantic_tokens(query_norm: str, base_tokens: list[str]) -> list[str]:
@@ -111,7 +113,7 @@ def _ngrams_for_tfidf(tokens: list[str]) -> list[str]:
     meaningful = [t for t in tokens if t not in VI_STOPWORDS]
     if not meaningful:
         meaningful = tokens
-    bigrams = [f"{meaningful[i]}_{meaningful[i + 1]}" for i in range(len(meaningful) - 1)]
+    bigrams = [sys.intern(f"{meaningful[i]}_{meaningful[i + 1]}") for i in range(len(meaningful) - 1)]
     return meaningful + bigrams
 
 
@@ -119,7 +121,7 @@ def _trigrams(text: str) -> set[str]:
     norm = _normalize(text).replace(" ", "_")
     if len(norm) < 3:
         return {norm} if norm else set()
-    return {norm[i:i + 3] for i in range(len(norm) - 2)}
+    return {sys.intern(norm[i:i + 3]) for i in range(len(norm) - 2)}
 
 
 def _trigram_similarity(set1: set[str], set2: set[str]) -> float:
