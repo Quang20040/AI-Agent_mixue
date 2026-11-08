@@ -267,21 +267,20 @@ class AttendanceNetwork(Base):
     added_at = Column(DateTime, nullable=False, default=datetime.now)
 
 
-class FaceProfile(Base):
-    """Ảnh khuôn mặt mẫu của nhân viên (nhân viên đồng ý, Quản lý duyệt) để AI so khi chấm công."""
-    __tablename__ = "face_profiles"
 
-    username = Column(String(50), primary_key=True)
-    photo_path = Column(String(300), nullable=False)
-    status = Column(String(20), nullable=False, default="PENDING")   # PENDING | APPROVED | REJECTED
-    consent_at = Column(DateTime, nullable=False, default=datetime.now)
-    reviewed_by = Column(String(100), nullable=True)
-    reviewed_at = Column(DateTime, nullable=True)
+class AppSetting(Base):
+    """Cấu hình nhỏ do Quản lý đặt trong app (vị trí quán, bán kính chấm công, bắt buộc WiFi…)."""
+    __tablename__ = "app_settings"
+
+    key = Column(String(60), primary_key=True)
+    value = Column(String(500), nullable=True)
+    updated_by = Column(String(100), nullable=True)
+    updated_at = Column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
 
 
-class AttendanceRecord(Base):
-    """Một lần check-in / check-out: thời điểm, mạng, kết quả so khuôn mặt, đúng giờ / muộn / về sớm, duyệt."""
-    __tablename__ = "attendance_records"
+class AttendanceCheck(Base):
+    """Một lần check-in / check-out: thời điểm, vị trí GPS, ảnh, AI duyệt ảnh, đúng giờ / muộn / về sớm."""
+    __tablename__ = "attendance_checks"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     username = Column(String(50), nullable=False)
@@ -289,15 +288,18 @@ class AttendanceRecord(Base):
     kind = Column(String(4), nullable=False)                  # IN | OUT
     at = Column(DateTime, nullable=False)
     shift_codes = Column(String(40), nullable=True)           # "CA_SANG,CA_CHIEU" or None (ngoài lịch)
+    lat = Column(Numeric(9, 6), nullable=True)
+    lon = Column(Numeric(9, 6), nullable=True)
+    accuracy_m = Column(Integer, nullable=True)
+    distance_m = Column(Integer, nullable=True)
     ip = Column(String(64), nullable=True)
     photo_path = Column(String(300), nullable=True)
-    face_result = Column(String(20), nullable=False)          # MATCH | NO_MATCH | UNSURE | NO_FACE | SPOOF | UNAVAILABLE
-    face_confidence = Column(Numeric(4, 2), nullable=True)
-    face_reason = Column(String(300), nullable=True)
+    ai_result = Column(String(20), nullable=False)            # OK | NO_PERSON | SCREEN | UNSURE | UNAVAILABLE
+    ai_reason = Column(String(300), nullable=True)
     timing = Column(String(20), nullable=False)               # ON_TIME | LATE | OK | EARLY | OFF_SCHEDULE
     minutes = Column(Integer, nullable=False, default=0)      # phút muộn / về sớm
     status = Column(String(20), nullable=False)               # AUTO_OK | NEEDS_REVIEW | APPROVED | REJECTED
     reviewed_by = Column(String(100), nullable=True)
     reviewed_at = Column(DateTime, nullable=True)
 
-    __table_args__ = (Index("idx_attendance_day", "work_date", "username"),)
+    __table_args__ = (Index("idx_attendance_check_day", "work_date", "username"),)

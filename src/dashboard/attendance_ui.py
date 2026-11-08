@@ -1,5 +1,5 @@
-"""⏱️ Chấm công tab (inside 📅 Lịch làm): staff check in / out with a selfie on the shop WiFi; the manager
-registers the shop network, approves face photos, reviews what the AI flagged and reads the timesheet."""
+"""⏱️ Chấm công tab (inside 📅 Lịch làm): staff get their GPS position, take a photo and check in / out;
+the manager sets the shop location and radius, reviews what the AI flagged and reads the timesheet."""
 from __future__ import annotations
 
 from datetime import timedelta
@@ -10,6 +10,35 @@ import streamlit as st
 from src.engine import attendance as att
 from src.engine import staff_schedule as ss
 
+_GEO_HTML = '<button type="button" class="geo-btn">📍 Lấy vị trí của tôi</button><span class="geo-msg"></span>'
+_GEO_CSS = """.geo-btn{background:#E60012;color:#fff;border:0;border-radius:10px;padding:9px 16px;font:600 14px sans-serif;cursor:pointer}
+.geo-msg{margin-left:10px;font:13px sans-serif;color:#6b5560}"""
+_GEO_JS = """export default function(component) {
+  const { parentElement, setStateValue } = component;
+  const btn = parentElement.querySelector('.geo-btn'), msg = parentElement.querySelector('.geo-msg');
+  btn.onclick = () => {
+    if (!navigator.geolocation) { msg.textContent = 'Trình duyệt không hỗ trợ định vị.'; return; }
+    msg.textContent = 'Đang lấy vị trí…';
+    navigator.geolocation.getCurrentPosition(
+      p => { msg.textContent = 'Đã lấy vị trí.';
+             setStateValue('position', {lat: p.coords.latitude, lon: p.coords.longitude,
+                                        accuracy: p.coords.accuracy, at: Date.now()}); },
+      e => { msg.textContent = e.code === 1 ? 'Bạn đã chặn quyền vị trí — mở cài đặt trình duyệt để cho phép.'
+                                            : 'Không lấy được vị trí, thử lại.';
+             setStateValue('position', {error: e.code, at: Date.now()}); },
+      {enableHighAccuracy: true, timeout: 15000, maximumAge: 0});
+  };
+}"""
+
+
+def get_position(key: str) -> dict | None:
+    """Browser GPS position {'lat','lon','accuracy'} after the user presses the button (None before)."""
+    import streamlit.components.v2 as components
+    geo = components.component('mixue_geolocation', html=_GEO_HTML, css=_GEO_CSS, js=_GEO_JS)
+    result = geo(key=key, on_position_change=lambda: None)
+    pos = getattr(result, 'position', None)
+    return dict(pos) if pos else None
+
 
 def _ip() -> str | None:
     try:
@@ -18,101 +47,76 @@ def _ip() -> str | None:
         return None
 
 
-def _network_line(ip):
-    if att.on_shop_network(ip):
-        st.success('📶 Đang dùng WiFi của quán — chấm công được.')
-    else:
-        st.error('📵 Không phải WiFi của quán (có thể đang dùng 4G). Kết nối WiFi quán để chấm công.')
-        st.caption(f'Địa chỉ mạng hiện tại: {ip or "không xác định"}')
-
-
 def render_attendance_staff(username: str):
     if flash := st.session_state.pop('att_flash', None):
         (st.success if flash[0] == 'ok' else st.error)(flash[1])
-    ip = _ip()
-    profile = att.face_profile(username)
-    if not profile or profile['status'] == 'REJECTED':
-        st.markdown('#### Đăng ký khuôn mặt')
-        if profile:
-            st.warning('Ảnh trước chưa được duyệt — chụp lại rõ mặt, đủ sáng.')
-        st.caption('Chụp một ảnh chính diện, rõ mặt. Quản lý duyệt xong bạn mới chấm công được.')
-        consent = st.checkbox('Tôi đồng ý cho cửa hàng lưu ảnh khuôn mặt của tôi và dùng AI (Google Gemini) so ảnh '
-                              'khi chấm công. Tôi có thể xin xóa bất cứ lúc nào.', key='att_consent')
-        shot = st.camera_input('Ảnh khuôn mặt mẫu', key='att_enroll_cam', disabled=not consent)
-        if shot and st.button('Gửi ảnh cho Quản lý duyệt', key='att_enroll', type='primary'):
-            att.enroll(username, shot.getvalue(), consent)
-            st.session_state['att_flash'] = ('ok', 'Đã gửi ảnh — chờ Quản lý duyệt.')
-            st.rerun()
+    if att.shop_location() is None:
+        st.info('Quản lý chưa đặt vị trí quán nên chưa chấm công được.')
         return
-    if profile['status'] == 'PENDING':
-        st.info('Ảnh khuôn mặt của bạn đang chờ Quản lý duyệt.')
-        return
-
     now = ss.now_vn()
     info = att.state(username, now)
     block = info['block']
-    st.markdown(f"#### Hôm nay {ss.day_label(now.date())}: " + (block['label'] if block else 'bạn không có ca trong lịch'))
-    _network_line(ip)
     action = info['next']
+    st.markdown(f"#### Hôm nay {ss.day_label(now.date())}: " + (block['label'] if block else 'bạn không có ca trong lịch'))
+    st.markdown('**1. Vị trí**')
+    position = get_position('att_geo_staff')
+    place = att.where(position)
+    (st.success if place['ok'] else st.warning)(('📍 ' if place['ok'] else '⚠️ ') + place['message'])
+    st.markdown('**2. Chụp ảnh**')
+    shot = st.camera_input('Chụp ảnh chấm công', key=f'att_cam_{action}', disabled=not place['ok'], label_visibility='collapsed')
     label = '✅ Check-in' if action == 'IN' else '🏁 Check-out'
-    shot = st.camera_input(f'Chụp mặt để {label[2:].lower()}', key=f'att_cam_{action}', disabled=not att.on_shop_network(ip))
-    if st.button(label, key='att_check', type='primary', disabled=not (shot and att.on_shop_network(ip))):
-        with st.spinner('AI đang so khuôn mặt…'):
+    if st.button(label, key='att_check', type='primary', disabled=not (shot and place['ok'])):
+        with st.spinner('AI đang xem ảnh…'):
             try:
-                rec = att.check(action, username, shot.getvalue(), ip)
+                rec = att.check(action, username, shot.getvalue(), position, _ip())
             except ValueError as exc:
                 st.session_state['att_flash'] = ('err', str(exc))
             else:
                 when = att.TIMING_VI[rec['timing']] + (f" {rec['minutes']} phút" if rec['timing'] in ('LATE', 'EARLY') else '')
-                verdict = 'AI đã xác nhận khuôn mặt.' if rec['status'] == 'AUTO_OK' else 'Quản lý sẽ xem lại lượt này.'
+                verdict = 'AI đã duyệt.' if rec['status'] == 'AUTO_OK' else 'Quản lý sẽ xem lại lượt này.'
                 st.session_state['att_flash'] = ('ok', f"{'Check-in' if action == 'IN' else 'Check-out'} lúc {rec['at']:%H:%M} · {when}. {verdict}")
         st.rerun()
     if info['records']:
         st.markdown('**Hôm nay**')
         st.dataframe(pd.DataFrame([{'Lượt': 'Vào' if r['kind'] == 'IN' else 'Ra', 'Giờ': f"{r['at']:%H:%M}",
                                     'Giờ giấc': att.TIMING_VI[r['timing']] + (f" {r['minutes']}′" if r['minutes'] else ''),
-                                    'Khuôn mặt': att.FACE_VI[r['face']], 'Duyệt': att.STATUS_VI[r['status']]} for r in info['records']]),
+                                    'Cách quán': f"{r['distance_m']} m" if r['distance_m'] is not None else '—',
+                                    'Ảnh': att.AI_VI[r['ai']], 'Duyệt': att.STATUS_VI[r['status']]} for r in info['records']]),
                      hide_index=True, width='stretch')
-    with st.expander('Xóa ảnh khuôn mặt của tôi'):
-        st.caption('Xóa ảnh mẫu thì bạn không chấm công được nữa cho tới khi đăng ký lại.')
-        if st.button('Xóa ảnh mẫu', key='att_delete_face'):
-            att.delete_face(username)
-            st.rerun()
 
 
 def render_attendance_admin(user_name: str):
     if flash := st.session_state.pop('att_flash', None):
         (st.success if flash[0] == 'ok' else st.error)(flash[1])
-    ip = _ip()
-    with st.expander(f"📶 WiFi của quán ({len(att.networks())} mạng)", expanded=not att.networks()):
-        st.caption('Đứng ở quán, bắt WiFi quán rồi bấm nút dưới. Chỉ thiết bị dùng mạng này mới chấm công được '
-                   '(4G bị chặn). Nếu nhà mạng đổi IP của quán, bấm lại để cập nhật.')
-        st.write(f'Mạng bạn đang dùng: `{ip or "không xác định"}`')
-        if ip and not att.on_shop_network(ip) and st.button('Dùng mạng hiện tại làm WiFi quán', key='att_add_net', type='primary'):
-            att.add_network(ip, 'WiFi quán', user_name)
-            st.session_state['att_flash'] = ('ok', f'Đã thêm {ip}.')
+    shop = att.shop_location()
+    with st.expander('📍 Vị trí quán & bán kính chấm công' + (f" · {shop['radius_m']} m" if shop else ' · chưa đặt'), expanded=shop is None):
+        st.caption('Đứng trong quán, bấm “Lấy vị trí của tôi”, rồi “Dùng làm vị trí quán”. Nhân viên chỉ chấm công được '
+                   'khi điện thoại ở trong bán kính này.')
+        if shop:
+            st.write(f"Hiện tại: `{shop['lat']:.6f}, {shop['lon']:.6f}` · bán kính **{shop['radius_m']} m**")
+        position = get_position('att_geo_admin')
+        radius = st.number_input('Bán kính (m)', 20, 1000, value=shop['radius_m'] if shop else 100, step=10, key='att_radius')
+        c = st.columns(2)
+        if c[0].button('Dùng vị trí vừa lấy làm vị trí quán', key='att_set_loc', type='primary',
+                       disabled=not (position and position.get('lat') is not None)):
+            att.set_shop_location(float(position['lat']), float(position['lon']), int(radius), user_name)
+            st.session_state['att_flash'] = ('ok', f"Đã đặt vị trí quán (sai số GPS lúc lấy ~{position.get('accuracy', 0):.0f} m).")
             st.rerun()
-        for n in att.networks():
-            c = st.columns([3, 1])
-            c[0].write(f"`{n['ip']}` · {n['label']} · thêm bởi {n['added_by']} {n['added_at']:%d/%m %H:%M}")
-            if c[1].button('Xóa', key=f"att_rm_{n['ip']}"):
-                att.remove_network(n['ip'])
+        if shop and c[1].button('Chỉ đổi bán kính', key='att_set_radius'):
+            att.set_shop_location(shop['lat'], shop['lon'], int(radius), user_name)
+            st.rerun()
+        if shop:
+            wifi = st.toggle('Bắt buộc thêm WiFi của quán (chặn 4G)', value=shop['require_wifi'], key='att_wifi_toggle')
+            if wifi != shop['require_wifi']:
+                att.set_require_wifi(wifi, user_name)
                 st.rerun()
-
-    faces = att.pending_faces()
-    if faces:
-        st.markdown(f'#### 🙂 Ảnh khuôn mặt chờ duyệt ({len(faces)})')
-        for f in faces:
-            c = st.columns([1, 2, 1, 1], vertical_alignment='center')
-            if data := att.read_photo(f['photo']):
-                c[0].image(data, width=120)
-            c[1].write(f"**{f['full_name']}** — kiểm tra đúng người, rõ mặt.")
-            if c[2].button('Duyệt', key=f"face_ok_{f['username']}", type='primary'):
-                att.review_face(f['username'], True, user_name)
-                st.rerun()
-            if c[3].button('Từ chối', key=f"face_no_{f['username']}"):
-                att.review_face(f['username'], False, user_name)
-                st.rerun()
+            if wifi:
+                ip = _ip()
+                st.caption(f'Mạng bạn đang dùng: `{ip or "không xác định"}` · WiFi quán đã lưu: '
+                           + (', '.join(f"`{n['ip']}`" for n in att.networks()) or 'chưa có'))
+                if ip and not att.on_shop_network(ip) and st.button('Dùng mạng hiện tại làm WiFi quán', key='att_add_net'):
+                    att.add_network(ip, 'WiFi quán', user_name)
+                    st.rerun()
 
     queue = att.needs_review()
     st.markdown(f'#### 🔎 Lượt cần Quản lý xem ({len(queue)})')
@@ -121,36 +125,30 @@ def render_attendance_admin(user_name: str):
     names = {e['username']: e['full_name'] for e in ss.employees()}
     for r in queue[:20]:
         with st.container(border=True):
-            c = st.columns([1, 1, 2.4, 1, 1], vertical_alignment='center')
-            ref = att.face_profile(r['username'])
-            if ref and (data := att.read_photo(ref['photo'])):
-                c[0].image(data, caption='Ảnh mẫu', width=110)
+            c = st.columns([1, 3, 1, 1], vertical_alignment='center')
             if data := att.read_photo(r['photo']):
-                c[1].image(data, caption='Lúc chấm công', width=110)
-            c[2].markdown(f"**{names.get(r['username'], r['username'])}** · {'Vào' if r['kind'] == 'IN' else 'Ra'} "
-                          f"{r['at']:%H:%M %d/%m} · {att.TIMING_VI[r['timing']]}"
-                          + (f" {r['minutes']} phút" if r['minutes'] else '')
-                          + f"  \nAI: **{att.FACE_VI[r['face']]}**" + (f" ({r['confidence']:.0%})" if r['confidence'] is not None else '')
-                          + (f" — {r['reason']}" if r['reason'] else ''))
-            if c[3].button('Tính công', key=f"att_ok_{r['id']}", type='primary'):
+                c[0].image(data, width=120)
+            c[1].markdown(f"**{names.get(r['username'], r['username'])}** · {'Vào' if r['kind'] == 'IN' else 'Ra'} "
+                          f"{r['at']:%H:%M %d/%m} · {att.TIMING_VI[r['timing']]}" + (f" {r['minutes']} phút" if r['minutes'] else '')
+                          + (f" · cách quán {r['distance_m']} m" if r['distance_m'] is not None else '')
+                          + f"  \nAI: **{att.AI_VI[r['ai']]}**" + (f" — {r['reason']}" if r['reason'] else ''))
+            if c[2].button('Tính công', key=f"att_ok_{r['id']}", type='primary'):
                 att.review(r['id'], True, user_name)
                 st.rerun()
-            if c[4].button('Không tính', key=f"att_no_{r['id']}"):
+            if c[3].button('Không tính', key=f"att_no_{r['id']}"):
                 att.review(r['id'], False, user_name)
                 st.rerun()
 
     st.markdown('#### 📋 Bảng công')
     today = ss.now_vn().date()
     start = st.date_input('Từ ngày', value=ss.week_start(today), format='DD/MM/YYYY', key='att_from')
-    end = start + timedelta(days=6)
-    rows = att.timesheet(start, end)
+    rows = att.timesheet(start, start + timedelta(days=6))
     if rows:
         df = pd.DataFrame(rows)
         st.dataframe(df, hide_index=True, width='stretch')
-        late = df.groupby('Nhân viên')[['Muộn (phút)', 'Về sớm (phút)']].sum()
-        late['Số lần muộn'] = df[df['Muộn (phút)'] > 0].groupby('Nhân viên').size()
+        total = df.groupby('Nhân viên')[['Muộn (phút)', 'Về sớm (phút)']].sum()
         st.caption('Tổng tuần: ' + ' · '.join(f"{n}: muộn {int(r['Muộn (phút)'])}′, về sớm {int(r['Về sớm (phút)'])}′"
-                                              for n, r in late.iterrows()))
+                                              for n, r in total.iterrows()))
     else:
         st.caption('Chưa có ca hoặc lượt chấm công nào trong tuần này.')
     st.caption(f"Quy tắc: vào muộn hơn {att.CHECKIN_GRACE_MIN} phút sau giờ bắt đầu ca là đi muộn (tính từ giờ bắt đầu); "

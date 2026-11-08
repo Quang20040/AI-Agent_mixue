@@ -26,14 +26,16 @@ Nhắc nhở hiện trong app khi nhân viên mở app; chưa gửi Zalo / SMS /
 
 ## ⏱️ Chấm công (tab trong 📅 Lịch làm)
 
-- **Chỉ WiFi quán:** máy chủ xem địa chỉ IP công cộng của thiết bị (`X-Forwarded-For` từ Render). Quản lý đứng ở quán,
-  bắt WiFi quán, bấm *"Dùng mạng hiện tại làm WiFi quán"*. Điện thoại dùng 4G có IP của nhà mạng nên bị chặn.
-  Nếu nhà mạng đổi IP của quán (IP động), bấm lại để cập nhật. Mạng IPv6 được so theo cả dải /64.
-- **Khuôn mặt:** nhân viên đồng ý rồi chụp ảnh mẫu → Quản lý duyệt. Mỗi lần chấm công chụp selfie, Gemini so với ảnh
-  mẫu (cùng người? thấy rõ mặt? có vẻ chụp lại màn hình?). Khớp chắc chắn (≥ 0,8) → **AI duyệt**; không khớp / không
-  chắc / không thấy mặt / AI tắt / ngoài lịch → **chờ Quản lý xem** (ảnh mẫu và ảnh chấm công đặt cạnh nhau).
-  Nhân viên tự xóa được ảnh mẫu. Ảnh lưu trên ổ riêng của máy chủ, nằm trong bản sao lưu, không đưa lên GitHub.
+- **Vị trí:** Quản lý đứng trong quán, bấm *Lấy vị trí của tôi* → *Dùng làm vị trí quán*, chọn bán kính (mặc định 100 m).
+  Khi chấm công, điện thoại nhân viên gửi vị trí GPS (trình duyệt hỏi quyền vị trí); ngoài bán kính, hoặc sai số GPS
+  quá 150 m, thì không chấm được.
+- **Ảnh:** chụp một ảnh tại chỗ (camera của trình duyệt). Không nhận diện khuôn mặt; Gemini chỉ xem ảnh có người thật,
+  không phải chụp lại màn hình / ảnh in → **AI duyệt**. Ảnh không đạt, AI tắt, hoặc chấm công vào ngày không có ca
+  → **chờ Quản lý xem** (Tính công / Không tính). Ảnh lưu trên ổ riêng của máy chủ, nằm trong bản sao lưu.
+- **Tùy chọn:** bật *Bắt buộc thêm WiFi của quán* để chặn 4G (so IP công cộng của mạng quán).
 - **Giờ giấc** (theo lịch đã duyệt, `SHIFT_TIMES` mặc định 08:00–13:00 · 13:00–18:00 · 18:00–23:30):
   vào trễ quá 5 phút = **đi muộn**, số phút tính từ giờ bắt đầu ca; ra sớm hơn 5 phút (ca tối 10 phút) = **về sớm**.
   Hai ca liền nhau tính như một ca dài. Check-in / check-out lúc nào cũng được.
 - **Quản lý:** bảng công theo tuần (vào, muộn, ra, về sớm, chưa check-in), hỏi AI *"hôm nay ai đi muộn?"*.
+- **Giới hạn:** vị trí do điện thoại gửi lên — ứng dụng giả lập GPS có thể đánh lừa; ảnh tại chỗ và bước Quản lý xem
+  lại là lớp kiểm tra thứ hai.

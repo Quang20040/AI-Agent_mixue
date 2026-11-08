@@ -61,6 +61,10 @@ with sync_playwright() as pw:
             import base64
             print('SHOT9:' + base64.b64encode(page.screenshot(type='jpeg', quality=55, full_page=True)).decode())
     print('schedule draft ok')
+    page.locator('[role=tab]').filter(has_text='Chấm công').first.click()
+    page.wait_for_selector('text=Lấy vị trí của tôi', timeout=30000)
+    assert not page.locator('[data-testid="stException"]').count(), 'exception on the attendance tab'
+    print('attendance tab ok')
     page.goto(BASE + '/ui/', wait_until='domcontentloaded')
     page.fill('input[name=u]', 'quanly')
     page.fill('input[name=p]', '123')
