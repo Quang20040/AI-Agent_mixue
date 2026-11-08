@@ -36,6 +36,7 @@ def ui_icon(name):
         'camera': '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
         'home': '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
         'logout': '<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>',
+        'gear': '<circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M4.9 4.9l2.1 2.1m10 10 2.1 2.1M4.9 19.1 7 17m10-10 2.1-2.1"/>',
     }
     path = paths.get(aliases.get(name, name), paths['star'])
     return f'<svg class="mx-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{path}</svg>'
@@ -47,7 +48,7 @@ def navigate_to(page):
 
 def render_mobile_navigation(pages, current):
     st.session_state['mobile_navigation'] = current
-    short = {'Trang chủ': '🏠 Trang chủ', 'Báo cáo & kho': '📦 Kho', 'Dự báo': '📈 Dự báo', 'Sơ chế': '🥣 Topping', 'Nhập hàng': '🛒 Đặt hàng', 'Tem & công thức': '📋 Công thức', '👥 Quản lý nhân viên': '👥 Nhân sự', '💬 Tuyết Vương AI': '💬 Trợ lý', '📸 Chốt ca & OCR': '📸 Chốt ca'}
+    short = {'Trang chủ': '🏠 Trang chủ', 'Báo cáo & kho': '📦 Kho', 'Dự báo': '📈 Dự báo', 'Sơ chế': '🥣 Topping', 'Nhập hàng': '🛒 Đặt hàng', 'Tem & công thức': '📋 Công thức', '👥 Quản lý nhân viên': '👥 Nhân sự', '🛠️ Kỹ thuật AI': '🛠️ Kỹ thuật AI', '💬 Tuyết Vương AI': '💬 Trợ lý', '📸 Chốt ca & OCR': '📸 Chốt ca'}
     def change_page():
         navigate_to(st.session_state.mobile_navigation)
     with st.container(key='mobile_dock'):
@@ -230,6 +231,7 @@ def menu_group(sku):
 NAV_LABELS = {
     'Báo cáo & kho': 'Doanh thu & Kho hàng', 'Tem & công thức': 'Công thức & Mã tem ly', 'Dự báo': 'Dự báo bán hàng',
     'Sơ chế': 'Chuẩn bị & Nấu topping', 'Nhập hàng': 'Đặt hàng nguyên liệu', '👥 Quản lý nhân viên': 'Quản lý nhân viên',
+    '🛠️ Kỹ thuật AI': 'Kỹ thuật AI',
     '💬 Tuyết Vương AI': 'Trợ lý Tuyết Vương',
     '📸 Chốt ca & OCR': 'Chốt ca & Quét hóa đơn',
 }
@@ -247,6 +249,7 @@ PAGE_HEROES = {
     'Nhập hàng': ('Đặt hàng nguyên liệu', 'Lập phiếu đặt hàng theo tồn kho và lượng dùng, chờ Quản lý duyệt', 'Đủ hàng mỗi ngày,\nKhông lo gián đoạn!'),
     'Tem & công thức': ('Công thức & Mã tem ly', 'Tra cứu định lượng nguyên liệu, cách pha từng món và mã tem dán ly', 'Đúng công thức,\nĐậm vị Mixue!'),
     '👥 Quản lý nhân viên': ('Quản lý nhân viên', 'Danh sách nhân viên, cấp tài khoản mới và đặt lại mật khẩu', 'Chăm chút đội ngũ,\nTạo nên trải nghiệm ngọt ngào!'),
+    '🛠️ Kỹ thuật AI': ('Kỹ thuật AI', 'Guardrail, tool calling, duyệt, RAG, OCR, độ trễ, chi phí và benchmark của trợ lý', 'Đo được,\nmới cải thiện được!'),
     '💬 Tuyết Vương AI': ('Trợ lý Tuyết Vương', 'Hỏi đáp nhanh công thức pha chế, tra cứu doanh thu, kiểm tra kho hàng và hỗ trợ công việc tại quán', 'Hỏi gì cũng có,\nnói có sách mách có chứng!'),
     '📸 Chốt ca & OCR': ('Chốt ca & Quét ảnh hóa đơn', 'Tải ảnh chụp sổ giao ca hoặc hóa đơn máy bán hàng để tự động đọc số tiền và gửi Quản lý duyệt', 'Số chưa chắc,\nđể người xác nhận!'),
 }
@@ -259,7 +262,7 @@ def _initials(name):
 
 NAV_SVG = {
     'Trang chủ': 'home', '💬 Tuyết Vương AI': 'chat', '📸 Chốt ca & OCR': 'camera', 'Báo cáo & kho': 'chart',
-    'Dự báo': 'trend', 'Sơ chế': 'prep', 'Nhập hàng': 'store', 'Tem & công thức': 'recipe', '👥 Quản lý nhân viên': 'users',
+    'Dự báo': 'trend', 'Sơ chế': 'prep', 'Nhập hàng': 'store', 'Tem & công thức': 'recipe', '👥 Quản lý nhân viên': 'users', '🛠️ Kỹ thuật AI': 'gear',
 }
 
 

@@ -33,7 +33,8 @@ OCR_PAGE = "📸 Chốt ca & OCR"
 CORE_PAGES: tuple[str, ...] = (CHAT_PAGE, OCR_PAGE)
 # Deterministic tools that feed the agent and reconciliation with data.
 SUPPORT_PAGES: tuple[str, ...] = ("Báo cáo & kho", "Dự báo", "Sơ chế", "Nhập hàng", "Tem & công thức")
-ADMIN_ONLY_PAGES: tuple[str, ...] = ("👥 Quản lý nhân viên",)
+AI_TECH_PAGE = "🛠️ Kỹ thuật AI"
+ADMIN_ONLY_PAGES: tuple[str, ...] = ("👥 Quản lý nhân viên", AI_TECH_PAGE)
 
 ADMIN_PAGES: list[str] = [
     "Trang chủ",
@@ -45,6 +46,7 @@ ADMIN_PAGES: list[str] = [
     "Nhập hàng",
     "Tem & công thức",
     "👥 Quản lý nhân viên",
+    AI_TECH_PAGE,
 ]
 
 STAFF_OFFICIAL_PAGES: list[str] = [

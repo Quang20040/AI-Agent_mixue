@@ -189,6 +189,13 @@ def ai_usage(days: int = Query(7, ge=1, le=90), store_id: str = Depends(store_ac
     return llm_usage.summary(days)
 
 
+@api.get('/v1/stores/{store_id}/ai-metrics', tags=['system'])
+def ai_metrics_view(days: int = Query(14, ge=1, le=90), store_id: str = Depends(store_access), user: User = Depends(admin_user)):
+    """AI engineering numbers: guardrail, tool calling, human-in-the-loop, RAG, OCR accuracy, latency, cost, benchmarks."""
+    from src.engine import ai_metrics
+    return _plain(ai_metrics.dashboard(days))
+
+
 @api.get('/v1/stores/{store_id}/backup', tags=['system'])
 def backup(store_id: str = Depends(store_access), user: User = Depends(admin_user)):
     """Zip of all shop data (database, shift reports, photos, chats, audit, AI usage) with SHA-256 manifest."""

@@ -26,7 +26,8 @@ def score_response(case, response):
     return {'passed': all(checks.values()), 'checks': checks, 'status': status}
 
 
-def run_scorecard(dataset='experiments/agent_golden_v2.jsonl', live=False, limit=None, output=None, verbose=True):
+def run_scorecard(dataset='experiments/agent_golden_v2.jsonl', live=False, limit=None, output=None, verbose=True,
+                  eval_dir='data/agent_private/evaluation'):
     """Run the behavioural scorecard and return the report (also written to ``output`` if given)."""
     args = argparse.Namespace(dataset=dataset, live=live, limit=limit, output=output)
     source = Path(args.dataset).read_bytes()
@@ -37,8 +38,8 @@ def run_scorecard(dataset='experiments/agent_golden_v2.jsonl', live=False, limit
     elif not settings.llm_enabled or not settings.allow_external_transfer:
         raise SystemExit('Live evaluation requires enabled API and existing external-transfer permission.')
     # Keep evaluation conversations separate from human account histories.
-    settings = settings.model_copy(update={'checkpoint_path': 'data/agent_private/evaluation/checkpoints.sqlite',
-                                           'audit_path': 'data/agent_private/evaluation/audit.jsonl'})
+    settings = settings.model_copy(update={'checkpoint_path': f'{eval_dir}/checkpoints.sqlite',
+                                           'audit_path': f'{eval_dir}/audit.jsonl'})
     agent = MixueOperationsAgent(settings=settings)
     rows, categories = [], defaultdict(list)
     try:

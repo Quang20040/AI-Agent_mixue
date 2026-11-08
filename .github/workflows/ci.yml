@@ -85,8 +85,16 @@ jobs:
           docker run -d --name demo -p 8502:8501 -e APP_ENV=development -e APP_DEMO_MODE=true -e LLM_ENABLED=false beverageops:ci
           pip install -q playwright && python -m playwright install --with-deps chromium > /dev/null
           for i in $(seq 1 60); do curl -fsS http://localhost:8502/_stcore/health && break; sleep 2; done
-          python scripts/ci/browser_smoke.py http://localhost:8502 || (docker logs demo 2>&1 | tail -40; exit 1)
+          SMOKE_SHOTS=smoke-shots python scripts/ci/browser_smoke.py http://localhost:8502 || (docker logs demo 2>&1 | tail -40; exit 1)
           docker rm -f demo
+
+      - name: UI screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-screenshots
+          path: smoke-shots/
+          if-no-files-found: ignore
 
       - name: Restart keeps the owner password (no re-provisioning)
         run: |

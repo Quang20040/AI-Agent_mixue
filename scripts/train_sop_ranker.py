@@ -232,6 +232,31 @@ def with_dense(agent, rows):
     return out
 
 
+def baselines(agent, rows, k=5, rrf_k=60):
+    """Standard hybrid-search recipes on the same questions, for comparison with the learned ranker:
+    BM25 alone, vector search alone, and both merged by Reciprocal Rank Fusion (score = sum 1/(60 + rank)).
+    None of them has a reject threshold, so every out-of-scope question still gets 5 chunks."""
+    dense_rows = with_dense(agent, rows)
+    if dense_rows is None:
+        return None
+    out = {name: [] for name in ('bm25', 'vector', 'rrf')}
+    for r, d in zip(rows, dense_rows):
+        neg = r['case']['is_negative']
+        if r['X'] is None:
+            for name in out:
+                out[name].append((neg, []))
+            continue
+        bm25, cos = r['X'][:, 0], d['X'][:, -1]
+        rank_b = np.empty(len(bm25))
+        rank_b[np.argsort(-bm25, kind='stable')] = np.arange(1, len(bm25) + 1)
+        rank_v = np.empty(len(cos))
+        rank_v[np.argsort(-cos, kind='stable')] = np.arange(1, len(cos) + 1)
+        rrf = 1 / (rrf_k + rank_b) + 1 / (rrf_k + rank_v)
+        for name, s in (('bm25', bm25), ('vector', cos), ('rrf', rrf)):
+            out[name].append((neg, [int(r['y'][j]) for j in np.argsort(-s, kind='stable')[:k]]))
+    return {name: metrics(v) for name, v in out.items()}
+
+
 def export(final, threshold, features, agent, extra=None):
     spec = {'model': 'listwise_linear', 'features': features,
             'mean': [round(float(x), 6) for x in final['mean']],
@@ -246,6 +271,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--no-write', action='store_true')
     ap.add_argument('--repeats', type=int, default=10)
+    ap.add_argument('--baselines-only', action='store_true',
+                    help='only (re)compute the BM25 / vector / RRF comparison and store it in the existing JSON')
     args = ap.parse_args()
 
     import os
@@ -256,6 +283,19 @@ def main():
     rows = build_rows(agent, every)
     by_id = {r['case']['query_id']: r for r in rows}
     ids = [c['query_id'] for c in every]
+
+    if args.baselines_only:
+        base = baselines(agent, rows)
+        if base is None:
+            raise SystemExit('Needs data/sop_embeddings (documents + benchmark questions).')
+        for name, m in base.items():
+            print(f'{name}: {fmt(m)}')
+        if not args.no_write:
+            spec = json.loads(SOP_RANKER_PATH.read_text(encoding='utf-8'))
+            spec['evaluation']['baselines_all_100'] = {n: {k: (None if v != v else v) for k, v in m.items()} for n, m in base.items()}
+            SOP_RANKER_PATH.write_text(json.dumps(spec, ensure_ascii=False, indent=1), encoding='utf-8')
+            print('updated', SOP_RANKER_PATH.relative_to(ROOT))
+        return
 
     report = {'questions': {k: len(v) for k, v in cases.items()}}
     report['heuristic'] = {name: evaluate_heuristic(agent, c) for name, c in cases.items()}
@@ -272,6 +312,7 @@ def main():
     if dense_rows is not None:
         d_by_id = {r['case']['query_id']: r for r in dense_rows}
         report[f'learned_semantic_cv5x{args.repeats}'] = cross_validate(dense_rows, ids, d_by_id, args.repeats)
+        report['baselines_all_100'] = baselines(agent, rows)
         d_final = fit(dense_rows, seed=0)
         d_threshold = choose_threshold(d_final, dense_rows)
         report['weights_semantic'] = {f: round(float(w), 3) for f, w in zip(FEATURES + ['dense_cos'], d_final['w'])}

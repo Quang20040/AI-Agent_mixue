@@ -717,7 +717,14 @@ Bạn được trang bị 8 công cụ vận hành:
             "dong vai dan", "dong vai developer", "quen het quy tac", "show me your system prompt",
             "in ra system prompt", "bypass security", "jailbreak", "override system", "tro thanh dan"
         ]
-        if any(kw in q or kw in q_raw for kw in injection_keywords):
+        injection_patterns = [
+            r"\b(?:bo qua|phot lo|quen|vo hieu hoa|xoa bo|ignore|disregard|forget)\b.{0,30}"
+            r"\b(?:huong dan|chi dan|chi thi|quy tac|luat|rang buoc|instructions?|rules?|system prompt)\b",
+            r"\b(?:in|xem|hien|tiet lo|cho (?:toi|minh|em|tao) xem|show|print|reveal)\b.{0,20}\b(?:system prompt|prompt he thong|prompt goc)\b",
+            r"\b(?:tu (?:gio|nay) (?:ban|may|em) la|hay dong vai|gia vo la|pretend (?:to be|you are)|you are now)\b"
+            r".{0,40}\b(?:khong gioi han|khong co quy tac|unrestricted|dan|developer mode|admin)\b",
+        ]
+        if any(kw in q or kw in q_raw for kw in injection_keywords) or any(re.search(p, q) for p in injection_patterns):
             msg = (
                 "🛡️ **Cảnh Báo An Toàn:** Mình không làm theo yêu cầu bỏ qua quy tắc hay tiết lộ hướng dẫn nội bộ. "
                 "Mình hỗ trợ việc ở quán Mixue 39 Tôn Quang Phiệt: công thức, mã tem ly, chốt ca, kho và doanh thu (theo quyền tài khoản)."
@@ -735,7 +742,8 @@ Bạn được trang bị 8 công cụ vận hành:
             "lo mat khau", "secret key", "connection string", "lay pass", "hack pass", "password_hash"
         ]
         if any(kw in q for kw in secret_keywords) or re.search(
-                r'\b(?:in|cho xem|hien thi|doc|lay|tiet lo)\b.*\b(?:api key|hash mat khau)\b', q):
+                r'\b(?:in|cho|xem|hien thi|doc|lay|tiet lo|gui|dua|show|give|print)\b.*'
+                r'\b(?:api ?key|hash mat khau|access token|token api|database url|database_url|bien moi truong|env var)\b', q):
             msg = (
                 "🛡️ **Bảo Mật Thông Tin:** Mật khẩu tài khoản, mã băm và khóa hệ thống không bao giờ được đưa ra trong chat. "
                 "Cần cấp lại mật khẩu cho nhân viên thì Quản lý vào mục **Quản lý nhân viên**."
@@ -747,7 +755,19 @@ Bạn được trang bị 8 công cụ vận hành:
                 "evidence_refs": []
             }
 
-        # 3. Các chủ đề về tiền lương, thưởng, chế độ tài chính cá nhân (HR Privacy)
+        # 3. Chặn yêu cầu tự nâng quyền qua chat (quyền chỉ do máy chủ cấp theo tài khoản)
+        if re.search(r"\b(?:cap|nang|trao|mo|grant)\b.{0,15}\bquyen\b.{0,30}\b(?:admin|quan ly|chu quan|owner|manager|duyet|quan tri)\b", q) \
+                or re.search(r"\bcho (?:toi|minh|em|tao|tui) (?:lam )?(?:quyen )?(?:admin|quan tri|quan ly|chu quan)\b", q) \
+                or re.search(r"\b(?:make me|give me|grant me)\b.{0,15}\b(?:admin|manager|owner)\b", q):
+            return {
+                "text": ("🛡️ **Không thể đổi quyền qua chat:** quyền của tài khoản do máy chủ xác thực khi đăng nhập. "
+                         "Cần đổi vai trò thì Chủ quán vào mục **Quản lý nhân viên**."),
+                "tool_called": "guardrail_privilege_escalation",
+                "raw_result": {"status": "GUARDRAIL_TRIGGERED", "category": "PRIVILEGE_ESCALATION_DEFENSE"},
+                "evidence_refs": []
+            }
+
+        # 4. Các chủ đề về tiền lương, thưởng, chế độ tài chính cá nhân (HR Privacy)
         salary_keywords = [
             "luong", "bang luong", "tinh luong", "tien luong", "thu nhap",
             "tien thuong", "thuong kpi", "thuong them kpi", "muc thuong",
@@ -1573,7 +1593,18 @@ Bạn được trang bị 8 công cụ vận hành:
         return {"name": "decode_recipe_or_sticker", "args": {"code": arg}}
 
     def process_query(self, user_query: str, user_role: str = "MANAGER", user_name: str = "Quản lý", chat_history: list[dict[str, Any]] | None = None, *, user_id=None) -> dict[str, Any]:
-        """Run the stateful LangGraph. Identity comes only from the authenticated caller."""
+        """Run the stateful LangGraph. Identity comes only from the authenticated caller.
+        Every turn is logged (structure only, no text) for the AI engineering dashboard."""
+        import time
+
+        from src.engine import agent_events
+        started = time.monotonic()
+        result = self._process_query(user_query, user_role, user_name, chat_history, user_id=user_id)
+        if not str(user_id or '').startswith('evaluation-'):   # benchmark runs are not real usage
+            agent_events.record_turn('chat', user_role, result, (time.monotonic() - started) * 1000)
+        return result
+
+    def _process_query(self, user_query: str, user_role: str, user_name: str, chat_history=None, *, user_id=None) -> dict[str, Any]:
         actor = self._actor(user_role, user_name, user_id)
         owner = self._conversation_owner(actor)
         store = self._ensure_store()
@@ -1637,9 +1668,15 @@ Bạn được trang bị 8 công cụ vận hành:
         return result
 
     def resume_approval(self, approve: bool, user_role: str, user_name: str, *, user_id=None):
+        import time
+
+        from src.engine import agent_events
+        started = time.monotonic()
         actor = self._actor(user_role, user_name, user_id)
         owner = self._conversation_owner(actor)
         result = self._runtime().resume(approve, actor, self._conversation_id)
+        agent_events.record_turn('approval' if approve else 'rejection', user_role, result,
+                                 (time.monotonic() - started) * 1000)
         self._ensure_store().append(owner, self._conversation_id, 'assistant', result['text'], result.get('evidence_refs'))
         self._refresh_conversation_summary(owner, self._conversation_id)
         return result

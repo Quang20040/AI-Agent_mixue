@@ -42,7 +42,7 @@ def test_dashboard_admin_full_access():
     assert app.session_state.get('user_role') == 'ADMIN'
 
     # Admin thấy 2 trụ cột (AI Agent, Chốt ca & OCR) ngay sau Trang chủ, rồi tới công cụ phụ trợ và quản trị
-    expected_tabs = ['Trang chủ', '💬 Tuyết Vương AI', '📸 Chốt ca & OCR', 'Báo cáo & kho', 'Dự báo', 'Sơ chế', 'Nhập hàng', 'Tem & công thức', '👥 Quản lý nhân viên']
+    expected_tabs = ['Trang chủ', '💬 Tuyết Vương AI', '📸 Chốt ca & OCR', 'Báo cáo & kho', 'Dự báo', 'Sơ chế', 'Nhập hàng', 'Tem & công thức', '👥 Quản lý nhân viên', '🛠️ Kỹ thuật AI']
     assert app.radio(key='main_navigation').options == [nav_label(page) for page in expected_tabs]
 
     # Kiểm tra tra cứu món và gửi công thức sang chat

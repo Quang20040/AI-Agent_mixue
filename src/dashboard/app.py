@@ -23,6 +23,7 @@ from src.engine.weather import VN
 from src.engine.stock_matrix import find_opening_column, matrix_views
 from src.dashboard.forecast_context_ui import render_forecast_context
 from src.auth import (
+    AI_TECH_PAGE,
     CHAT_PAGE,
     OCR_PAGE,
     can_access_page,
@@ -1173,6 +1174,10 @@ with st.container(key="workspace"):
         render_backup_panel()
         st.divider()
         render_sample_purge_panel(st.session_state.get("username", ""))
+
+    elif section == AI_TECH_PAGE:
+        from src.dashboard.ai_tech_ui import render_ai_tech_page
+        render_ai_tech_page(agent)
 
     # Render Chatbot (Dedicated Fullscreen Tab when section == "💬 Tuyết Vương AI", or Floating Bottom-Right Button otherwise).
     if section == CHAT_PAGE:

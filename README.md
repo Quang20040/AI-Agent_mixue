@@ -185,5 +185,6 @@ Nhóm kiểm thử chính của hai trụ cột:
 - [docs/OCR_AND_AGENT_EVALUATION.md](docs/OCR_AND_AGENT_EVALUATION.md) · [docs/LANGGRAPH_AGENT.md](docs/LANGGRAPH_AGENT.md) — chi tiết đánh giá OCR và kiến trúc Agent.
 - [docs/PRD.md](docs/PRD.md) · [docs/ARCHITECTURE_ADR.md](docs/ARCHITECTURE_ADR.md) — yêu cầu và quyết định kiến trúc.
 - [docs/SOP_RANKER.md](docs/SOP_RANKER.md) — tra cứu SOP bằng learning-to-rank + Gemini embedding (số đo).
+- [docs/AI_ENGINEERING_DASHBOARD.md](docs/AI_ENGINEERING_DASHBOARD.md) — trang 🛠️ Kỹ thuật AI (guardrail, tool, duyệt, RAG, OCR, chi phí, benchmark).
 - [docs/API.md](docs/API.md) · [docs/POSTGRES.md](docs/POSTGRES.md) · [docs/DEPLOY_RENDER.md](docs/DEPLOY_RENDER.md) — backend, cơ sở dữ liệu, triển khai.
 - [docs/HUONG_DAN_NHAP_LIEU.md](docs/HUONG_DAN_NHAP_LIEU.md) · [docs/Bang_Du_Lieu_Mixue.xlsx](docs/Bang_Du_Lieu_Mixue.xlsx) — nhập liệu và sổ tay số hóa công thức Mixue.

@@ -31,6 +31,7 @@ def sources() -> dict[str, Path]:
     out['shift_reports.json'] = shift_service.SHIFT_DATA_FILE
     out['agent_private/ocr_user_edits.jsonl'] = shift_service.OCR_EDITS_LOG_FILE
     out['agent_private/checkpoints.sqlite'] = Path(cfg.checkpoint_path)
+    out['agent_private/conversations.sqlite'] = Path(cfg.checkpoint_path).parent / 'conversations.sqlite'  # chats + OCR drafts
     out['agent_private/audit.jsonl'] = Path(cfg.audit_path)
     out['agent_private/llm_usage.db'] = db_path()
     out['shift_uploads'] = shift_service.SHIFT_UPLOADS_DIR
