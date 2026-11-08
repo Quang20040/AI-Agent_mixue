@@ -12,7 +12,6 @@ import time
 from typing import Any
 
 logger = logging.getLogger(__name__)
-MODEL = 'gemini-3.5-flash'
 
 PROMPT = """Đây là ảnh nhân viên vừa tự chụp bằng điện thoại để chấm công ở cửa hàng đồ uống.
 Kiểm tra và trả JSON đúng schema:
@@ -21,12 +20,6 @@ Kiểm tra và trả JSON đúng schema:
 - indoor_shop_like: bối cảnh có giống trong cửa hàng / quầy pha chế không (chỉ để tham khảo).
 - reason: một câu ngắn tiếng Việt.
 Không nhận diện danh tính, không mô tả đặc điểm cá nhân nhạy cảm."""
-
-SCHEMA = {'type': 'object', 'properties': {
-    'person_visible': {'type': 'boolean'}, 'looks_like_screen_or_print': {'type': 'boolean'},
-    'indoor_shop_like': {'type': 'boolean'}, 'reason': {'type': 'string'}},
-    'required': ['person_visible', 'looks_like_screen_or_print', 'indoor_shop_like', 'reason']}
-
 
 def shrink(data: bytes, size: int = 640) -> bytes:
     from PIL import Image, ImageOps
@@ -52,31 +45,56 @@ def classify(answer: dict[str, Any]) -> dict[str, Any]:
     return {'result': 'OK', 'reason': reason}
 
 
-def review(photo: bytes) -> dict[str, Any]:
-    """{'result': OK | NO_PERSON | SCREEN | UNAVAILABLE, 'reason'}."""
-    if not available():
-        return {'result': 'UNAVAILABLE', 'reason': 'AI chưa bật — Quản lý xem ảnh.'}
+def _ask(model: str, key: str, image: bytes) -> tuple[dict[str, Any], dict]:
     import httpx
-    from src.agent.config import AgentSettings
-    cfg = AgentSettings.from_env()
-    model = os.environ.get('CHECKIN_PHOTO_MODEL') or MODEL
     body = {'contents': [{'role': 'user', 'parts': [
-        {'text': PROMPT}, {'inline_data': {'mime_type': 'image/jpeg', 'data': base64.b64encode(shrink(photo, 512)).decode()}}]}],
-        'generationConfig': {'responseMimeType': 'application/json', 'responseSchema': SCHEMA, 'temperature': 0, 'maxOutputTokens': 300}}
-    started = time.monotonic()
-    try:
-        r = httpx.post(f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent', json=body,
-                       timeout=30, headers={'x-goog-api-key': cfg.api_key.get_secret_value()})
-        r.raise_for_status()
-        data = r.json()
-        answer = json.loads(''.join(p.get('text', '') for p in data['candidates'][0]['content']['parts'] if not p.get('thought')))
-    except Exception as exc:  # noqa: BLE001 - any failure → a person decides
-        logger.warning('check-in photo review failed: %s', exc)
-        return {'result': 'UNAVAILABLE', 'reason': 'Không gọi được AI — Quản lý xem ảnh.'}
-    try:
-        from src.engine import llm_usage
-        tin, tout, think = llm_usage.usage_from_metadata(data.get('usageMetadata'))
-        llm_usage.record('checkin', model, tin, tout, think, ok=True, seconds=time.monotonic() - started)
-    except Exception:  # noqa: BLE001
-        pass
-    return classify(answer)
+        {'text': PROMPT + '\nChỉ trả về một object JSON với các khóa: person_visible, looks_like_screen_or_print, '
+                          'indoor_shop_like, reason.'},
+        {'inline_data': {'mime_type': 'image/jpeg', 'data': base64.b64encode(image).decode()}}]}],
+        # Thinking tokens share the output budget on Gemini 3: keep thinking minimal and the budget generous,
+        # otherwise the answer is cut off before the JSON.
+        'generationConfig': {'responseMimeType': 'application/json', 'temperature': 0, 'maxOutputTokens': 2048}}
+    if model.startswith('gemini-3'):
+        body['generationConfig']['thinkingConfig'] = {'thinkingLevel': 'low'}
+    r = httpx.post(f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent', json=body,
+                   timeout=40, headers={'x-goog-api-key': key})
+    if r.status_code != 200:
+        raise RuntimeError(f'HTTP {r.status_code}: {r.text[:200]}')
+    data = r.json()
+    parts = ((data.get('candidates') or [{}])[0].get('content') or {}).get('parts', [])
+    text = ''.join(p.get('text', '') for p in parts if not p.get('thought')).strip()
+    if text.startswith('```'):
+        text = text.strip('`').removeprefix('json').strip()
+    return json.loads(text), data
+
+
+def review(photo: bytes) -> dict[str, Any]:
+    """{'result': OK | NO_PERSON | SCREEN | UNAVAILABLE, 'reason'}. Tries the same Gemini models as OCR."""
+    if not available():
+        return {'result': 'UNAVAILABLE', 'reason': 'AI chưa bật (LLM_ENABLED / ALLOW_EXTERNAL_DATA_TRANSFER / API key) — Quản lý xem ảnh.'}
+    from src.agent.config import AgentSettings
+    from src.engine import llm_usage
+    from src.engine.vision_ocr import ocr_model_chain
+    cfg = AgentSettings.from_env()
+    chain = [os.environ['CHECKIN_PHOTO_MODEL']] if os.environ.get('CHECKIN_PHOTO_MODEL') else ocr_model_chain(cfg)
+    image = shrink(photo, 512)
+    last = ''
+    for model in chain:
+        started = time.monotonic()
+        try:
+            answer, data = _ask(model, cfg.api_key.get_secret_value(), image)
+        except Exception as exc:  # noqa: BLE001 - try the next model, then hand over to the manager
+            last = f'{model}: {exc}'[:200]
+            logger.warning('check-in photo review failed on %s: %s', model, exc)
+            try:
+                llm_usage.record('checkin', model, ok=False, seconds=time.monotonic() - started)
+            except Exception:  # noqa: BLE001
+                pass
+            continue
+        try:
+            tin, tout, think = llm_usage.usage_from_metadata(data.get('usageMetadata'))
+            llm_usage.record('checkin', model, tin, tout, think, ok=True, seconds=time.monotonic() - started)
+        except Exception:  # noqa: BLE001
+            pass
+        return classify(answer)
+    return {'result': 'UNAVAILABLE', 'reason': f'Không gọi được AI ({last}) — Quản lý xem ảnh.'}

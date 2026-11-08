@@ -259,6 +259,23 @@ def review(record_id: int, approve: bool, by: str) -> None:
         db.commit()
 
 
+def rereview(record_id: int, reviewer: Callable[[bytes], dict] | None = None) -> dict[str, Any]:
+    """Ask the AI again for a record it could not look at (e.g. AI was down); may turn it into AUTO_OK."""
+    if reviewer is None:
+        from src.engine.checkin_photo import review as reviewer
+    with SessionLocal() as db:
+        r = db.get(AttendanceCheck, record_id)
+        if r is None or r.status != 'NEEDS_REVIEW':
+            raise ValueError('Lượt này không chờ duyệt.')
+        ai = reviewer(read_photo(r.photo_path) or b'')
+        r.ai_result, r.ai_reason = ai['result'], (ai.get('reason') or '')[:300]
+        if ai['result'] == 'OK' and r.timing != 'OFF_SCHEDULE':
+            r.status = 'AUTO_OK'
+        db.commit()
+        db.refresh(r)
+        return _row(r)
+
+
 def needs_review() -> list[dict[str, Any]]:
     with SessionLocal() as db:
         return [_row(r) for r in db.query(AttendanceCheck).filter(AttendanceCheck.status == 'NEEDS_REVIEW')

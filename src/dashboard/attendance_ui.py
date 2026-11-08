@@ -148,7 +148,7 @@ def render_attendance_admin(user_name: str):
     names = {e['username']: e['full_name'] for e in ss.employees()}
     for r in queue[:20]:
         with st.container(border=True):
-            c = st.columns([1, 3, 1, 1], vertical_alignment='center')
+            c = st.columns([1, 3, 1, 1, 1], vertical_alignment='center')
             if data := att.read_photo(r['photo']):
                 c[0].image(data, width=120)
             c[1].markdown(f"**{names.get(r['username'], r['username'])}** · {'Vào' if r['kind'] == 'IN' else 'Ra'} "
@@ -160,6 +160,12 @@ def render_attendance_admin(user_name: str):
                 st.rerun()
             if c[3].button('Không tính', key=f"att_no_{r['id']}"):
                 att.review(r['id'], False, user_name)
+                st.rerun()
+            if r['ai'] == 'UNAVAILABLE' and c[4].button('🤖 AI xem lại', key=f"att_ai_{r['id']}"):
+                with st.spinner('AI đang xem ảnh…'):
+                    res = att.rereview(r['id'])
+                st.session_state['att_flash'] = ('ok' if res['ai'] != 'UNAVAILABLE' else 'err',
+                                                 f"AI: {att.AI_VI[res['ai']]}" + (f" — {res['reason']}" if res['reason'] else ''))
                 st.rerun()
 
     st.markdown('#### 📋 Bảng công')

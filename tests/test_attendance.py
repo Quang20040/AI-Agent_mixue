@@ -147,3 +147,26 @@ def test_pages_render(shop):
     app.radio(key='main_navigation').set_value(SCHEDULE_PAGE).run()
     assert not app.exception, app.exception
     assert any('Bảng công' in m.value for m in app.markdown)
+
+
+def test_ai_answer_parsing_and_model_fallback(monkeypatch):
+    calls = []
+
+    def fake_ask(model, key, image):
+        calls.append(model)
+        if model == 'm1':
+            raise RuntimeError('HTTP 429: quota')
+        return {'person_visible': True, 'looks_like_screen_or_print': False, 'indoor_shop_like': True, 'reason': 'ok'}, {}
+    monkeypatch.setattr(checkin_photo, 'available', lambda: True)
+    monkeypatch.setattr(checkin_photo, '_ask', fake_ask)
+    monkeypatch.setenv('CHECKIN_PHOTO_MODEL', '')
+    monkeypatch.setattr('src.engine.vision_ocr.ocr_model_chain', lambda cfg: ['m1', 'm2'])
+    assert checkin_photo.review(_jpg())['result'] == 'OK' and calls == ['m1', 'm2']
+
+
+def test_manager_can_ask_ai_again(shop):
+    down = att.check('IN', 'lich_an', _jpg(), HERE, now=_at(WEEK, 7, 58),
+                     reviewer=lambda p: {'result': 'UNAVAILABLE', 'reason': 'AI lỗi'})
+    assert down['status'] == 'NEEDS_REVIEW'
+    again = att.rereview(down['id'], reviewer=MATCH)
+    assert again['status'] == 'AUTO_OK' and again['ai'] == 'OK'

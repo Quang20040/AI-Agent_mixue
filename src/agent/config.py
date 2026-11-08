@@ -60,6 +60,7 @@ class AgentSettings(BaseModel):
             else:
                 key_name = 'OPENAI_API_KEY'
             config['api_key'] = values.get(key_name) or ''
+        config['api_key'] = str(config.get('api_key') or '').strip()   # a pasted key often ends with a newline
         if provider == 'openrouter' and not config.get('base_url'):
             config['base_url'] = 'https://openrouter.ai/api/v1'
         elif provider in {'gemini', 'google', 'google_genai'} and not config.get('base_url'):
