@@ -56,6 +56,27 @@ def render_my_week(username: str, full_name: str = ''):
         st.caption('Xem cả lịch và báo bận ở trang 📅 Lịch làm.')
 
 
+def render_staff_reminders(items: list[dict], username: str):
+    """Banners on every page for staff: answer the busy-days round, next shift."""
+    from src.auth import SCHEDULE_PAGE
+
+    def go():
+        st.session_state.main_navigation = SCHEDULE_PAGE
+        st.session_state['sched_week_staff'] = 'Tuần sau'
+    for i, item in enumerate(items):
+        with st.container(key=f'staff_reminder_{i}'):
+            if item['kind'] == 'ask_busy':
+                msg, a, b = st.columns([4, 1.2, 1.4], vertical_alignment='center')
+                msg.warning(f"🗓️ {item['text']}")
+                a.button('Báo ngày bận', key='rem_report_busy', on_click=go, use_container_width=True)
+                if b.button('Tuần sau tôi rảnh', key='rem_no_busy', type='primary', use_container_width=True):
+                    ss.confirm_no_busy(username, item['week'])
+                    st.session_state['sched_flash'] = 'Đã ghi nhận: tuần sau bạn rảnh cả tuần.'
+                    st.rerun()
+            else:
+                (st.info if item['kind'] != 'shift_soon' else st.warning)(f"⏰ {item['text']}")
+
+
 def _pick_week(key: str) -> date:
     today = _today()
     choice = st.segmented_control('Tuần', ['Tuần này', 'Tuần sau', 'Chọn ngày'], default='Tuần sau' if key == 'admin' else 'Tuần này',
@@ -121,6 +142,16 @@ def render_schedule_page(agent, user_role: str, user_name: str, username: str, i
             st.info('Quản lý chưa gửi lịch tuần này.')
         st.divider()
         if any(p['username'] == username for p in people):
+            c = ss.cycle()
+            if c['open'] and start == c['target_week']:
+                mine = next((r['response'] for r in ss.responses(start) if r['username'] == username), None)
+                col = st.columns([3, 1.3], vertical_alignment='center')
+                col[0].info(f"Hạn báo bận tuần này: **{c['deadline']:%H:%M %d/%m}**. "
+                            + ('Bạn đã trả lời ✅' if mine else 'Bạn chưa trả lời — không báo thì coi như rảnh cả tuần.'))
+                if col[1].button('Tuần này tôi rảnh', key='sched_no_busy', disabled=bool(mine)):
+                    ss.confirm_no_busy(username, start)
+                    st.session_state['sched_flash'] = 'Đã ghi nhận.'
+                    st.rerun()
             _busy_form(people, 'staff', fixed_user=username, by=user_name)
             st.markdown('**Ngày bạn đã báo bận (tuần đang xem)**')
             _busy_table(start, start + timedelta(days=6), 'staff', only=username)
@@ -136,6 +167,7 @@ def render_schedule_page(agent, user_role: str, user_name: str, username: str, i
             return
         published = ss.published(start)
         draft = ss.pending(start)
+        _render_collection(start)
         if published and not draft:
             st.success(f"✅ Đã gửi cho nhân viên · duyệt bởi {published.get('approved_by', '')}")
             render_week_table(published['schedule'])
@@ -184,10 +216,28 @@ def render_schedule_page(agent, user_role: str, user_name: str, username: str, i
         _busy_table(_today(), _today() + timedelta(days=28), 'people')
 
 
+def _render_collection(start: date):
+    """Who has answered the busy-days round for this week; when the AI will draft it."""
+    c = ss.cycle()
+    rows = ss.responses(start)
+    done = [r for r in rows if r['response']]
+    missing = [r['full_name'] for r in rows if not r['response']]
+    if start == c['target_week']:
+        when = (f"Đang hỏi lịch bận — hạn **{c['deadline']:%H:%M %d/%m}**, sau đó Tuyết Vương tự xếp và gửi bản nháp cho bạn duyệt."
+                if c['open'] else
+                f"Đợt hỏi lịch bận mở từ **{c['opens']:%d/%m}**, hạn **{c['deadline']:%H:%M %d/%m}**." if not c['closed'] else
+                'Đã hết hạn báo bận — ai chưa báo được coi là rảnh cả tuần.')
+        st.info(f"🗓️ {when}  \n✅ Đã trả lời **{len(done)}/{len(rows)}**" + (f" · chưa trả lời: {', '.join(missing)}" if missing else ''))
+
+
 def _render_draft(agent, plan, user_role, user_name):
     check = plan['verification']
     with st.container(border=True, key='sched_draft'):
         st.markdown(f"#### 📝 Bản nháp AI xếp · `{plan['plan_id']}` — nhân viên chưa thấy")
+        if plan.get('auto'):
+            silent = plan['auto'].get('no_answer') or []
+            st.caption(f"🤖 Tuyết Vương tự xếp lúc {plan['auto']['at'].replace('T', ' ')} sau hạn báo bận"
+                       + (f" · không báo (coi như rảnh): {', '.join(silent)}" if silent else ' · mọi người đều đã trả lời'))
         st.caption('Sửa ô nếu cần (chọn ca cho từng người từng ngày), bấm **Lưu chỉnh sửa**, rồi **Duyệt & gửi**.')
         rows = ss.to_grid(plan['schedule'])
         frame = pd.DataFrame(rows)

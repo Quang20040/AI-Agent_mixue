@@ -245,3 +245,13 @@ class StaffUnavailability(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.now)
 
     __table_args__ = (Index("idx_staff_unavail_date", "work_date", "username"),)
+
+
+class ScheduleResponse(Base):
+    """Nhân viên đã trả lời đợt hỏi lịch bận của một tuần chưa (báo bận hoặc xác nhận không bận)."""
+    __tablename__ = "schedule_responses"
+
+    username = Column(String(50), primary_key=True)
+    week_start = Column(Date, primary_key=True)
+    status = Column(String(20), nullable=False)          # NO_BUSY | BUSY_REPORTED
+    updated_at = Column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)

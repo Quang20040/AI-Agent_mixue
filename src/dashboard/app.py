@@ -254,7 +254,14 @@ with st.sidebar:
             st.session_state.pop(k, None)
         st.rerun()
 
-_pending_notifications = len(get_pending_requests()) if is_admin else 0
+from src.engine import schedule_jobs  # noqa: E402
+schedule_jobs.start()   # once per server process: drafts next week's schedule after the Sunday deadline
+if is_admin:
+    _pending_notifications = len(get_pending_requests())
+else:
+    from src.engine.staff_schedule import reminders as _schedule_reminders
+    _staff_reminders = _schedule_reminders(st.session_state.get("username", ""))
+    _pending_notifications = len(_staff_reminders)
 render_topbar(user_name, _pending_notifications, section)
 if section not in (CHAT_PAGE, OCR_PAGE, "Trang chủ"):
     render_page_hero(section, user_name)
@@ -271,6 +278,10 @@ if is_admin and section not in (OCR_PAGE, "Trang chủ"):
             _msg, _btn = st.columns([4, 1.3], vertical_alignment="center")
             _msg.warning(f"📥 Có **{len(_waiting)}** yêu cầu đang chờ bạn phê duyệt.")
             _btn.button("Mở & duyệt", key="open_staff_inbox", type="primary", on_click=_open_inbox, use_container_width=True)
+
+if not is_admin and _staff_reminders:
+    from src.dashboard.schedule_ui import render_staff_reminders
+    render_staff_reminders(_staff_reminders, st.session_state.get("username", ""))
 
 with st.container(key="workspace"):
     if not can_access_page(user_role, section):

@@ -273,6 +273,8 @@ def build_tool_registry(service):
         ToolSpec('create_weekly_schedule', 'AI XẾP LỊCH LÀM cả tuần cho nhân viên chính thức và thử việc theo ca chính, ngày bận và số người '
                  'mỗi ca; lưu thành BẢN NHÁP chờ Quản lý duyệt rồi mới gửi cho nhân viên. Gọi lại để xếp phương án khác.',
                  ScheduleArguments, lambda **a: sched.create_schedule(service, **a), 'admin', 'draft'),
+        ToolSpec('confirm_free_next_week', 'Nhân viên xác nhận tuần sau KHÔNG có ngày bận (trả lời đợt hỏi lịch bận từ thứ 7 tới 18:00 Chủ nhật).',
+                 NoArguments, lambda: sched.confirm_free(service), 'public', 'draft'),
         ToolSpec('get_work_schedule', 'Xem lịch làm đã công bố của tuần (và ca của người đang chat); Quản lý xem thêm bản nháp chờ duyệt, '
                  'ca chính và lịch bận.', ScheduleViewArguments, lambda **a: sched.view_schedule(service, **a)),
     ]

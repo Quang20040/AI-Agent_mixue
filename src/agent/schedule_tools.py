@@ -108,6 +108,15 @@ def view_schedule(service, week_of: date | None = None) -> dict[str, Any]:
     start = ss.week_start(week_of or _today())
     out: dict[str, Any] = {'status': 'SUCCESS', 'week': f"{start:%d/%m} – {start + timedelta(days=6):%d/%m/%Y}",
                            'source_refs': ['table:operation_plans']}
+    c = ss.cycle()
+    out['busy_round'] = {'week': f"{c['target_week']:%d/%m}", 'deadline': f"{c['deadline']:%H:%M %d/%m}",
+                         'open': c['open'], 'auto_schedule_after_deadline': True}
+    if not is_admin_role(actor.role):
+        out['reminders'] = [r['text'] for r in ss.reminders(actor.user_id)]
+    else:
+        rows = ss.responses(c['target_week'])
+        out['busy_round']['answered'] = f"{sum(1 for r in rows if r['response'])}/{len(rows)}"
+        out['busy_round']['not_answered'] = [r['full_name'] for r in rows if not r['response']]
     plan = ss.published(start)
     if plan:
         out['published_table'] = _grid_text(plan['schedule'])
@@ -129,3 +138,15 @@ def view_schedule(service, week_of: date | None = None) -> dict[str, Any]:
     elif not plan:
         out['status'] = 'NO_DATA'
     return out
+
+
+def confirm_free(service) -> dict[str, Any]:
+    """The signed-in staff member says they have no busy days next week."""
+    actor = _actor(service)
+    c = ss.cycle()
+    if not any(e['username'] == actor.user_id for e in ss.employees()):
+        return {'status': 'NOT_FOUND', 'message': 'Tài khoản của bạn không nằm trong danh sách được xếp lịch.'}
+    ss.confirm_no_busy(actor.user_id, c['target_week'])
+    return {'status': 'SUCCESS', 'week': f"{c['target_week']:%d/%m}",
+            'message': f"Đã ghi nhận bạn rảnh tuần {c['target_week']:%d/%m} (những ngày bận đã báo vẫn giữ).",
+            'source_refs': ['table:schedule_responses']}

@@ -5,7 +5,7 @@ import pytest
 
 from src.database import SessionLocal
 from src.engine import staff_schedule as ss
-from src.models import StaffShiftPreference, StaffUnavailability, User
+from src.models import ScheduleResponse, StaffShiftPreference, StaffUnavailability, User
 
 WEEK = date(2026, 11, 16)   # a Monday
 PEOPLE = [('lich_an', 'Nguyễn Văn An', 'STAFF_OFFICIAL', 'CA_SANG'), ('lich_binh', 'Trần Thị Bình', 'STAFF_OFFICIAL', 'CA_CHIEU'),
@@ -24,6 +24,7 @@ def _drop_schedules(db):
 def staff():
     with SessionLocal() as db:
         _drop_schedules(db)
+        db.query(ScheduleResponse).delete()
         db.query(StaffUnavailability).delete()
         db.query(StaffShiftPreference).delete()
         others = db.query(User).filter(User.role.in_(['STAFF_OFFICIAL', 'STAFF', 'STAFF_PROBATION'])).all()
@@ -43,6 +44,7 @@ def staff():
             db.query(User).filter(User.username == username).delete()
         db.query(StaffUnavailability).delete()
         db.query(StaffShiftPreference).delete()
+        db.query(ScheduleResponse).delete()
         _drop_schedules(db)
         db.commit()
 
@@ -182,3 +184,79 @@ def test_staff_page_and_home_card_render():
     assert any('Lịch làm tuần này' in m.value for m in app.markdown)
     app.radio(key='main_navigation').set_value(SCHEDULE_PAGE).run()
     assert not app.exception, app.exception
+
+
+
+def _vn(y, m, d, h=0, mi=0):
+    from datetime import datetime
+    return datetime(y, m, d, h, mi, tzinfo=ss.VN)
+
+
+def test_busy_round_opens_saturday_closes_sunday_18h():
+    friday, saturday, sunday_17, sunday_18 = _vn(2026, 11, 13, 20), _vn(2026, 11, 14, 8), _vn(2026, 11, 15, 17, 59), _vn(2026, 11, 15, 18)
+    assert not ss.cycle(friday)['open'] and ss.cycle(friday)['target_week'] == WEEK
+    assert ss.cycle(saturday)['open'] and ss.cycle(sunday_17)['open']
+    c = ss.cycle(sunday_18)
+    assert not c['open'] and c['closed'] and c['target_week'] == WEEK
+
+
+def test_reminders_and_auto_schedule_after_deadline(staff, monkeypatch):
+    saturday = _vn(2026, 11, 14, 9)
+    asks = ss.reminders('lich_an', saturday)
+    assert asks and asks[0]['kind'] == 'ask_busy'
+    ss.add_busy('lich_an', [WEEK + timedelta(days=2)], 'CA_SANG', 'học', 'test')       # answering = reporting busy
+    assert not [r for r in ss.reminders('lich_an', saturday) if r['kind'] == 'ask_busy']
+    ss.confirm_no_busy('lich_binh', WEEK)
+    assert {r['username']: r['response'] for r in ss.responses(WEEK)}['lich_binh'] == 'NO_BUSY'
+
+    assert ss.auto_schedule(_vn(2026, 11, 15, 17)) is None                            # before the deadline: wait
+    plan = ss.auto_schedule(_vn(2026, 11, 15, 18, 5))
+    assert plan and plan['status'] == 'PENDING_APPROVAL' and plan['schedule']['week_start'] == WEEK.isoformat()
+    assert 'Lê Văn Cường' in plan['auto']['no_answer'] and 'Nguyễn Văn An' not in plan['auto']['no_answer']
+    wed = plan['schedule']['assignments'][(WEEK + timedelta(days=2)).isoformat()]
+    assert 'lich_an' not in wed['CA_SANG']
+    assert ss.auto_schedule(_vn(2026, 11, 15, 19)) is None                            # once only
+    from src.engine.plan_service import reject_plan
+    reject_plan(plan['plan_id'], 'quanly', 'không ưng')
+    assert ss.auto_schedule(_vn(2026, 11, 16, 7)) is None                             # rejected: the manager takes over
+
+
+def test_shift_reminders_from_published_schedule(staff, monkeypatch):
+    from src.agent.config import AgentSettings
+    from src.agent.mixue_agent import MixueOperationsAgent
+    monkeypatch.setenv('SHIFT_TIMES', '07:00-13:00,13:00-18:00,18:00-22:30')
+    plan = ss.create_draft(WEEK, seed=9, by='quanly')
+    agent = MixueOperationsAgent(settings=AgentSettings.from_env().model_copy(update={'llm_enabled': False}))
+    try:
+        agent.tool_approve_plan(plan['plan_id'], 'MANAGER', 'Quản lý')
+    finally:
+        agent.close()
+    tue = WEEK + timedelta(days=1)
+    who = plan['schedule']['assignments'][tue.isoformat()]['CA_CHIEU'][0]
+    soon = ss.reminders(who, _vn(tue.year, tue.month, tue.day, 11, 30))
+    assert any(r['kind'] == 'shift_soon' and '13:00' in r['text'] and '1 giờ 30 phút' in r['text'] for r in soon)
+    during = ss.reminders(who, _vn(tue.year, tue.month, tue.day, 14))
+    assert any(r['kind'] == 'on_shift' for r in during)
+    evening_before = ss.reminders(who, _vn(WEEK.year, WEEK.month, WEEK.day, 20))
+    assert any(r['kind'] == 'tomorrow' and 'chiều' in r['text'] for r in evening_before)
+
+
+def test_background_job_is_idempotent(staff, monkeypatch):
+    from src.engine import schedule_jobs
+    monkeypatch.setattr(ss, 'now_vn', lambda: _vn(2026, 11, 15, 18, 30))
+    first = schedule_jobs.run_once()
+    assert first and schedule_jobs.run_once() is None
+
+
+def test_staff_sees_busy_round_banner_and_can_say_free(monkeypatch):
+    from test_e2e_staff_manager import _open
+    monkeypatch.setattr(ss, 'now_vn', lambda: _vn(2026, 11, 14, 10))
+    with SessionLocal() as db:
+        db.query(ScheduleResponse).delete()
+        db.commit()
+    app = _open('quick_login_staff')
+    assert any('Báo ngày bận tuần' in w.value for w in app.warning)
+    app.button(key='rem_no_busy').click().run()
+    assert not app.exception, app.exception
+    assert {r['username']: r['response'] for r in ss.responses(WEEK)}.get('nhanvien') == 'NO_BUSY'
+    assert not any('Báo ngày bận tuần' in w.value for w in app.warning)

@@ -18,7 +18,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from src.database import Base, SessionLocal, engine
-from src.models import StaffShiftPreference, StaffUnavailability, User
+from src.models import ScheduleResponse, StaffShiftPreference, StaffUnavailability, User
 
 Base.metadata.create_all(bind=engine)
 
@@ -115,6 +115,8 @@ def add_busy(username: str, days: list[date], shift: str | None = None, reason: 
             db.add(StaffUnavailability(username=username, work_date=d, shift_code=shift, reason=(reason or '')[:200], created_by=by))
             added += 1
         db.commit()
+    for week in {week_start(d) for d in days}:
+        _respond(username, week, 'BUSY_REPORTED')
     return added
 
 
@@ -315,4 +317,115 @@ def my_shifts(username: str, start: date) -> list[dict[str, Any]]:
     for d in week_days(week_start(start)):
         shifts = [s for s in SHIFTS if username in plan['schedule']['assignments'].get(d.isoformat(), {}).get(s, [])]
         out.append({'date': d, 'label': day_label(d), 'shifts': shifts})
+    return out
+
+
+# --- weekly cycle: ask for busy days (Sat → Sun 18:00), then the AI drafts the week for the manager -------------
+# Times are Vietnam local time. ASK_FROM_WEEKDAY 5 = Saturday; the deadline is Sunday at DEADLINE_HOUR.
+
+import os  # noqa: E402
+from zoneinfo import ZoneInfo  # noqa: E402
+
+VN = ZoneInfo('Asia/Ho_Chi_Minh')
+ASK_FROM_WEEKDAY = int(os.environ.get('SCHEDULE_ASK_FROM_WEEKDAY', 5))
+DEADLINE_HOUR = int(os.environ.get('SCHEDULE_DEADLINE_HOUR', 18))
+
+
+def shift_times() -> dict[str, tuple[str, str]]:
+    """Start/end of each shift, e.g. SHIFT_TIMES="07:00-13:00,13:00-18:00,18:00-22:30"."""
+    raw = os.environ.get('SHIFT_TIMES', '07:00-13:00,13:00-18:00,18:00-22:30').split(',')
+    return {code: tuple(part.strip().split('-')) for code, part in zip(SHIFTS, raw)}
+
+
+def now_vn() -> datetime:
+    return datetime.now(VN)
+
+
+def cycle(now: datetime | None = None) -> dict[str, Any]:
+    """The collection round for next week: when it opens, its deadline, whether it is open / closed."""
+    now = now or now_vn()
+    target = week_start(now.date()) + timedelta(days=7)
+    deadline = datetime.combine(target - timedelta(days=1), datetime.min.time(), VN).replace(hour=DEADLINE_HOUR)
+    opens = datetime.combine(target - timedelta(days=7 - ASK_FROM_WEEKDAY), datetime.min.time(), VN)
+    return {'target_week': target, 'opens': opens, 'deadline': deadline,
+            'open': opens <= now < deadline, 'closed': now >= deadline}
+
+
+def _respond(username: str, week: date, status: str) -> None:
+    with SessionLocal() as db:
+        row = db.get(ScheduleResponse, (username, week))
+        if row is None:
+            db.add(ScheduleResponse(username=username, week_start=week, status=status))
+        elif row.status != 'BUSY_REPORTED' or status == 'BUSY_REPORTED':
+            row.status = status
+        db.commit()
+
+
+def confirm_no_busy(username: str, week: date) -> None:
+    """The staff member says they are free all next week (busy days already reported stay)."""
+    with SessionLocal() as db:
+        has_busy = db.query(StaffUnavailability).filter(StaffUnavailability.username == username,
+                                                        StaffUnavailability.work_date >= week,
+                                                        StaffUnavailability.work_date <= week + timedelta(days=6)).count()
+    _respond(username, week_start(week), 'BUSY_REPORTED' if has_busy else 'NO_BUSY')
+
+
+def responses(week: date) -> list[dict[str, Any]]:
+    with SessionLocal() as db:
+        got = {r.username: r.status for r in db.query(ScheduleResponse).filter(ScheduleResponse.week_start == week_start(week))}
+    return [{**e, 'response': got.get(e['username'])} for e in employees()]
+
+
+def auto_schedule(now: datetime | None = None) -> dict[str, Any] | None:
+    """After the deadline, draft next week once (staff who did not answer are taken as free). Idempotent:
+    does nothing if any schedule — draft, approved or rejected — already exists for that week."""
+    c = cycle(now)
+    if not c['closed'] or not employees():
+        return None
+    from src.engine.plan_service import list_plans
+    if any(p['schedule']['week_start'] == c['target_week'].isoformat() and p.get('status') != 'SUPERSEDED'
+           for p in list_plans(PLAN_TYPE)):
+        return None
+    silent = [r['full_name'] for r in responses(c['target_week']) if not r['response']]
+    plan = create_draft(c['target_week'], by='Tuyết Vương (tự động)')
+    plan['auto'] = {'at': (now or now_vn()).isoformat(timespec='minutes'), 'no_answer': silent}
+    from src.engine.plan_service import save_plan
+    save_plan(plan)
+    return plan
+
+
+def reminders(username: str, now: datetime | None = None) -> list[dict[str, Any]]:
+    """What to tell a staff member now: answer the busy-days round, and their next shift."""
+    now = now or now_vn()
+    out = []
+    c = cycle(now)
+    me = next((e for e in employees() if e['username'] == username), None)
+    if me is None:
+        return out
+    if c['open']:
+        answered = next((r['response'] for r in responses(c['target_week']) if r['username'] == username), None)
+        if not answered:
+            out.append({'kind': 'ask_busy', 'week': c['target_week'],
+                        'text': (f"Báo ngày bận tuần {c['target_week']:%d/%m} – {c['target_week'] + timedelta(days=6):%d/%m} "
+                                 f"trước {DEADLINE_HOUR}:00 Chủ nhật để Tuyết Vương xếp lịch. Không báo = coi như rảnh cả tuần.")})
+    times = shift_times()
+    for offset in (0, 1):
+        day = now.date() + timedelta(days=offset)
+        plan = published(day)
+        if not plan:
+            continue
+        for s in SHIFTS:
+            if username not in plan['schedule']['assignments'].get(day.isoformat(), {}).get(s, []):
+                continue
+            begin = datetime.combine(day, datetime.strptime(times[s][0], '%H:%M').time(), VN)
+            end = datetime.combine(day, datetime.strptime(times[s][1], '%H:%M').time(), VN)
+            if begin <= now < end:
+                out.append({'kind': 'on_shift', 'text': f"Bạn đang trong ca {SHIFT_VI[s].lower()} ({times[s][0]}–{times[s][1]})."})
+            elif timedelta(0) < begin - now <= timedelta(hours=3):
+                mins = int((begin - now).total_seconds() // 60)
+                out.append({'kind': 'shift_soon', 'text': f"Sắp đến ca {SHIFT_VI[s].lower()} lúc {times[s][0]} "
+                                                          f"(còn {mins // 60} giờ {mins % 60} phút)." if mins >= 60 else
+                                                          f"Sắp đến ca {SHIFT_VI[s].lower()} lúc {times[s][0]} (còn {mins} phút)."})
+            elif offset == 1 and now.hour >= 17:
+                out.append({'kind': 'tomorrow', 'text': f"Mai ({day_label(day)}) bạn làm ca {SHIFT_VI[s].lower()} lúc {times[s][0]}."})
     return out

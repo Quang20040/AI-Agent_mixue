@@ -30,6 +30,7 @@ _PATHS = {
     'AGENT_CHECKPOINT_PATH': str(_SANDBOX / 'agent_private' / 'checkpoints.sqlite'),
     'AGENT_AUDIT_PATH': str(_SANDBOX / 'agent_private' / 'audit.jsonl'),
     'CHAT_ATTACHMENTS_DIR': str(_SANDBOX / 'chat_attachments'),
+    'SCHEDULE_AUTO': '0',   # no background scheduling thread in tests (tests call run_once directly)
 }
 # Module-level so the paths are in place before test modules import src.database & co.
 os.environ.update(_PATHS)
