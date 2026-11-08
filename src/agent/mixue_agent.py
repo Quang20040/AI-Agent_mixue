@@ -190,7 +190,6 @@ class MixueOperationsAgent(OcrChatMixin):
     - AI only generates verified drafts.
     - Only Manager/Owner roles can approve purchase/preparation actions.
     - All conclusions cite numerical source evidence.
-    Conforms to the 15-day AI Thực Chiến engineering framework.
     """
 
     SYSTEM_PROMPT_5_BLOCKS = """
@@ -252,7 +251,7 @@ Bạn được trang bị 8 công cụ vận hành:
         }
 
     def get_system_prompt(self) -> str:
-        """Trả về System Prompt 5 khối chuẩn production theo Ngày 04 AI Thực Chiến."""
+        """Trả về System Prompt 5 khối (vai trò, quy tắc, công cụ, định dạng, an toàn)."""
         return self.system_prompt
 
     def close(self):
@@ -713,7 +712,7 @@ Bạn được trang bị 8 công cụ vận hành:
         q = _normalize_vn(query)
         q_raw = query.lower()
 
-        # 1. Chặn Direct Prompt Injection & Jailbreak (Ngày 11 - AI Safety)
+        # 1. Chặn Direct Prompt Injection & Jailbreak 
         injection_keywords = [
             "bo qua moi chi dan", "bo qua huong dan", "ignore all previous", "ignore previous instructions",
             "dong vai dan", "dong vai developer", "quen het quy tac", "show me your system prompt",

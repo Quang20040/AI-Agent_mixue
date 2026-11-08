@@ -66,7 +66,7 @@ def render_ai_tech_page(agent):
                     '⏱️ Tracing & chi phí', '🧪 Benchmark', '🧠 Bộ nhớ hội thoại'])
 
     with tabs[0]:
-        st.caption('Ngày 11 — 5 lớp guardrail & red teaming. Câu hỏi đi qua lớp chặn **trước** khi tới mô hình; '
+        st.caption('5 lớp guardrail & red teaming. Câu hỏi đi qua lớp chặn **trước** khi tới mô hình; '
                    'quyền gọi tool được kiểm lại ở máy chủ (RBAC) dù mô hình có yêu cầu.')
         g = a['guard']
         c = st.columns(4)
@@ -91,7 +91,7 @@ def render_ai_tech_page(agent):
             st.dataframe(pd.DataFrame(rt['rows']), hide_index=True, width='stretch')
 
     with tabs[1]:
-        st.caption('Ngày 06 — Function calling & tool contracts. Mỗi tool có schema tham số (Pydantic) và mức quyền; '
+        st.caption('Function calling & tool contracts. Mỗi tool có schema tham số (Pydantic) và mức quyền; '
                    'tham số sai kiểu bị trả về cho mô hình sửa, không chạy.')
         auth = a['authorize']
         c = st.columns(4)
@@ -102,7 +102,7 @@ def render_ai_tech_page(agent):
         _table(a['tools'], {'tool': 'Tool', 'calls': 'Lượt gọi', 'ok_pct': 'Thành công (%)', 'p50_ms': 'Trung vị (ms)', 'p95_ms': 'p95 (ms)'})
 
     with tabs[2]:
-        st.caption('Ngày 05 — Human-in-the-loop (maker–checker). AI chỉ soạn nháp; ghi doanh thu, duyệt đơn hàng '
+        st.caption('Human-in-the-loop (maker–checker). AI chỉ soạn nháp; ghi doanh thu, duyệt đơn hàng '
                    'chỉ chạy ở bước duyệt sau khi người có quyền bấm xác nhận.')
         h, p = a['hitl'], data['plans']
         c = st.columns(4)
@@ -120,7 +120,7 @@ def render_ai_tech_page(agent):
         _table([{'Trạng thái': k_, 'Số báo cáo': v} for k_, v in o['status'].items()])
 
     with tabs[3]:
-        st.caption('Ngày 08–09 — RAG & grounding. Tra SOP bằng BM25 + đặc trưng từ vựng + Gemini embedding, '
+        st.caption('RAG & grounding. Tra SOP bằng BM25 + đặc trưng từ vựng + Gemini embedding, '
                    'gộp bằng learning-to-rank (ListNet) có ngưỡng từ chối câu ngoài phạm vi.')
         r = a['rag']
         c = st.columns(3)
@@ -152,7 +152,7 @@ def render_ai_tech_page(agent):
             st.caption(f"Nhân viên kiểm tra một báo cáo mất trung vị {o['review_seconds_p50']:.0f} giây.")
 
     with tabs[5]:
-        st.caption('Ngày 12–13 — Tracing, độ trễ, chi phí và dự phòng. Mỗi lượt có trace từng bước '
+        st.caption('Tracing, độ trễ, chi phí và dự phòng. Mỗi lượt có trace từng bước '
                    '(guard → model → authorize → tools → approval); khi AI lỗi, hệ thống chuyển sang luật offline.')
         c = st.columns(4)
         c[0].metric('Lượt gọi mô hình / lượt chat', _n(a['model_calls_per_llm_turn'], digits=2))
@@ -179,7 +179,7 @@ def render_ai_tech_page(agent):
                  'Token ra': v['output_tokens'], 'Chi phí (USD)': f"{v['cost_usd']:.4f}"} for f, v in u['by_feature'].items()])
 
     with tabs[6]:
-        st.caption('Ngày 14 — Golden benchmark. 50 tình huống có đáp án (chào hỏi, công thức, doanh thu, kho, '
+        st.caption('Golden benchmark. 50 tình huống có đáp án (chào hỏi, công thức, doanh thu, kho, '
                    'quyền, tấn công…) chạy lại sau mỗi lần sửa để bắt lỗi hồi quy.')
         sc = data['scorecard']
         if sc:
@@ -208,7 +208,7 @@ def render_ai_tech_page(agent):
             st.rerun()
 
     with tabs[7]:
-        st.caption('Ngày 07 — Bộ nhớ hội thoại nhiều lượt. Lịch sử dài được tóm tắt để giữ ngữ cảnh mà không '
+        st.caption('Bộ nhớ hội thoại nhiều lượt. Lịch sử dài được tóm tắt để giữ ngữ cảnh mà không '
                    'gửi lại toàn bộ cho mô hình; nhân viên chấm 👍/👎 từng câu trả lời.')
         m = data['conversations']
         c = st.columns(5)
