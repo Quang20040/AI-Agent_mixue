@@ -1,0 +1,2 @@
+DejaVuSans-Bold.ttf — DejaVu fonts (Bitstream Vera derivative), free license: https://dejavu-fonts.github.io/License.html
+Used to stamp time / place on attendance photos.

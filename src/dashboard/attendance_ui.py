@@ -94,6 +94,10 @@ def render_attendance_staff(username: str):
                                     'Cách quán': f"{r['distance_m']} m" if r['distance_m'] is not None else '—',
                                     'Ảnh': att.AI_VI[r['ai']], 'Duyệt': att.STATUS_VI[r['status']]} for r in info['records']]),
                      hide_index=True, width='stretch')
+        cols = st.columns(4)
+        for i, r in enumerate(info['records'][-4:]):
+            if data := att.read_photo(r['photo']):
+                cols[i].image(data, caption=f"{'Vào' if r['kind'] == 'IN' else 'Ra'} {r['at']:%H:%M}", width='stretch')
 
 
 def render_attendance_admin(user_name: str):
@@ -180,5 +184,15 @@ def render_attendance_admin(user_name: str):
                                               for n, r in total.iterrows()))
     else:
         st.caption('Chưa có ca hoặc lượt chấm công nào trong tuần này.')
+    with st.expander('🖼️ Ảnh chấm công theo ngày'):
+        day = st.date_input('Ngày', value=today, format='DD/MM/YYYY', key='att_photo_day')
+        recs = att.day_records(day)
+        if not recs:
+            st.caption('Không có lượt chấm công nào.')
+        cols = st.columns(4)
+        for i, r in enumerate(recs):
+            if data := att.read_photo(r['photo']):
+                cols[i % 4].image(data, width='stretch', caption=f"{names.get(r['username'], r['username'])} · "
+                                  f"{'Vào' if r['kind'] == 'IN' else 'Ra'} {r['at']:%H:%M} · {att.STATUS_VI[r['status']]}")
     st.caption(f"Quy tắc: vào muộn hơn {att.CHECKIN_GRACE_MIN} phút sau giờ bắt đầu ca là đi muộn (tính từ giờ bắt đầu); "
                'ra sớm hơn 5 phút (ca tối 10 phút) trước giờ kết thúc là về sớm.')

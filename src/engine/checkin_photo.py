@@ -14,6 +14,8 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 PROMPT = """Đây là ảnh nhân viên vừa tự chụp bằng điện thoại để chấm công ở cửa hàng đồ uống.
+Dải chữ trắng nền tối ở cuối ảnh (giờ, ngày, ca, khoảng cách tới quán, tọa độ) do hệ thống tự in lên — đó KHÔNG phải
+dấu hiệu chụp màn hình; chỉ xét phần ảnh phía trên.
 Kiểm tra và trả JSON đúng schema:
 - person_visible: có thấy rõ một người thật (mặt hoặc nửa người) trong ảnh không.
 - looks_like_screen_or_print: ảnh có vẻ là chụp lại màn hình điện thoại / máy tính hoặc ảnh in không.

@@ -170,3 +170,18 @@ def test_manager_can_ask_ai_again(shop):
     assert down['status'] == 'NEEDS_REVIEW'
     again = att.rereview(down['id'], reviewer=MATCH)
     assert again['status'] == 'AUTO_OK' and again['ai'] == 'OK'
+
+
+def test_photo_is_stamped_with_time_and_place(shop):
+    seen = {}
+
+    def spy(photo):
+        seen['photo'] = photo
+        return {'result': 'OK', 'reason': ''}
+    rec = att.check('IN', 'lich_an', _jpg(), HERE, now=_at(WEEK, 8, 12), reviewer=spy)
+    saved = att.read_photo(rec['photo'])
+    assert saved == seen['photo']                                   # the AI sees the stamped photo too
+    img = Image.open(io.BytesIO(saved))
+    band = img.crop((0, img.height - 10, img.width, img.height)).convert('L')
+    assert sum(band.getdata()) / (band.width * band.height) < 200   # dark caption band at the bottom (white input)
+    assert att.day_records(WEEK)[0]['id'] == rec['id']

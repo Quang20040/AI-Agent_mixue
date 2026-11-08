@@ -40,10 +40,35 @@ def photo_dir() -> Path:
     return path
 
 
+def stamp(data: bytes, lines: list[str]) -> bytes:
+    """Burn the check-in facts into the photo (like a timestamp camera): written by the server from its own
+    clock and the measured position, so the photo the manager / AI sees always says when and where."""
+    import io
+
+    from PIL import Image, ImageDraw, ImageFont, ImageOps
+    img = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert('RGB')
+    img.thumbnail((800, 800))
+    w, h = img.size
+    size = max(14, w // 34)
+    try:
+        font = ImageFont.truetype(str(Path(__file__).with_name('assets') / 'DejaVuSans-Bold.ttf'), size)
+    except OSError:
+        font = ImageFont.load_default(size)
+    pad, gap = size // 2, size // 4
+    band = pad * 2 + len(lines) * (size + gap)
+    overlay = Image.new('RGBA', (w, band), (0, 0, 0, 150))
+    img.paste(overlay, (0, h - band), overlay)
+    draw = ImageDraw.Draw(img)
+    for i, line in enumerate(lines):
+        draw.text((pad, h - band + pad + i * (size + gap)), line, font=font, fill=(255, 255, 255))
+    out = io.BytesIO()
+    img.save(out, 'JPEG', quality=85)
+    return out.getvalue()
+
+
 def _save_photo(data: bytes, prefix: str) -> str:
-    from src.engine.checkin_photo import shrink
     name = f'{prefix}_{datetime.now():%Y%m%d_%H%M%S}_{uuid.uuid4().hex[:6]}.jpg'
-    (photo_dir() / name).write_bytes(shrink(data, 640))
+    (photo_dir() / name).write_bytes(data)
     return name
 
 
@@ -227,8 +252,16 @@ def check(kind: str, username: str, photo: bytes, position: dict | None, ip: str
         raise ValueError('Bạn đã check-in rồi, lần tiếp theo là check-out.' if kind == 'IN' else 'Bạn chưa check-in hôm nay.')
     if reviewer is None:
         from src.engine.checkin_photo import review as reviewer
-    ai = reviewer(photo)
     when, minutes = timing(kind, current['block'], now)
+    name = next((e['full_name'] for e in ss.employees() if e['username'] == username), username)
+    lines = [f"{'CHECK-IN' if kind == 'IN' else 'CHECK-OUT'} · {name}",
+             f"{now:%H:%M:%S} · {ss.WEEKDAY_VI[now.weekday()]} {now:%d/%m/%Y}"
+             + (f" · {current['block']['label']}" if current['block'] else ' · ngoài lịch'),
+             f"{TIMING_VI[when]}" + (f" {minutes} phút" if when in ('LATE', 'EARLY') else '')
+             + f" · cách quán {place['distance_m']} m (GPS ±{float(position.get('accuracy') or 0):.0f} m)",
+             f"{float(position['lat']):.6f}, {float(position['lon']):.6f}" + (f" · WiFi {ip}" if ip else '')]
+    photo = stamp(photo, lines)
+    ai = reviewer(photo)
     status = 'AUTO_OK' if ai['result'] == 'OK' and when != 'OFF_SCHEDULE' else 'NEEDS_REVIEW'
     with SessionLocal() as db:
         rec = AttendanceCheck(username=username, work_date=now.date(), kind=kind, at=now.replace(tzinfo=None),
@@ -274,6 +307,11 @@ def rereview(record_id: int, reviewer: Callable[[bytes], dict] | None = None) ->
         db.commit()
         db.refresh(r)
         return _row(r)
+
+
+def day_records(day: date) -> list[dict[str, Any]]:
+    with SessionLocal() as db:
+        return [_row(r) for r in db.query(AttendanceCheck).filter(AttendanceCheck.work_date == day).order_by(AttendanceCheck.at)]
 
 
 def needs_review() -> list[dict[str, Any]]:
