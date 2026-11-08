@@ -41,6 +41,7 @@ def shop(staff, tmp_path, monkeypatch):  # noqa: F811
             db.query(model).delete()
         db.commit()
     att.set_shop_location(*SHOP, 100, 'quanly')
+    att.set_require_wifi(False, 'quanly')          # most tests are about location / timing; WiFi has its own test
     # one-week schedule: An morning Mon, Cường evening Mon, Bình chiều+tối Tue
     plan = ss.create_draft(WEEK, seed=1, by='quanly')
     a = plan['schedule']['assignments']
@@ -65,7 +66,15 @@ def test_network_rules():
     assert att.client_ip({}, '10.0.0.9') == '10.0.0.9'
 
 
-def test_location_radius_accuracy_and_optional_wifi(shop):
+def test_wifi_required_by_default():
+    with SessionLocal() as db:
+        db.query(AppSetting).delete()
+        db.commit()
+    att.set_shop_location(*SHOP, 100, 'quanly')
+    assert att.shop_location()['require_wifi'] is True
+
+
+def test_location_radius_accuracy_and_wifi(shop):
     assert att.where(HERE)['ok'] and att.where(HERE)['distance_m'] < 20
     with pytest.raises(ValueError, match='cách quán'):
         att.check('IN', 'lich_an', _jpg(), FAR, now=_at(WEEK, 7, 55), reviewer=MATCH)
@@ -74,6 +83,8 @@ def test_location_radius_accuracy_and_optional_wifi(shop):
     with pytest.raises(ValueError, match='vị trí'):
         att.check('IN', 'lich_an', _jpg(), None, now=_at(WEEK, 7, 55), reviewer=MATCH)
     att.set_require_wifi(True, 'quanly')
+    with pytest.raises(ValueError, match='chưa đăng ký WiFi'):
+        att.check('IN', 'lich_an', _jpg(), HERE, ip=SHOP_IP, now=_at(WEEK, 7, 55), reviewer=MATCH)
     att.add_network(SHOP_IP, 'WiFi quán', 'quanly')
     with pytest.raises(ValueError, match='WiFi'):
         att.check('IN', 'lich_an', _jpg(), HERE, ip='27.72.1.1', now=_at(WEEK, 7, 55), reviewer=MATCH)   # 4G

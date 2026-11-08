@@ -32,7 +32,8 @@ Nhắc nhở hiện trong app khi nhân viên mở app; chưa gửi Zalo / SMS /
 - **Ảnh:** chụp một ảnh tại chỗ (camera của trình duyệt). Không nhận diện khuôn mặt; Gemini chỉ xem ảnh có người thật,
   không phải chụp lại màn hình / ảnh in → **AI duyệt**. Ảnh không đạt, AI tắt, hoặc chấm công vào ngày không có ca
   → **chờ Quản lý xem** (Tính công / Không tính). Ảnh lưu trên ổ riêng của máy chủ, nằm trong bản sao lưu.
-- **Tùy chọn:** bật *Bắt buộc thêm WiFi của quán* để chặn 4G (so IP công cộng của mạng quán).
+- **WiFi quán (mặc định bắt buộc):** chỉ chấm công được khi điện thoại bắt WiFi quán — máy chủ so IP công cộng của mạng
+  với IP Quản lý đã đăng ký (4G bị chặn). Quản lý tắt được trong tab Chấm công.
 - **Giờ giấc** (theo lịch đã duyệt, `SHIFT_TIMES` mặc định 08:00–13:00 · 13:00–18:00 · 18:00–23:30):
   vào trễ quá 5 phút = **đi muộn**, số phút tính từ giờ bắt đầu ca; ra sớm hơn 5 phút (ca tối 10 phút) = **về sớm**.
   Hai ca liền nhau tính như một ca dài. Check-in / check-out lúc nào cũng được.

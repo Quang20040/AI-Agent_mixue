@@ -75,7 +75,7 @@ def shop_location() -> dict[str, Any] | None:
     if lat is None or lon is None:
         return None
     return {'lat': float(lat), 'lon': float(lon), 'radius_m': int(_get('attendance_radius_m', '100')),
-            'require_wifi': _get('attendance_require_wifi', '0') == '1'}
+            'require_wifi': _get('attendance_require_wifi', '1') == '1'}   # shop WiFi required unless turned off
 
 
 def set_shop_location(lat: float, lon: float, radius_m: int, by: str = '') -> None:
@@ -216,8 +216,10 @@ def check(kind: str, username: str, photo: bytes, position: dict | None, ip: str
     if not place['ok']:
         raise ValueError(place['message'])
     shop = shop_location()
+    if shop['require_wifi'] and not networks():
+        raise ValueError('Quản lý chưa đăng ký WiFi của quán nên chưa chấm công được.')
     if shop['require_wifi'] and not on_shop_network(ip):
-        raise ValueError('Quản lý yêu cầu bắt WiFi của quán khi chấm công (tắt 4G, kết nối WiFi quán).')
+        raise ValueError('Chỉ chấm công được khi bắt WiFi của quán — tắt 4G và kết nối WiFi quán.')
     if not photo:
         raise ValueError('Chụp ảnh trước khi chấm công.')
     current = state(username, now)

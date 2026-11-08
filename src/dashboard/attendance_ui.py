@@ -58,11 +58,22 @@ def render_attendance_staff(username: str):
     block = info['block']
     action = info['next']
     st.markdown(f"#### Hôm nay {ss.day_label(now.date())}: " + (block['label'] if block else 'bạn không có ca trong lịch'))
-    st.markdown('**1. Vị trí**')
+    shop = att.shop_location()
+    ip = _ip()
+    wifi_ok = not shop['require_wifi'] or att.on_shop_network(ip)
+    if shop['require_wifi']:
+        st.markdown('**1. WiFi quán**')
+        if wifi_ok:
+            st.success('📶 Đang dùng WiFi của quán.')
+        else:
+            st.error('📵 Chưa bắt WiFi của quán (có thể đang dùng 4G). Tắt 4G, kết nối WiFi quán rồi tải lại trang.')
+            st.caption(f'Địa chỉ mạng hiện tại: {ip or "không xác định"}')
+    st.markdown(f"**{2 if shop['require_wifi'] else 1}. Vị trí**")
     position = get_position('att_geo_staff')
     place = att.where(position)
+    place = {**place, 'ok': place['ok'] and wifi_ok}
     (st.success if place['ok'] else st.warning)(('📍 ' if place['ok'] else '⚠️ ') + place['message'])
-    st.markdown('**2. Chụp ảnh**')
+    st.markdown(f"**{3 if shop['require_wifi'] else 2}. Chụp ảnh**")
     shot = st.camera_input('Chụp ảnh chấm công', key=f'att_cam_{action}', disabled=not place['ok'], label_visibility='collapsed')
     label = '✅ Check-in' if action == 'IN' else '🏁 Check-out'
     if st.button(label, key='att_check', type='primary', disabled=not (shot and place['ok'])):
@@ -105,18 +116,30 @@ def render_attendance_admin(user_name: str):
         if shop and c[1].button('Chỉ đổi bán kính', key='att_set_radius'):
             att.set_shop_location(shop['lat'], shop['lon'], int(radius), user_name)
             st.rerun()
-        if shop:
-            wifi = st.toggle('Bắt buộc thêm WiFi của quán (chặn 4G)', value=shop['require_wifi'], key='att_wifi_toggle')
-            if wifi != shop['require_wifi']:
-                att.set_require_wifi(wifi, user_name)
+
+    ip = _ip()
+    nets = att.networks()
+    require = shop['require_wifi'] if shop else True
+    with st.expander(f"📶 WiFi của quán · {'bắt buộc' if require else 'không bắt buộc'} · {len(nets)} mạng đã lưu",
+                     expanded=require and not nets):
+        st.caption('Đứng ở quán, bắt WiFi quán (tắt 4G), bấm nút dưới. Nếu nhà mạng đổi IP của quán (thường sau khi '
+                   'khởi động lại modem), nhân viên sẽ bị báo không phải WiFi quán — bấm lại để thêm IP mới.')
+        st.markdown(f'Mạng bạn đang dùng: **`{ip or "không xác định"}`** — '
+                    + ('✅ là WiFi quán' if att.on_shop_network(ip) else '❌ chưa có trong danh sách'))
+        if ip and not att.on_shop_network(ip) and st.button('Dùng mạng hiện tại làm WiFi quán', key='att_add_net', type='primary'):
+            att.add_network(ip, 'WiFi quán', user_name)
+            st.session_state['att_flash'] = ('ok', f'Đã thêm {ip}.')
+            st.rerun()
+        for n in nets:
+            c = st.columns([3, 1])
+            c[0].write(f"`{n['ip']}` · thêm bởi {n['added_by']} {n['added_at']:%d/%m %H:%M}")
+            if c[1].button('Xóa', key=f"att_rm_{n['ip']}"):
+                att.remove_network(n['ip'])
                 st.rerun()
-            if wifi:
-                ip = _ip()
-                st.caption(f'Mạng bạn đang dùng: `{ip or "không xác định"}` · WiFi quán đã lưu: '
-                           + (', '.join(f"`{n['ip']}`" for n in att.networks()) or 'chưa có'))
-                if ip and not att.on_shop_network(ip) and st.button('Dùng mạng hiện tại làm WiFi quán', key='att_add_net'):
-                    att.add_network(ip, 'WiFi quán', user_name)
-                    st.rerun()
+        wifi = st.toggle('Bắt buộc WiFi của quán khi chấm công (chặn 4G)', value=require, key='att_wifi_toggle')
+        if wifi != require:
+            att.set_require_wifi(wifi, user_name)
+            st.rerun()
 
     queue = att.needs_review()
     st.markdown(f'#### 🔎 Lượt cần Quản lý xem ({len(queue)})')
