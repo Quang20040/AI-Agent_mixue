@@ -525,7 +525,7 @@ Bạn được trang bị 8 công cụ vận hành:
 
         # 1. Check if numeric sticker code (e.g. 5 digits: DD-S-I-T, ví dụ: 24101)
         digits = "".join(filter(str.isdigit, clean_code))
-        if len(digits) >= 4 and not any(clean_code.startswith(p) for p in ["DK", "TS", "THQ", "ST", "CF"]):
+        if len(digits) >= 4 and not any(clean_code.startswith(p) for p in ["DK", "TS", "THQ", "ST", "CF", "TNC", "TP", "LN"]):
             prod_prefix = digits[:2]
             sugar_char = digits[2]
             ice_char = digits[3]

@@ -256,6 +256,8 @@ with st.sidebar:
 
 from src.engine import schedule_jobs  # noqa: E402
 schedule_jobs.start()   # once per server process: drafts next week's schedule after the Sunday deadline
+from src.engine import pos_import  # noqa: E402
+pos_import.sync_once()   # once per server process: loads new/changed POS day slips from data/pos_daily
 if is_admin:
     _pending_notifications = len(get_pending_requests())
 else:

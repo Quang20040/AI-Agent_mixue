@@ -225,7 +225,7 @@ def normalized(text):
 
 
 def menu_group(sku):
-    return {'DK': 'Kem', 'TS': 'Trà sữa', 'THQ': 'Trà trái cây', 'ST': 'Sữa trái cây', 'CF': 'Cà phê'}.get(''.join(c for c in sku if c.isalpha()), 'Khác')
+    return {'DK': 'Kem', 'TS': 'Trà sữa', 'THQ': 'Trà trái cây', 'ST': 'Sữa trái cây', 'CF': 'Cà phê', 'TNC': 'Trà nguyên chất', 'TP': 'Topping', 'LN': 'Lưu niệm'}.get(''.join(c for c in sku if c.isalpha()), 'Khác')
 
 
 NAV_LABELS = {
