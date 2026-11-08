@@ -18,7 +18,7 @@ if [ "$(id -u)" = "0" ]; then
 fi
 
 if [ -n "${PERSIST_DIR:-}" ]; then
-  mkdir -p "$PERSIST_DIR/agent_private" "$PERSIST_DIR/chat_attachments" "$PERSIST_DIR/shift_uploads"
+  mkdir -p "$PERSIST_DIR/agent_private" "$PERSIST_DIR/chat_attachments" "$PERSIST_DIR/shift_uploads" "$PERSIST_DIR/attendance_photos"
   # Seed once from the image; never overwrite data the shop has already written.
   FRESH=""
   if [ -z "${DATABASE_URL:-}" ] && [ ! -f "$PERSIST_DIR/beverageops.db" ] && [ -f /opt/seed_data/beverageops.db ]; then
@@ -42,6 +42,7 @@ if [ -n "${PERSIST_DIR:-}" ]; then
   export LLM_USAGE_DB="${LLM_USAGE_DB:-$PERSIST_DIR/agent_private/llm_usage.db}"
   export CHAT_ATTACHMENTS_DIR="${CHAT_ATTACHMENTS_DIR:-$PERSIST_DIR/chat_attachments}"
   export SHIFT_UPLOADS_DIR="${SHIFT_UPLOADS_DIR:-$PERSIST_DIR/shift_uploads}"
+  export ATTENDANCE_PHOTO_DIR="${ATTENDANCE_PHOTO_DIR:-$PERSIST_DIR/attendance_photos}"
 else
   mkdir -p /app/data
   FRESH=""

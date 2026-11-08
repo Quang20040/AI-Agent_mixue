@@ -275,6 +275,9 @@ def build_tool_registry(service):
                  ScheduleArguments, lambda **a: sched.create_schedule(service, **a), 'admin', 'draft'),
         ToolSpec('confirm_free_next_week', 'Nhân viên xác nhận tuần sau KHÔNG có ngày bận (trả lời đợt hỏi lịch bận từ thứ 7 tới 18:00 Chủ nhật).',
                  NoArguments, lambda: sched.confirm_free(service), 'public', 'draft'),
+        ToolSpec('get_attendance_report', 'Bảng chấm công: ai đi muộn bao nhiêu phút, về sớm, chưa check-in, lượt chờ duyệt trong khoảng ngày '
+                 '(chỉ start_date = đúng ngày đó; bỏ trống = hôm nay).', SalesArguments,
+                 lambda start_date=None, end_date=None: sched.attendance_report(service, start_date, end_date), 'admin'),
         ToolSpec('get_work_schedule', 'Xem lịch làm đã công bố của tuần (và ca của người đang chat); Quản lý xem thêm bản nháp chờ duyệt, '
                  'ca chính và lịch bận.', ScheduleViewArguments, lambda **a: sched.view_schedule(service, **a)),
     ]

@@ -35,6 +35,7 @@ def sources() -> dict[str, Path]:
     out['agent_private/audit.jsonl'] = Path(cfg.audit_path)
     out['agent_private/llm_usage.db'] = db_path()
     out['shift_uploads'] = shift_service.SHIFT_UPLOADS_DIR
+    out['attendance_photos'] = Path(os.environ.get('ATTENDANCE_PHOTO_DIR') or ROOT / 'data' / 'attendance_photos')
     out['chat_attachments'] = Path(os.environ.get('CHAT_ATTACHMENTS_DIR') or ROOT / 'data' / 'shift_photos' / 'chat_attachments')
     return out
 

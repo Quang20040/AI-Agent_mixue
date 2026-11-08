@@ -333,7 +333,7 @@ DEADLINE_HOUR = int(os.environ.get('SCHEDULE_DEADLINE_HOUR', 18))
 
 def shift_times() -> dict[str, tuple[str, str]]:
     """Start/end of each shift, e.g. SHIFT_TIMES="07:00-13:00,13:00-18:00,18:00-22:30"."""
-    raw = os.environ.get('SHIFT_TIMES', '07:00-13:00,13:00-18:00,18:00-22:30').split(',')
+    raw = os.environ.get('SHIFT_TIMES', '08:00-13:00,13:00-18:00,18:00-23:30').split(',')
     return {code: tuple(part.strip().split('-')) for code, part in zip(SHIFTS, raw)}
 
 
@@ -420,7 +420,12 @@ def reminders(username: str, now: datetime | None = None) -> list[dict[str, Any]
             begin = datetime.combine(day, datetime.strptime(times[s][0], '%H:%M').time(), VN)
             end = datetime.combine(day, datetime.strptime(times[s][1], '%H:%M').time(), VN)
             if begin <= now < end:
-                out.append({'kind': 'on_shift', 'text': f"Bạn đang trong ca {SHIFT_VI[s].lower()} ({times[s][0]}–{times[s][1]})."})
+                text = f"Bạn đang trong ca {SHIFT_VI[s].lower()} ({times[s][0]}–{times[s][1]})."
+                if offset == 0:
+                    from src.engine import attendance
+                    if attendance.state(username, now)['next'] == 'IN':
+                        text += ' Bạn chưa check-in — vào 📅 Lịch làm → Chấm công.'
+                out.append({'kind': 'on_shift', 'text': text})
             elif timedelta(0) < begin - now <= timedelta(hours=3):
                 mins = int((begin - now).total_seconds() // 60)
                 out.append({'kind': 'shift_soon', 'text': f"Sắp đến ca {SHIFT_VI[s].lower()} lúc {times[s][0]} "

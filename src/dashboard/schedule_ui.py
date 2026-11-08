@@ -127,37 +127,49 @@ def _busy_table(start, end, key, only=None, can_delete=True):
             st.rerun()
 
 
+def _staff_schedule(people, username, user_name):
+    start = _pick_week('staff')
+    plan = ss.published(start)
+    st.markdown(f"### Lịch làm tuần {start:%d/%m} – {start + timedelta(days=6):%d/%m/%Y}")
+    if plan:
+        render_week_table(plan['schedule'], highlight=username)
+        st.caption(f"Đã duyệt bởi {plan.get('approved_by', '')} · tên của bạn tô đỏ.")
+    else:
+        st.info('Quản lý chưa gửi lịch tuần này.')
+    st.divider()
+    if any(p['username'] == username for p in people):
+        c = ss.cycle()
+        if c['open'] and start == c['target_week']:
+            mine = next((r['response'] for r in ss.responses(start) if r['username'] == username), None)
+            col = st.columns([3, 1.3], vertical_alignment='center')
+            col[0].info(f"Hạn báo bận tuần này: **{c['deadline']:%H:%M %d/%m}**. "
+                        + ('Bạn đã trả lời ✅' if mine else 'Bạn chưa trả lời — không báo thì coi như rảnh cả tuần.'))
+            if col[1].button('Tuần này tôi rảnh', key='sched_no_busy', disabled=bool(mine)):
+                ss.confirm_no_busy(username, start)
+                st.session_state['sched_flash'] = 'Đã ghi nhận.'
+                st.rerun()
+        _busy_form(people, 'staff', fixed_user=username, by=user_name)
+        st.markdown('**Ngày bạn đã báo bận (tuần đang xem)**')
+        _busy_table(start, start + timedelta(days=6), 'staff', only=username)
+
+
 def render_schedule_page(agent, user_role: str, user_name: str, username: str, is_admin: bool):
     if flash := st.session_state.pop('sched_flash', None):
         st.success(flash)
     people = ss.employees()
     if not is_admin:
-        start = _pick_week('staff')
-        plan = ss.published(start)
-        st.markdown(f"### Lịch làm tuần {start:%d/%m} – {start + timedelta(days=6):%d/%m/%Y}")
-        if plan:
-            render_week_table(plan['schedule'], highlight=username)
-            st.caption(f"Đã duyệt bởi {plan.get('approved_by', '')} · tên của bạn tô đỏ.")
-        else:
-            st.info('Quản lý chưa gửi lịch tuần này.')
-        st.divider()
-        if any(p['username'] == username for p in people):
-            c = ss.cycle()
-            if c['open'] and start == c['target_week']:
-                mine = next((r['response'] for r in ss.responses(start) if r['username'] == username), None)
-                col = st.columns([3, 1.3], vertical_alignment='center')
-                col[0].info(f"Hạn báo bận tuần này: **{c['deadline']:%H:%M %d/%m}**. "
-                            + ('Bạn đã trả lời ✅' if mine else 'Bạn chưa trả lời — không báo thì coi như rảnh cả tuần.'))
-                if col[1].button('Tuần này tôi rảnh', key='sched_no_busy', disabled=bool(mine)):
-                    ss.confirm_no_busy(username, start)
-                    st.session_state['sched_flash'] = 'Đã ghi nhận.'
-                    st.rerun()
-            _busy_form(people, 'staff', fixed_user=username, by=user_name)
-            st.markdown('**Ngày bạn đã báo bận (tuần đang xem)**')
-            _busy_table(start, start + timedelta(days=6), 'staff', only=username)
+        from src.dashboard.attendance_ui import render_attendance_staff
+        tab_sched, tab_att = st.tabs(['🗓️ Lịch làm', '⏱️ Chấm công'])
+        with tab_sched:
+            _staff_schedule(people, username, user_name)
+        with tab_att:
+            render_attendance_staff(username)
         return
 
-    tab_week, tab_people = st.tabs(['🗓️ Lịch tuần', '👤 Ca chính & ngày bận'])
+    tab_week, tab_people, tab_att = st.tabs(['🗓️ Lịch tuần', '👤 Ca chính & ngày bận', '⏱️ Chấm công'])
+    with tab_att:
+        from src.dashboard.attendance_ui import render_attendance_admin
+        render_attendance_admin(user_name)
     with tab_week:
         start = _pick_week('admin')
         end = start + timedelta(days=6)

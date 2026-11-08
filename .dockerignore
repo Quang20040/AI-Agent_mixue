@@ -19,3 +19,4 @@ audit-reports
 output
 node_modules
 *.log
+data/attendance_photos

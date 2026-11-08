@@ -17,9 +17,23 @@ mỗi ca có ít nhất 1 nhân viên chính thức nếu được. Số ngườ
 
 | Biến | Mặc định | Ý nghĩa |
 |---|---|---|
-| `SHIFT_TIMES` | `07:00-13:00,13:00-18:00,18:00-22:30` | giờ ca sáng, chiều, tối (dùng để nhắc ca) |
+| `SHIFT_TIMES` | `08:00-13:00,13:00-18:00,18:00-23:30` | giờ ca sáng, chiều, tối (dùng để nhắc ca) |
 | `SCHEDULE_ASK_FROM_WEEKDAY` | `5` | ngày bắt đầu hỏi lịch bận (0 = thứ 2 … 5 = thứ 7) |
 | `SCHEDULE_DEADLINE_HOUR` | `18` | giờ chốt Chủ nhật |
 | `SCHEDULE_AUTO` | `1` | `0` để tắt tự xếp |
 
 Nhắc nhở hiện trong app khi nhân viên mở app; chưa gửi Zalo / SMS / thông báo điện thoại.
+
+## ⏱️ Chấm công (tab trong 📅 Lịch làm)
+
+- **Chỉ WiFi quán:** máy chủ xem địa chỉ IP công cộng của thiết bị (`X-Forwarded-For` từ Render). Quản lý đứng ở quán,
+  bắt WiFi quán, bấm *"Dùng mạng hiện tại làm WiFi quán"*. Điện thoại dùng 4G có IP của nhà mạng nên bị chặn.
+  Nếu nhà mạng đổi IP của quán (IP động), bấm lại để cập nhật. Mạng IPv6 được so theo cả dải /64.
+- **Khuôn mặt:** nhân viên đồng ý rồi chụp ảnh mẫu → Quản lý duyệt. Mỗi lần chấm công chụp selfie, Gemini so với ảnh
+  mẫu (cùng người? thấy rõ mặt? có vẻ chụp lại màn hình?). Khớp chắc chắn (≥ 0,8) → **AI duyệt**; không khớp / không
+  chắc / không thấy mặt / AI tắt / ngoài lịch → **chờ Quản lý xem** (ảnh mẫu và ảnh chấm công đặt cạnh nhau).
+  Nhân viên tự xóa được ảnh mẫu. Ảnh lưu trên ổ riêng của máy chủ, nằm trong bản sao lưu, không đưa lên GitHub.
+- **Giờ giấc** (theo lịch đã duyệt, `SHIFT_TIMES` mặc định 08:00–13:00 · 13:00–18:00 · 18:00–23:30):
+  vào trễ quá 5 phút = **đi muộn**, số phút tính từ giờ bắt đầu ca; ra sớm hơn 5 phút (ca tối 10 phút) = **về sớm**.
+  Hai ca liền nhau tính như một ca dài. Check-in / check-out lúc nào cũng được.
+- **Quản lý:** bảng công theo tuần (vào, muộn, ra, về sớm, chưa check-in), hỏi AI *"hôm nay ai đi muộn?"*.

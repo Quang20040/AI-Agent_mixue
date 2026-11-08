@@ -255,3 +255,49 @@ class ScheduleResponse(Base):
     week_start = Column(Date, primary_key=True)
     status = Column(String(20), nullable=False)          # NO_BUSY | BUSY_REPORTED
     updated_at = Column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
+
+
+class AttendanceNetwork(Base):
+    """Địa chỉ mạng (IP công cộng của WiFi quán) được phép chấm công."""
+    __tablename__ = "attendance_networks"
+
+    ip = Column(String(64), primary_key=True)
+    label = Column(String(100), nullable=True)
+    added_by = Column(String(100), nullable=True)
+    added_at = Column(DateTime, nullable=False, default=datetime.now)
+
+
+class FaceProfile(Base):
+    """Ảnh khuôn mặt mẫu của nhân viên (nhân viên đồng ý, Quản lý duyệt) để AI so khi chấm công."""
+    __tablename__ = "face_profiles"
+
+    username = Column(String(50), primary_key=True)
+    photo_path = Column(String(300), nullable=False)
+    status = Column(String(20), nullable=False, default="PENDING")   # PENDING | APPROVED | REJECTED
+    consent_at = Column(DateTime, nullable=False, default=datetime.now)
+    reviewed_by = Column(String(100), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+
+
+class AttendanceRecord(Base):
+    """Một lần check-in / check-out: thời điểm, mạng, kết quả so khuôn mặt, đúng giờ / muộn / về sớm, duyệt."""
+    __tablename__ = "attendance_records"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String(50), nullable=False)
+    work_date = Column(Date, nullable=False)
+    kind = Column(String(4), nullable=False)                  # IN | OUT
+    at = Column(DateTime, nullable=False)
+    shift_codes = Column(String(40), nullable=True)           # "CA_SANG,CA_CHIEU" or None (ngoài lịch)
+    ip = Column(String(64), nullable=True)
+    photo_path = Column(String(300), nullable=True)
+    face_result = Column(String(20), nullable=False)          # MATCH | NO_MATCH | UNSURE | NO_FACE | SPOOF | UNAVAILABLE
+    face_confidence = Column(Numeric(4, 2), nullable=True)
+    face_reason = Column(String(300), nullable=True)
+    timing = Column(String(20), nullable=False)               # ON_TIME | LATE | OK | EARLY | OFF_SCHEDULE
+    minutes = Column(Integer, nullable=False, default=0)      # phút muộn / về sớm
+    status = Column(String(20), nullable=False)               # AUTO_OK | NEEDS_REVIEW | APPROVED | REJECTED
+    reviewed_by = Column(String(100), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (Index("idx_attendance_day", "work_date", "username"),)

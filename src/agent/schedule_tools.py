@@ -150,3 +150,20 @@ def confirm_free(service) -> dict[str, Any]:
     return {'status': 'SUCCESS', 'week': f"{c['target_week']:%d/%m}",
             'message': f"Đã ghi nhận bạn rảnh tuần {c['target_week']:%d/%m} (những ngày bận đã báo vẫn giữ).",
             'source_refs': ['table:schedule_responses']}
+
+
+def attendance_report(service, start_date: date | None = None, end_date: date | None = None) -> dict[str, Any]:
+    """Manager: who was late / left early / did not check in, from the timesheet."""
+    from src.engine import attendance
+    actor = _actor(service)
+    if not is_admin_role(actor.role):
+        return {'status': 'UNAUTHORIZED', 'message': 'Chỉ Quản lý / Chủ quán xem bảng công.'}
+    start = start_date or _today()
+    end = end_date or start
+    rows = attendance.timesheet(start, end)
+    return {'status': 'SUCCESS' if rows else 'NO_DATA', 'from': start.isoformat(), 'to': end.isoformat(), 'rows': rows[:200],
+            'late': [r for r in rows if r['Muộn (phút)']], 'left_early': [r for r in rows if r['Về sớm (phút)']],
+            'not_checked_in': [r for r in rows if 'Chưa check-in' in r['Trạng thái']],
+            'waiting_review': len(attendance.needs_review()),
+            'rules': 'Muộn: vào sau giờ bắt đầu ca quá 5 phút (tính từ giờ bắt đầu). Về sớm: ra trước giờ kết thúc quá 5 phút (ca tối 10 phút).',
+            'source_refs': ['table:attendance_records', 'table:operation_plans']}
