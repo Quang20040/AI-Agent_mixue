@@ -697,7 +697,9 @@ Bạn được trang bị 8 công cụ vận hành:
 
         return {
             "status": "SUCCESS",
-            "message": f"ĐÃ PHÊ DUYỆT THÀNH CÔNG: Kế hoạch {draft_plan_id} ({plan['plan_type']}) đã được quản lý {user_name} duyệt.",
+            "message": (f"ĐÃ DUYỆT & GỬI lịch làm {draft_plan_id}: mọi nhân viên đã thấy lịch của mình trong app."
+                        if plan['plan_type'] == 'STAFF_SCHEDULE' else
+                        f"ĐÃ PHÊ DUYỆT THÀNH CÔNG: Kế hoạch {draft_plan_id} ({plan['plan_type']}) đã được quản lý {user_name} duyệt."),
             "plan_id": draft_plan_id,
             "is_approved": True,
             "approved_by": plan["approved_by"],
@@ -1830,6 +1832,25 @@ Bạn được trang bị 8 công cụ vận hành:
             out["pending_approval"] = pending
         return out
 
+    def _schedule_reply(self, q_norm: str, role: str, is_admin: bool) -> dict[str, Any]:
+        from src.agent import schedule_tools as sched
+        if is_admin and "xep lich" in q_norm:
+            res = sched.create_schedule(self)
+            text = res['message'] if res['status'] != 'PENDING_APPROVAL' else (
+                f"📅 **Đã xếp nháp lịch tuần {res['week']}** (mã `{res['plan_id']}`)\n\n{res['schedule_table']}\n\n"
+                + ''.join(f"- ⚠️ {w}\n" for w in res['warnings']) + f"\n{res['message']}")
+            return {'text': text, 'tool_called': 'create_weekly_schedule', 'raw_result': res,
+                    'evidence_refs': res.get('source_refs', [])}
+        res = sched.view_schedule(self, week_of=(None if 'tuan sau' not in q_norm else date.today() + timedelta(days=7)))
+        parts = [f"📅 **Lịch làm tuần {res['week']}**"]
+        if res.get('my_shifts'):
+            parts.append('**Ca của bạn:** ' + '; '.join(res['my_shifts']))
+        parts.append(res['published_table'] or res.get('message', ''))
+        if res.get('draft'):
+            parts.append(f"Bản nháp chờ duyệt `{res['draft']['plan_id']}` — xem ở trang 📅 Lịch làm.")
+        return {'text': '\n\n'.join(parts), 'tool_called': 'get_work_schedule', 'raw_result': res,
+                'evidence_refs': res.get('source_refs', [])}
+
     def _process_offline_query(self, user_query: str, user_role: str = "MANAGER", user_name: str = "Quản lý", chat_history: list[dict[str, Any]] | None = None, *, _allow_compound: bool = True) -> dict[str, Any]:
         """Processes a natural language query from the user, routes to appropriate tools, and builds response with evidence."""
         from src.agent.response_policy import grounded_result_reply, is_explicit_draft_request
@@ -1860,6 +1881,10 @@ Bạn được trang bị 8 công cụ vận hành:
         everyday = everyday_reply(user_query, previous_answer)
         if everyday:
             return everyday
+
+        # Lịch làm tuần (xem / AI xếp nháp). Báo bận và đặt ca chính cần hiểu câu tự do → dùng chế độ AI.
+        if re.search(r"\b(lich lam|lich truc|xep lich|lich ca|ca lam cua (toi|em|minh))\b", q_norm):
+            return self._schedule_reply(q_norm, clean_role, is_admin)
 
         # 0.55. PHÂN RÃ CÂU HỎI GHÉP ĐA Ý ĐỊNH (MULTI-INTENT COMPOUND QUERY)
         if _allow_compound:
@@ -2116,7 +2141,7 @@ Bạn được trang bị 8 công cụ vận hành:
         if re.search(r"\b(ky duyet|phe duyet|duyet|approve)\b", q_norm) and not any(
             word in q_norm for word in ["cho duyet", "da duyet", "lich su", "ai duyet", "chua duyet"]
         ):
-            match = re.search(r"\bPLAN_(?:PO|PREP)_[A-Z0-9]+\b", user_query.upper())
+            match = re.search(r"\b(?:PLAN_(?:PO|PREP)_[A-Z0-9]+|LICH-\d{8}-[A-F0-9]{4})\b", user_query.upper())
             draft_id = match.group(0) if match else None
             if not draft_id:
                 candidates = list(self.draft_plans.values())

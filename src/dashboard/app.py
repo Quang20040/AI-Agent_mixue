@@ -25,6 +25,7 @@ from src.dashboard.forecast_context_ui import render_forecast_context
 from src.auth import (
     AI_TECH_PAGE,
     CHAT_PAGE,
+    SCHEDULE_PAGE,
     OCR_PAGE,
     can_access_page,
     create_employee,
@@ -285,6 +286,9 @@ with st.container(key="workspace"):
             render_approval_center(agent, user_role, user_name, key="home")
         elif normalize_role(user_role) == "STAFF_OFFICIAL":
             render_my_submissions(agent, user_role, user_name)
+        if not is_admin:
+            from src.dashboard.schedule_ui import render_my_week
+            render_my_week(st.session_state.get("username", ""), user_name)
         render_live_home()
 
     elif section == OCR_PAGE:
@@ -1174,6 +1178,10 @@ with st.container(key="workspace"):
         render_backup_panel()
         st.divider()
         render_sample_purge_panel(st.session_state.get("username", ""))
+
+    elif section == SCHEDULE_PAGE:
+        from src.dashboard.schedule_ui import render_schedule_page
+        render_schedule_page(agent, user_role, user_name, st.session_state.get("username", ""), is_admin)
 
     elif section == AI_TECH_PAGE:
         from src.dashboard.ai_tech_ui import render_ai_tech_page

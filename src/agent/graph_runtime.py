@@ -244,7 +244,7 @@ class AgentGraph:
             if not is_admin_role(actor.role):
                 return {'response': self._response('Tài khoản hiện tại không được phép phê duyệt kế hoạch.',
                                                    'FORBIDDEN', tool_called='rbac_restriction')}
-            match = re.search(r'\bPLAN_(?:PO|PREP)_[A-Z0-9]{8}\b', state['query'].upper())
+            match = re.search(r'\b(?:PLAN_(?:PO|PREP)_[A-Z0-9]{8}|LICH-\d{8}-[A-F0-9]{4})\b', state['query'].upper())
             if not match:
                 return {'response': self._response('Bạn gửi mã kế hoạch cần duyệt nhé.', 'NEED_PLAN_ID')}
             return {'messages': [AIMessage(content='', tool_calls=[{'name': 'request_plan_approval',

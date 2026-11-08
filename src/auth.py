@@ -28,11 +28,12 @@ Base.metadata.create_all(bind=engine)
 
 CHAT_PAGE = "💬 Tuyết Vương AI"
 OCR_PAGE = "📸 Chốt ca & OCR"
+SCHEDULE_PAGE = "📅 Lịch làm"
 
 # Two technical pillars of the thesis, shown first on every navigation surface.
 CORE_PAGES: tuple[str, ...] = (CHAT_PAGE, OCR_PAGE)
 # Deterministic tools that feed the agent and reconciliation with data.
-SUPPORT_PAGES: tuple[str, ...] = ("Báo cáo & kho", "Dự báo", "Sơ chế", "Nhập hàng", "Tem & công thức")
+SUPPORT_PAGES: tuple[str, ...] = ("Báo cáo & kho", "Dự báo", "Sơ chế", "Nhập hàng", "Tem & công thức", SCHEDULE_PAGE)
 AI_TECH_PAGE = "🛠️ Kỹ thuật AI"
 ADMIN_ONLY_PAGES: tuple[str, ...] = ("👥 Quản lý nhân viên", AI_TECH_PAGE)
 
@@ -45,6 +46,7 @@ ADMIN_PAGES: list[str] = [
     "Sơ chế",
     "Nhập hàng",
     "Tem & công thức",
+    SCHEDULE_PAGE,
     "👥 Quản lý nhân viên",
     AI_TECH_PAGE,
 ]
@@ -55,12 +57,14 @@ STAFF_OFFICIAL_PAGES: list[str] = [
     OCR_PAGE,
     "Báo cáo & kho",
     "Tem & công thức",
+    SCHEDULE_PAGE,
 ]
 
 STAFF_PROBATION_PAGES: list[str] = [
     "Trang chủ",
     CHAT_PAGE,
     "Tem & công thức",
+    SCHEDULE_PAGE,
 ]
 
 

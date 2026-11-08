@@ -42,7 +42,7 @@ def test_dashboard_admin_full_access():
     assert app.session_state.get('user_role') == 'ADMIN'
 
     # Admin thấy 2 trụ cột (AI Agent, Chốt ca & OCR) ngay sau Trang chủ, rồi tới công cụ phụ trợ và quản trị
-    expected_tabs = ['Trang chủ', '💬 Tuyết Vương AI', '📸 Chốt ca & OCR', 'Báo cáo & kho', 'Dự báo', 'Sơ chế', 'Nhập hàng', 'Tem & công thức', '👥 Quản lý nhân viên', '🛠️ Kỹ thuật AI']
+    expected_tabs = ['Trang chủ', '💬 Tuyết Vương AI', '📸 Chốt ca & OCR', 'Báo cáo & kho', 'Dự báo', 'Sơ chế', 'Nhập hàng', 'Tem & công thức', '📅 Lịch làm', '👥 Quản lý nhân viên', '🛠️ Kỹ thuật AI']
     assert app.radio(key='main_navigation').options == [nav_label(page) for page in expected_tabs]
 
     # Kiểm tra tra cứu món và gửi công thức sang chat
@@ -78,7 +78,7 @@ def test_dashboard_staff_restricted_access():
     assert normalize_role(app.session_state.get('user_role')) == 'STAFF_OFFICIAL'
 
     # Nhân viên chính thức: Trang chủ, 2 trụ cột (AI Agent, Chốt ca & OCR), Báo cáo & kho, Tem & công thức
-    allowed_staff_tabs = ['Trang chủ', '💬 Tuyết Vương AI', '📸 Chốt ca & OCR', 'Báo cáo & kho', 'Tem & công thức']
+    allowed_staff_tabs = ['Trang chủ', '💬 Tuyết Vương AI', '📸 Chốt ca & OCR', 'Báo cáo & kho', 'Tem & công thức', '📅 Lịch làm']
     # Staff only file stock slips there, so their menu names the page by that (not "Doanh thu & Kho hàng").
     staff_labels = [('Phiếu xin nhập / xuất kho' if page == 'Báo cáo & kho' else nav_label(page)) for page in allowed_staff_tabs]
     assert app.radio(key='main_navigation').options == staff_labels

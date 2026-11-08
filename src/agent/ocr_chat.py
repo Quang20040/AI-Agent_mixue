@@ -1121,7 +1121,7 @@ class OcrChatMixin:
         """
         upper = user_query.upper()
         file_ids = list(dict.fromkeys(re.findall(r"\bFILE_[A-F0-9]{16}\b", upper)))
-        mentions_plan = bool(re.search(r"\bPLAN_(?:PO|PREP)_[A-Z0-9]{8}\b", upper))
+        mentions_plan = bool(re.search(r"\b(?:PLAN_(?:PO|PREP)_[A-Z0-9]{8}|LICH-\d{8}-[A-F0-9]{4})\b", upper))
         draft_ref = re.search(r"\b(?:DRAFT_OCR_[A-F0-9]{12}|OCR_DRAFT_[A-F0-9]{10})\b", upper)
         ocr_topic = any(w in q_norm for w in ("chot ca", "ocr", "du thao", "so tay", "hoa don pos")) or bool(draft_ref)
 

@@ -46,13 +46,23 @@ def pending_items(agent, user_role: str, user_name: str, user_id: str) -> list[d
             'detail': (f"Số lượng {req['quantity']:g} · ngày {_date(req['business_date'])} · đề xuất bởi {escape(str(req['recorded_by']))}"
                        + (f" · {escape(str(req['notes']))}" if req.get('notes') and req['notes'] != '—' else '')),
         })
-    from src.dashboard.sales_view import business_today
-    today = business_today().isoformat()
+    from src.engine.stock_matrix import today_vn
+    today = today_vn().isoformat()
     for plan in list_plans():
         # A plan for a day that has passed can no longer be carried out; it is history, not work.
         # Topping prep plans are advice for the bar, never waiting on a manager (older ones were saved as pending).
         if (plan.get('status') != 'PENDING_APPROVAL' or plan.get('plan_type') == 'TOPPING_PREPARATION'
                 or str(plan.get('target_date', ''))[:10] < today):
+            continue
+        if plan.get('plan_type') == 'STAFF_SCHEDULE':
+            week = plan['schedule']
+            check = plan.get('verification') or {}
+            items.append({
+                'kind': 'plan', 'id': plan['plan_id'],
+                'title': f"📅 Lịch làm tuần {_date(week['week_start'])[:5]} – {_date(week['week_end'])}",
+                'detail': (f"Mã {plan['plan_id']} · AI xếp, chờ duyệt để gửi cho nhân viên"
+                           + (f" · ⚠️ {len(check.get('warnings', []))} lưu ý" if check.get('warnings') else '')),
+            })
             continue
         kind_label = 'Đơn đặt hàng nguyên liệu' if plan.get('plan_type') == 'REPLENISHMENT_PO' else 'Kế hoạch'
         items.append({

@@ -219,3 +219,29 @@ class ShiftReportRecord(Base):
     __table_args__ = (
         Index("idx_shift_reports_date_code", "business_date", "shift_code"),
     )
+
+
+class StaffShiftPreference(Base):
+    """Ca chính của từng nhân viên (CA_SANG / CA_CHIEU / CA_TOI) — AI ưu tiên xếp vào ca này."""
+    __tablename__ = "staff_shift_preferences"
+
+    username = Column(String(50), primary_key=True)
+    main_shift = Column(String(20), nullable=True)
+    note = Column(String(200), nullable=True)
+    updated_by = Column(String(100), nullable=True)
+    updated_at = Column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
+
+
+class StaffUnavailability(Base):
+    """Một ngày / một ca nhân viên báo bận — AI không xếp người đó vào ca này."""
+    __tablename__ = "staff_unavailability"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String(50), nullable=False)
+    work_date = Column(Date, nullable=False)
+    shift_code = Column(String(20), nullable=True)   # None = bận cả ngày
+    reason = Column(String(200), nullable=True)
+    created_by = Column(String(100), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.now)
+
+    __table_args__ = (Index("idx_staff_unavail_date", "work_date", "username"),)

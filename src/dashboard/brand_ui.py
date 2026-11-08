@@ -48,7 +48,7 @@ def navigate_to(page):
 
 def render_mobile_navigation(pages, current):
     st.session_state['mobile_navigation'] = current
-    short = {'Trang chủ': '🏠 Trang chủ', 'Báo cáo & kho': '📦 Kho', 'Dự báo': '📈 Dự báo', 'Sơ chế': '🥣 Topping', 'Nhập hàng': '🛒 Đặt hàng', 'Tem & công thức': '📋 Công thức', '👥 Quản lý nhân viên': '👥 Nhân sự', '🛠️ Kỹ thuật AI': '🛠️ Kỹ thuật AI', '💬 Tuyết Vương AI': '💬 Trợ lý', '📸 Chốt ca & OCR': '📸 Chốt ca'}
+    short = {'Trang chủ': '🏠 Trang chủ', 'Báo cáo & kho': '📦 Kho', 'Dự báo': '📈 Dự báo', 'Sơ chế': '🥣 Topping', 'Nhập hàng': '🛒 Đặt hàng', 'Tem & công thức': '📋 Công thức', '👥 Quản lý nhân viên': '👥 Nhân sự', '🛠️ Kỹ thuật AI': '🛠️ Kỹ thuật AI', '📅 Lịch làm': '📅 Lịch làm', '💬 Tuyết Vương AI': '💬 Trợ lý', '📸 Chốt ca & OCR': '📸 Chốt ca'}
     def change_page():
         navigate_to(st.session_state.mobile_navigation)
     with st.container(key='mobile_dock'):
@@ -231,7 +231,7 @@ def menu_group(sku):
 NAV_LABELS = {
     'Báo cáo & kho': 'Doanh thu & Kho hàng', 'Tem & công thức': 'Công thức & Mã tem ly', 'Dự báo': 'Dự báo bán hàng',
     'Sơ chế': 'Chuẩn bị & Nấu topping', 'Nhập hàng': 'Đặt hàng nguyên liệu', '👥 Quản lý nhân viên': 'Quản lý nhân viên',
-    '🛠️ Kỹ thuật AI': 'Kỹ thuật AI',
+    '🛠️ Kỹ thuật AI': 'Kỹ thuật AI', '📅 Lịch làm': 'Lịch làm tuần',
     '💬 Tuyết Vương AI': 'Trợ lý Tuyết Vương',
     '📸 Chốt ca & OCR': 'Chốt ca & Quét hóa đơn',
 }
@@ -249,6 +249,7 @@ PAGE_HEROES = {
     'Nhập hàng': ('Đặt hàng nguyên liệu', 'Lập phiếu đặt hàng theo tồn kho và lượng dùng, chờ Quản lý duyệt', 'Đủ hàng mỗi ngày,\nKhông lo gián đoạn!'),
     'Tem & công thức': ('Công thức & Mã tem ly', 'Tra cứu định lượng nguyên liệu, cách pha từng món và mã tem dán ly', 'Đúng công thức,\nĐậm vị Mixue!'),
     '👥 Quản lý nhân viên': ('Quản lý nhân viên', 'Danh sách nhân viên, cấp tài khoản mới và đặt lại mật khẩu', 'Chăm chút đội ngũ,\nTạo nên trải nghiệm ngọt ngào!'),
+    '📅 Lịch làm': ('Lịch làm tuần', 'AI xếp ca theo ca chính và ngày bận của từng người; Quản lý duyệt rồi mới gửi cho nhân viên', 'Ca đủ người,\nquán chạy êm!'),
     '🛠️ Kỹ thuật AI': ('Kỹ thuật AI', 'Guardrail, tool calling, duyệt, RAG, OCR, độ trễ, chi phí và benchmark của trợ lý', 'Đo được,\nmới cải thiện được!'),
     '💬 Tuyết Vương AI': ('Trợ lý Tuyết Vương', 'Hỏi đáp nhanh công thức pha chế, tra cứu doanh thu, kiểm tra kho hàng và hỗ trợ công việc tại quán', 'Hỏi gì cũng có,\nnói có sách mách có chứng!'),
     '📸 Chốt ca & OCR': ('Chốt ca & Quét ảnh hóa đơn', 'Tải ảnh chụp sổ giao ca hoặc hóa đơn máy bán hàng để tự động đọc số tiền và gửi Quản lý duyệt', 'Số chưa chắc,\nđể người xác nhận!'),
@@ -262,7 +263,7 @@ def _initials(name):
 
 NAV_SVG = {
     'Trang chủ': 'home', '💬 Tuyết Vương AI': 'chat', '📸 Chốt ca & OCR': 'camera', 'Báo cáo & kho': 'chart',
-    'Dự báo': 'trend', 'Sơ chế': 'prep', 'Nhập hàng': 'store', 'Tem & công thức': 'recipe', '👥 Quản lý nhân viên': 'users', '🛠️ Kỹ thuật AI': 'gear',
+    'Dự báo': 'trend', 'Sơ chế': 'prep', 'Nhập hàng': 'store', 'Tem & công thức': 'recipe', '👥 Quản lý nhân viên': 'users', '🛠️ Kỹ thuật AI': 'gear', '📅 Lịch làm': 'calendar',
 }
 
 
@@ -878,6 +879,15 @@ def render_approval_card(agent, pending, clean_role, user_name, is_admin, key_su
                 st.markdown(f"<div class='px-cash-note'>{' · '.join(notes)}</div>", unsafe_allow_html=True)
             for disc in discrepancies:
                 st.warning(f"⚠️ {disc.get('message')}")
+        elif pending.get('plan_type') == 'STAFF_SCHEDULE':
+            from src.dashboard.schedule_ui import render_week_table
+            plan = pending.get('plan') or {}
+            st.markdown(f"#### ⏸️ Duyệt & gửi lịch làm `{pending['plan_id']}`")
+            st.caption('Nhân viên chỉ thấy lịch sau khi bạn bấm Phê duyệt. Muốn sửa từng ô thì mở trang 📅 Lịch làm.')
+            render_week_table(plan.get('schedule') or {})
+            warns = (plan.get('verification') or {}).get('warnings', [])
+            if warns:
+                st.warning('\n'.join(f'- {w}' for w in warns[:12]) + (f'\n- … và {len(warns) - 12} lưu ý khác' if len(warns) > 12 else ''))
         else:
             st.markdown(f"**Xác nhận kế hoạch {pending['plan_id']}**")
             with st.expander('Xem nội dung kế hoạch trước khi duyệt'):

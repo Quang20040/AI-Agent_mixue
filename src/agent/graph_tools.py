@@ -2,7 +2,7 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -66,7 +66,47 @@ class ReplenishmentArguments(Arguments):
 
 
 class ApprovalArguments(Arguments):
-    draft_plan_id: str = Field(pattern=r'^PLAN_(?:PO|PREP)_[A-Z0-9]{8}$')
+    draft_plan_id: str = Field(pattern=r'^(?:PLAN_(?:PO|PREP)_[A-Z0-9]{8}|LICH-\d{8}-[A-F0-9]{4})$')
+
+
+ShiftName = Literal['sáng', 'chiều', 'tối']
+
+
+class MainShiftArguments(Arguments):
+    employee: str = Field(min_length=1, max_length=100, description='Họ tên hoặc tên đăng nhập của nhân viên')
+    main_shift: ShiftName | None = Field(default=None, description='Ca chính; bỏ trống để xóa ca chính')
+
+
+class BusyArguments(Arguments):
+    start_date: date = Field(description='Ngày bận (hoặc ngày đầu nếu bận nhiều ngày)')
+    end_date: date | None = Field(default=None, description='Ngày cuối nếu bận nhiều ngày liên tiếp')
+    shift: ShiftName | None = Field(default=None, description='Ca bận; bỏ trống = bận cả ngày')
+    employee: str | None = Field(default=None, max_length=100, description='Bỏ trống = chính người đang chat')
+    reason: str = Field(default='', max_length=200)
+
+    @model_validator(mode='after')
+    def valid_range(self):
+        if self.end_date and self.end_date < self.start_date:
+            raise ValueError('end_date must be on or after start_date')
+        if self.end_date and (self.end_date - self.start_date).days > 31:
+            raise ValueError('at most 31 days at once')
+        return self
+
+
+class ShiftNeed(Arguments):
+    day: date
+    shift: ShiftName
+    people: int = Field(ge=0, le=6)
+
+
+class ScheduleArguments(Arguments):
+    week_of: date | None = Field(default=None, description='Một ngày bất kỳ trong tuần cần xếp; bỏ trống = tuần sau')
+    needs: list[ShiftNeed] = Field(default_factory=list, max_length=21,
+                                   description='Chỉ các ca cần số người khác mặc định (sáng 1, chiều 2, tối 2)')
+
+
+class ScheduleViewArguments(Arguments):
+    week_of: date | None = Field(default=None, description='Một ngày trong tuần cần xem; bỏ trống = tuần này')
 
 
 FileId = Annotated[str, Field(pattern=r'^FILE_[A-F0-9]{16}$')]
@@ -191,6 +231,8 @@ def build_tool_registry(service):
             kwargs['report_date'] = kwargs['report_date'].isoformat()
         return service.tool_update_shift_ocr_draft(**kwargs)
 
+    from src.agent import schedule_tools as sched
+
     specs = [
         ToolSpec('get_weather_forecast', 'Tự lấy dự báo thời tiết theo tọa độ cửa hàng từ Open-Meteo/ECMWF: giờ mưa sắp tới, nhiệt độ, nguồn, thời điểm lấy và gợi ý sơ chế. Dùng khi hỏi thời tiết hoặc lời khuyên theo mưa. Không phải quan trắc tại cửa hàng.', WeatherArguments, weather),
         ToolSpec('get_data_coverage', 'Xem ngày đầu, ngày cuối và số ngày có dữ liệu bán hàng. Dùng để xác định ngày gần nhất.', NoArguments, coverage, 'admin'),
@@ -224,5 +266,14 @@ def build_tool_registry(service):
         ToolSpec('update_shift_ocr_draft', 'Cập nhật từng trường trong dự thảo chốt ca OCR đang chờ theo yêu cầu người dùng và kiểm tra lại tính nhất quán.', OcrDraftUpdateArguments, update_ocr, 'public', 'draft'),
         ToolSpec('request_shift_draft_confirmation', 'Yêu cầu xác nhận lưu dự thảo chốt ca OCR vào sổ doanh thu sau khi đã kiểm định đầy đủ.', OcrDraftConfirmArguments,
                  lambda draft_id: service.tool_get_shift_ocr_draft(draft_id) or {'status': 'NOT_FOUND'}, 'admin', 'approval'),
+        ToolSpec('set_staff_main_shift', 'Đặt ca chính (sáng / chiều / tối) của một nhân viên để AI ưu tiên khi xếp lịch làm.',
+                 MainShiftArguments, lambda **a: sched.set_main_shift(service, **a), 'admin', 'draft'),
+        ToolSpec('report_staff_busy', 'Ghi lại ngày / ca nhân viên bận để không bị xếp lịch. Nhân viên chỉ báo bận cho chính mình; '
+                 'Quản lý ghi được cho người khác.', BusyArguments, lambda **a: sched.report_busy(service, **a), 'public', 'draft'),
+        ToolSpec('create_weekly_schedule', 'AI XẾP LỊCH LÀM cả tuần cho nhân viên chính thức và thử việc theo ca chính, ngày bận và số người '
+                 'mỗi ca; lưu thành BẢN NHÁP chờ Quản lý duyệt rồi mới gửi cho nhân viên. Gọi lại để xếp phương án khác.',
+                 ScheduleArguments, lambda **a: sched.create_schedule(service, **a), 'admin', 'draft'),
+        ToolSpec('get_work_schedule', 'Xem lịch làm đã công bố của tuần (và ca của người đang chat); Quản lý xem thêm bản nháp chờ duyệt, '
+                 'ca chính và lịch bận.', ScheduleViewArguments, lambda **a: sched.view_schedule(service, **a)),
     ]
     return {spec.name: spec for spec in specs}

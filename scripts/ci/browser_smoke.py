@@ -50,6 +50,17 @@ with sync_playwright() as pw:
                 print(f'SHOT{i}:' + base64.b64encode(data).decode())
     assert not page.locator('[data-testid="stException"]').count(), 'exception on the AI page'
     print('AI engineering dashboard ok')
+    # Weekly schedule: the AI drafts next week, the manager sees the editable draft.
+    nav.get_by_text('Lịch làm tuần', exact=True).first.click(timeout=15000)
+    page.locator('.st-key-sched_generate button').click(timeout=30000)
+    page.wait_for_selector('.st-key-sched_draft', timeout=60000)
+    assert not page.locator('[data-testid="stException"]').count(), 'exception on the schedule page'
+    if shots:
+        page.screenshot(path=f'{shots}/schedule.png', full_page=True)
+        if os.environ.get('SMOKE_SHOTS_LOG'):
+            import base64
+            print('SHOT9:' + base64.b64encode(page.screenshot(type='jpeg', quality=55, full_page=True)).decode())
+    print('schedule draft ok')
     page.goto(BASE + '/ui/', wait_until='domcontentloaded')
     page.fill('input[name=u]', 'quanly')
     page.fill('input[name=p]', '123')
