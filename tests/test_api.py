@@ -71,5 +71,12 @@ def test_chat_approval_needs_a_manager():
                        headers=bearer('nhanvien')).status_code == 403
 
 
+def test_the_assistant_step_trace_is_shown_to_the_manager_only():
+    staff = client.post('/api/v1/stores/2132/chat', json={'message': 'xin chào'}, headers=bearer('nhanvien')).json()
+    assert staff['text'] and 'trace' not in staff and 'steps' not in staff
+    manager = client.post('/api/v1/stores/2132/chat', json={'message': 'xin chào'}, headers=bearer('chucuahang')).json()
+    assert manager['text'] and 'trace' in manager and 'steps' in manager
+
+
 def test_backup_download_is_manager_only():
     assert client.get('/api/v1/stores/2132/backup', headers=bearer('nhanvien')).status_code == 403

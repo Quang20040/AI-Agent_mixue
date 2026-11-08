@@ -817,6 +817,10 @@ from src.agent.trace_format import trace_steps  # noqa: E402
 
 
 def render_agent_trace(trace, mode=None):
+    """'What the assistant did' (guardrail, tools, permission check) — shown to the manager only."""
+    from src.auth import is_admin_role
+    if not is_admin_role(st.session_state.get('user_role')):
+        return
     steps = trace_steps(trace, mode)
     if not steps:
         return

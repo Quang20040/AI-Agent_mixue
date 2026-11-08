@@ -335,8 +335,10 @@ def chat(body: ChatIn, store_id: str = Depends(store_access), user: User = Depen
     """Ask the assistant. A reply with `pending_approval` waits for POST .../chat/approval (manager accounts)."""
     result = agent_for(user).process_query(body.message, user.role, user.name, user_id=user.username)
     from src.agent.trace_format import trace_steps
-    out = {k: result.get(k) for k in ('text', 'tool_called', 'evidence_refs', 'pending_approval', 'execution_mode', 'trace')}
-    out['steps'] = trace_steps(result.get('trace'), result.get('execution_mode'))
+    out = {k: result.get(k) for k in ('text', 'tool_called', 'evidence_refs', 'pending_approval', 'execution_mode')}
+    if user.is_admin:   # the step-by-step trace (guardrail, tools, permission check) is for the manager only
+        out['trace'] = result.get('trace')
+        out['steps'] = trace_steps(result.get('trace'), result.get('execution_mode'))
     return _plain(out)
 
 
