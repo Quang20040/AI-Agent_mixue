@@ -10,7 +10,7 @@ from src.database import Base, SessionLocal, engine
 from src.engine import pos_import
 from src.models import AppSetting, MenuItem, SalesDaily
 
-DAYS = ['2026-11-01', '2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06']
+DAYS = ['2026-11-01', '2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06', '2026-11-07']
 
 
 def _clean(days):
@@ -31,9 +31,9 @@ def _clean(days):
 def pos_dir(tmp_path):
     for f in pos_import.folder().iterdir():
         shutil.copy(f, tmp_path / f.name)
-    _clean(DAYS + ['2026-11-07'])
+    _clean(DAYS)
     yield tmp_path
-    _clean(DAYS + ['2026-11-07'])
+    _clean(DAYS)
 
 
 def test_shipped_transcriptions_reconcile_with_the_pos_footer():
@@ -47,7 +47,7 @@ def test_shipped_transcriptions_reconcile_with_the_pos_footer():
 def test_sync_imports_days_creates_new_skus_and_is_idempotent(pos_dir):
     report = pos_import.sync(path=pos_dir)
     assert not report['failed']
-    assert {r['date'] for r in report['imported']} == set(DAYS) | {'2026-11-07'}
+    assert {r['date'] for r in report['imported']} == set(DAYS)
     db = SessionLocal()
     try:
         assert db.get(MenuItem, 'DK11').sku_name == 'Kem ốc quế Matcha'
@@ -60,8 +60,8 @@ def test_sync_imports_days_creates_new_skus_and_is_idempotent(pos_dir):
         dk1 = next(r for r in rows if r.sku_id == 'DK1')
         assert (dk1.quantity_sold, int(dk1.revenue_vnd)) == (45, 450_000)
         assert {r.verification_status for r in rows} == {'verified'}
-        partial = db.query(SalesDaily).filter(SalesDaily.business_date == date(2026, 11, 7)).all()
-        assert partial and {r.verification_status for r in partial} == {'pending'}
+        d7 = db.query(SalesDaily).filter(SalesDaily.business_date == date(2026, 11, 7)).all()
+        assert sum(int(r.revenue_vnd) for r in d7) == 11_028_000
         count = db.query(SalesDaily).filter(SalesDaily.business_date >= d1).count()
     finally:
         db.close()
@@ -96,18 +96,25 @@ def test_unknown_pos_name_is_reported():
     assert problems and 'Món mới toanh' in problems[0]
 
 
-def test_completing_day_7_reimports_it_as_verified(pos_dir):
+def test_a_day_marked_incomplete_is_pending_until_completed(pos_dir):
+    mf = pos_dir / 'manifest.json'
+    m = json.loads(mf.read_text(encoding='utf-8'))
+    full = dict(m['2026-11-07'])
+    m['2026-11-07'] = {'items': None, 'revenue_vnd': None, 'complete': False}
+    mf.write_text(json.dumps(m), encoding='utf-8')
     pos_import.sync(path=pos_dir)
-    rows = pos_import.read_day(pos_dir / '2026-11-07.csv')
-    t = pos_import.totals(rows)
-    m = json.loads((pos_dir / 'manifest.json').read_text(encoding='utf-8'))
-    m['2026-11-07'] = {'items': t['items'], 'revenue_vnd': t['revenue_vnd'], 'complete': True}
-    (pos_dir / 'manifest.json').write_text(json.dumps(m), encoding='utf-8')
+
+    def statuses():
+        db = SessionLocal()
+        try:
+            return {r.verification_status for r in
+                    db.query(SalesDaily).filter(SalesDaily.business_date == date(2026, 11, 7)).all()}
+        finally:
+            db.close()
+
+    assert statuses() == {'pending'}
+    m['2026-11-07'] = full
+    mf.write_text(json.dumps(m), encoding='utf-8')
     report = pos_import.sync(path=pos_dir)
     assert [r['date'] for r in report['imported']] == ['2026-11-07']
-    db = SessionLocal()
-    try:
-        rows = db.query(SalesDaily).filter(SalesDaily.business_date == date(2026, 11, 7)).all()
-        assert {r.verification_status for r in rows} == {'verified'}
-    finally:
-        db.close()
+    assert statuses() == {'verified'}

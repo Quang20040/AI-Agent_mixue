@@ -1,10 +1,38 @@
 {
   "_note": "Footer of each POS 'Báo biểu – Thống kê số lượng sản phẩm' slip (Mixue 39 Tôn Quang Phiệt). items = 'Tổng số lượng sản phẩm' (drinks/ice cream, toppings not counted); revenue = 'Tổng doanh thu' (toppings included). complete=false means a photo is still missing: the day is imported as 'pending' and is not reconciled.",
-  "2026-11-01": {"items": 516, "revenue_vnd": 10943000, "complete": true},
-  "2026-11-02": {"items": 368, "revenue_vnd": 7391000, "complete": true},
-  "2026-11-03": {"items": 306, "revenue_vnd": 6472000, "complete": true},
-  "2026-11-04": {"items": 387, "revenue_vnd": 8067000, "complete": true},
-  "2026-11-05": {"items": 442, "revenue_vnd": 9634000, "complete": true},
-  "2026-11-06": {"items": 542, "revenue_vnd": 12041000, "complete": true},
-  "2026-11-07": {"items": null, "revenue_vnd": null, "complete": false}
+  "2026-11-01": {
+    "items": 516,
+    "revenue_vnd": 10943000,
+    "complete": true
+  },
+  "2026-11-02": {
+    "items": 368,
+    "revenue_vnd": 7391000,
+    "complete": true
+  },
+  "2026-11-03": {
+    "items": 306,
+    "revenue_vnd": 6472000,
+    "complete": true
+  },
+  "2026-11-04": {
+    "items": 387,
+    "revenue_vnd": 8067000,
+    "complete": true
+  },
+  "2026-11-05": {
+    "items": 442,
+    "revenue_vnd": 9634000,
+    "complete": true
+  },
+  "2026-11-06": {
+    "items": 542,
+    "revenue_vnd": 12041000,
+    "complete": true
+  },
+  "2026-11-07": {
+    "items": 520,
+    "revenue_vnd": 11028000,
+    "complete": true
+  }
 }
