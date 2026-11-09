@@ -653,7 +653,7 @@ def merge_image_extractions(results, *, names, shas, shift_hint, target_date):
             warnings.append(f'Trường {key}: {chosen.review_reason}')
         fields[key] = chosen
     dates = {r.get('document_date') for _, r in good if r.get('document_date')}
-    dates = {d for d in dates if _plausible_date(d, target_date)} or dates
+    dates = {d for d in dates if _plausible_date(d, target_date)}
     if len(dates) > 1 and target_date in dates and len(dates - {target_date}) == 1:
         # One page carries a real date, another only repeats the day being closed (a blank "Ngày …/…/…" template):
         # keep the written date so the page can offer to move the photos to that day.
@@ -754,6 +754,9 @@ def _inline_refs(schema: dict[str, Any]) -> dict[str, Any]:
 # With thinking held at 'low' a page reads in ~10-30 s; past this the next model in the chain is faster.
 OCR_MAX_ATTEMPTS = int(os.environ.get('OCR_MAX_ATTEMPTS') or 6)
 OCR_TIMEOUT_SECONDS = float(os.environ.get('OCR_TIMEOUT_SECONDS') or 60)
+# A fallback model is only tried because the first one failed; when it is overloaded it hangs for the whole timeout
+# (measured: gemini-3.8-flash 60 s then nothing) while a healthy answer takes 3-12 s. Give it less rope.
+OCR_FALLBACK_TIMEOUT_SECONDS = float(os.environ.get('OCR_FALLBACK_TIMEOUT_SECONDS') or 25)
 
 
 def _native_first() -> bool:
@@ -970,7 +973,8 @@ def _read_page(valid_images, sheet_key, shift_hint, target_date, cfg, model):
             break  # each failed call that already sent the photo is billed for its input tokens
         t0 = time.monotonic()
         at = round(t0 - started, 1)
-        outcome = _read_with_mode(valid_images, mode, model, cfg, shift_hint, target_date, model_id)
+        timeout = None if model_id is None or model_id == plan[0][0] else OCR_FALLBACK_TIMEOUT_SECONDS
+        outcome = _read_with_mode(valid_images, mode, model, cfg, shift_hint, target_date, model_id, timeout)
         read_log.append({'model': model_id or 'model', 'mode': mode, 'at': at,
                          'seconds': round(time.monotonic() - t0, 1), 'ok': not isinstance(outcome, Exception)})
         if not isinstance(outcome, Exception):
@@ -983,7 +987,7 @@ def _read_page(valid_images, sheet_key, shift_hint, target_date, cfg, model):
         logger.warning('OCR provider call failed (mode=%s, model=%s): %s', mode, model_id, _provider_detail(outcome))
         if model is not None or status in {401, 403}:
             break  # injected reader, or a key problem no other model or path will fix
-        if model_id and (status == 429 or (status == 503 and mode == 'gemini_native')):
+        if model_id and (status == 429 or (mode == 'gemini_native' and (status == 503 or isinstance(outcome, TimeoutError)))):
             # Out of quota / overloaded: the other photos and the next reads go straight to the next model.
             _cool_down(model_id, outcome)
         if status != 400:
@@ -1141,8 +1145,8 @@ class _NativeAnswer:
 class GeminiNativeReader:
     """Gemini's own generateContent endpoint (no OpenAI-compatibility layer), asked for plain JSON."""
 
-    def __init__(self, cfg: AgentSettings, model_id: str):
-        self.cfg, self.model_id = cfg, model_id
+    def __init__(self, cfg: AgentSettings, model_id: str, timeout: float | None = None):
+        self.cfg, self.model_id, self.timeout = cfg, model_id, timeout or OCR_TIMEOUT_SECONDS
 
     def invoke(self, messages):
         import httpx
@@ -1164,7 +1168,7 @@ class GeminiNativeReader:
             body['generationConfig']['thinkingConfig'] = {'thinkingLevel': level}
         url = f'https://generativelanguage.googleapis.com/v1beta/models/{self.model_id}:generateContent'
         try:
-            response = httpx.post(url, json=body, timeout=OCR_TIMEOUT_SECONDS,
+            response = httpx.post(url, json=body, timeout=self.timeout,
                                   headers={'x-goog-api-key': self.cfg.api_key.get_secret_value()})
         except httpx.TimeoutException as exc:
             raise TimeoutError('Gemini timeout') from exc
@@ -1182,14 +1186,14 @@ class GeminiNativeReader:
         return _NativeAnswer(text, self.model_id, 'length' if finish == 'max_tokens' else finish, data.get('usageMetadata'))
 
 
-def _read_with_mode(valid_images, mode, model, cfg, shift_hint, target_date, model_id=None):
+def _read_with_mode(valid_images, mode, model, cfg, shift_hint, target_date, model_id=None, timeout=None):
     """One model call. Returns a ShiftReading, an early-exit dict, or the exception raised."""
     try:
         from src.engine.day_sheet import DaySheet, build_day_sheet_prompt, day_sheet_schema
         if model is not None:
             reader = model
         elif mode == 'gemini_native':
-            reader = GeminiNativeReader(cfg, model_id or ocr_model_id(cfg))
+            reader = GeminiNativeReader(cfg, model_id or ocr_model_id(cfg), timeout)
         else:
             reader = build_ocr_reader(cfg, mode, model_id)
         # Live models transcribe the whole day sheet; injected readers (tests, replay) may answer either shape.
@@ -1321,6 +1325,8 @@ def _finish_extraction(result, valid_images, shift_hint, target_date, attempts, 
                     f"{reading.review_reason} Ảnh mờ/độ tương phản thấp cần xác nhận lại.".strip()
                 )
 
+    if result.document_date and not _plausible_date(result.document_date, target_date):
+        result.document_date = None  # a misread year is not offered as "the photo's date"
     if result.document_date and target_date and result.document_date != target_date:
         warnings.append(f'Ngày đọc từ ảnh ({result.document_date}) khác ngày bạn chọn ({target_date}); cần đối chiếu.')
 

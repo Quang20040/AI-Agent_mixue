@@ -134,3 +134,12 @@ def test_a_misread_year_on_one_photo_does_not_hide_the_date_of_the_others():
     merged = merge_image_extractions(results, names=['a', 'b', 'c'], shas=['a', 'b', 'c'], shift_hint='CA_TOI',
                                      target_date='2026-11-09')
     assert merged['document_date'] == '2026-11-01'
+
+
+def test_an_implausible_date_alone_is_dropped():
+    from src.engine.vision_ocr import MONEY_FIELDS, merge_image_extractions
+    base = {'status': 'NEEDS_REVIEW', 'warnings': [], 'document_type': 'handwritten_ledger',
+            'field_readings': {k: {'value': None, 'status': 'not_present'} for k in MONEY_FIELDS}}
+    merged = merge_image_extractions([dict(base, document_date=None), dict(base, document_date='2020-11-01')],
+                                     names=['a', 'b'], shas=['a', 'b'], shift_hint='CA_TOI', target_date='2026-11-09')
+    assert merged['document_date'] is None
