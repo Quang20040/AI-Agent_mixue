@@ -19,7 +19,7 @@ import re
 import time
 import threading
 from concurrent.futures import Future, ThreadPoolExecutor
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -608,6 +608,17 @@ def build_ocr_prompt(shift_hint: str | None, target_date: str | None) -> str:
     )
 
 
+def _plausible_date(value: str, target_date: str | None) -> bool:
+    """A date read off a photo within ~6 months of the day being closed. A misread year ('2020' on a faded slip)
+    must not outvote the other pages and hide the real date."""
+    try:
+        read = date.fromisoformat(str(value)[:10])
+        ref = date.fromisoformat(str(target_date)[:10]) if target_date else date.today()
+    except ValueError:
+        return False
+    return abs((read - ref).days) <= 180
+
+
 def merge_image_extractions(results, *, names, shas, shift_hint, target_date):
     """Reconcile independent readings; never sum repeated photos or hide conflicts."""
     good = [(index, result) for index, result in enumerate(results) if result.get('status') == 'NEEDS_REVIEW']
@@ -642,6 +653,7 @@ def merge_image_extractions(results, *, names, shas, shift_hint, target_date):
             warnings.append(f'Trường {key}: {chosen.review_reason}')
         fields[key] = chosen
     dates = {r.get('document_date') for _, r in good if r.get('document_date')}
+    dates = {d for d in dates if _plausible_date(d, target_date)} or dates
     if len(dates) > 1 and target_date in dates and len(dates - {target_date}) == 1:
         # One page carries a real date, another only repeats the day being closed (a blank "Ngày …/…/…" template):
         # keep the written date so the page can offer to move the photos to that day.

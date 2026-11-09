@@ -123,3 +123,14 @@ def test_a_page_that_only_repeats_the_chosen_day_does_not_hide_the_written_date(
                                      target_date='2026-11-09')
     assert merged['document_date'] == '2026-11-07'
     assert not any('ngày khác nhau' in w for w in merged.get('warnings', []))
+
+
+def test_a_misread_year_on_one_photo_does_not_hide_the_date_of_the_others():
+    from src.engine.vision_ocr import MONEY_FIELDS, merge_image_extractions
+    base = {'status': 'NEEDS_REVIEW', 'warnings': [], 'document_type': 'handwritten_ledger',
+            'field_readings': {k: {'value': None, 'status': 'not_present'} for k in MONEY_FIELDS}}
+    results = [dict(base, document_date='2026-11-01'), dict(base, document_date=None),
+               dict(base, document_date='2020-11-01')]
+    merged = merge_image_extractions(results, names=['a', 'b', 'c'], shas=['a', 'b', 'c'], shift_hint='CA_TOI',
+                                     target_date='2026-11-09')
+    assert merged['document_date'] == '2026-11-01'
