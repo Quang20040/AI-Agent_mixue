@@ -110,3 +110,16 @@ def test_without_a_shift_the_first_shift_on_the_page_is_used_and_said():
     result = extract_image(image_path=PHOTOS[0], target_date='2026-10-14', model=DayReader())
     assert result['shift_code'] == 'CA_SANG'
     assert any('Ca chiều' in w for w in result['warnings'])
+
+
+def test_a_page_that_only_repeats_the_chosen_day_does_not_hide_the_written_date():
+    """Shift page says 7/11, the day summary page has a blank date line that a model filled with the chosen day."""
+    from src.engine.vision_ocr import merge_image_extractions
+    from src.engine.vision_ocr import MONEY_FIELDS
+    base = {'status': 'NEEDS_REVIEW', 'warnings': [], 'document_type': 'handwritten_ledger',
+            'field_readings': {k: {'value': None, 'status': 'not_present'} for k in MONEY_FIELDS}}
+    results = [dict(base, document_date='2026-11-07'), dict(base, document_date='2026-11-09')]
+    merged = merge_image_extractions(results, names=['a.jpg', 'b.jpg'], shas=['a', 'b'], shift_hint='CA_SANG',
+                                     target_date='2026-11-09')
+    assert merged['document_date'] == '2026-11-07'
+    assert not any('ngày khác nhau' in w for w in merged.get('warnings', []))

@@ -642,6 +642,10 @@ def merge_image_extractions(results, *, names, shas, shift_hint, target_date):
             warnings.append(f'Trường {key}: {chosen.review_reason}')
         fields[key] = chosen
     dates = {r.get('document_date') for _, r in good if r.get('document_date')}
+    if len(dates) > 1 and target_date in dates and len(dates - {target_date}) == 1:
+        # One page carries a real date, another only repeats the day being closed (a blank "Ngày …/…/…" template):
+        # keep the written date so the page can offer to move the photos to that day.
+        dates -= {target_date}
     if len(dates) > 1:
         warnings.append('Các ảnh có ngày khác nhau; cần kiểm tra ngày trước khi xác nhận.')
         for reading in fields.values():
@@ -795,7 +799,9 @@ def _provider_detail(exc: Exception) -> str:
     status = getattr(exc, 'status_code', None)
     text = re.sub(r'data:image/[^\s"\']+', '<image>', str(exc))
     text = re.sub(r'(key|token)=[^\s&"\']+', r'\1=<redacted>', text, flags=re.IGNORECASE)
-    return (f'HTTP {status}: ' if status else f'{type(exc).__name__}: ') + ' '.join(text.split())[:300]
+    quota = re.search(r'Quota exceeded for metric:?\s*([^,\n]+)', text)
+    head = ' '.join(text.split())[:300]
+    return (f'HTTP {status}: ' if status else f'{type(exc).__name__}: ') + head + (f' [quota: {quota.group(1).strip()}]' if quota else '')
 
 
 def extract_image(
@@ -965,8 +971,9 @@ def _read_page(valid_images, sheet_key, shift_hint, target_date, cfg, model):
         logger.warning('OCR provider call failed (mode=%s, model=%s): %s', mode, model_id, _provider_detail(outcome))
         if model is not None or status in {401, 403}:
             break  # injected reader, or a key problem no other model or path will fix
-        if status == 429 and model_id:
-            _cool_down(model_id)  # out of quota: the other photos and the next reads skip it straight away
+        if model_id and (status == 429 or (status == 503 and mode == 'gemini_native')):
+            # Out of quota / overloaded: the other photos and the next reads go straight to the next model.
+            _cool_down(model_id, outcome)
         if status != 400:
             skip_model = model_id  # not a format problem: other JSON modes of this model will fail the same way
     if isinstance(outcome, Exception) or outcome is None:
@@ -994,8 +1001,16 @@ _COOLDOWN: dict[str, float] = {}
 OCR_COOLDOWN_SECONDS = float(os.environ.get('OCR_COOLDOWN_SECONDS') or 60)
 
 
-def _cool_down(model_id: str) -> None:
-    _COOLDOWN[model_id] = time.monotonic() + OCR_COOLDOWN_SECONDS
+def _cool_down(model_id: str, error: Any = None) -> None:
+    """Skip a model that just answered 429/503. The provider's retryDelay is honoured; a per-day quota rests it an hour."""
+    text = str(error or '')
+    seconds = OCR_COOLDOWN_SECONDS
+    delay = re.search(r'retryDelay["\']?\s*:\s*["\']?(\d+(?:\.\d+)?)s', text)
+    if delay:
+        seconds = max(seconds, float(delay.group(1)))
+    if re.search(r'PerDay|per day|requests_per_day', text, re.IGNORECASE):
+        seconds = max(seconds, 3600)
+    _COOLDOWN[model_id] = time.monotonic() + seconds
 
 
 def _cooling(model_id: str) -> bool:

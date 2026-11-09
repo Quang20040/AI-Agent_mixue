@@ -118,3 +118,15 @@ def test_bad_key_stops_immediately(monkeypatch):
 
 def test_inline_schema_has_no_refs():
     assert '$ref' not in json.dumps(vision_ocr._inline_refs(vision_ocr.extraction_schema()))
+
+
+def test_overloaded_or_out_of_quota_models_rest_so_the_next_photo_skips_them(monkeypatch):
+    vision_ocr._COOLDOWN.clear()
+    vision_ocr._cool_down('m-503', RuntimeError('503 high demand'))
+    vision_ocr._cool_down('m-retry', RuntimeError('{"retryDelay": "95s"}'))
+    vision_ocr._cool_down('m-day', RuntimeError('Quota exceeded for metric: generate_content_free_tier_requests, '
+                                               'quotaId: GenerateRequestsPerDayPerProjectPerModel-FreeTier'))
+    left = {m: vision_ocr._COOLDOWN[m] - vision_ocr.time.monotonic() for m in ('m-503', 'm-retry', 'm-day')}
+    assert 50 < left['m-503'] <= 60 and 85 < left['m-retry'] <= 95 and left['m-day'] > 3500
+    assert all(vision_ocr._cooling(m) for m in left)
+    vision_ocr._COOLDOWN.clear()

@@ -140,8 +140,8 @@ def build_day_sheet_prompt(target_date: str | None) -> str:
         'total_revenue = "Tổng doanh thu", collected = "Số tiền thu được", cash/grab_food/shopee_food/be_food = mục '
         '"Chi tiết số tiền thu được". Chữ số bị logo MIXUE đè -> legibility=unsure.\n'
         '5) `document_kind`: handwritten_ledger, pos_receipt, composite (cả sổ và phiếu), non_financial hoặc unreadable. '
-        '`document_date`: ngày ghi trên ảnh, dạng YYYY-MM-DD; để trống nếu không thấy. '
-        f'Ngày người dùng đang chốt là {target_date or "chưa chọn"}; chỉ là gợi ý, KHÔNG chép vào document_date nếu ảnh không ghi.\n'
+        '`document_date`: ngày VIẾT TRÊN ẢNH (ví dụ "Ngày 7.11.26" -> 2026-11-07), dạng YYYY-MM-DD; '
+        'dòng "Ngày … / … / …" in sẵn mà chưa ghi số thì để trống. Không đoán ngày.\n'
         'Trả về đúng một JSON theo schema, không markdown.'
     )
 
