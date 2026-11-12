@@ -264,3 +264,15 @@ def test_day_photos_are_read_once_and_each_shift_fills_its_own_numbers(monkeypat
     assert number('Khoản chi trong ca (đ)') == 56000
     assert number('Tổng doanh thu POS (đ, nếu có)') == 10119000
     assert number('Tổng thu về thực tế (đ)') == 9877000
+
+
+def test_the_photo_viewer_zooms_a_full_size_copy_of_the_shift_photo(tmp_path):
+    from PIL import Image
+    from src.dashboard import photo_viewer
+    p = tmp_path / 'so.jpg'
+    Image.new('RGB', (3000, 2000), 'white').save(p)
+    uri = photo_viewer.photo_data_uri(p)
+    assert uri.startswith('data:image/jpeg;base64,')
+    html = photo_viewer.viewer_html(uri)
+    for needed in ('wheel', 'touch', 'Vừa khung', '1:1', '⟳'):
+        assert needed in html

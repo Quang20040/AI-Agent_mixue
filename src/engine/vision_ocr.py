@@ -964,6 +964,9 @@ def _read_page(valid_images, sheet_key, shift_hint, target_date, cfg, model):
     read_log: list[dict[str, Any]] = []
     outcome: Any = None
     skip_model: str | None = None
+    if model is None and is_gemini(cfg) and _native_first() and OCR_HEDGE_SECONDS > 0:
+        outcome = _race_native(valid_images, cfg, shift_hint, target_date, read_log, attempts)
+        plan = []  # the native endpoint of every model was tried; the compat endpoint fails the same way when it is down
     for model_id, mode in plan:
         if model_id is not None and ((model_id == skip_model and mode != 'gemini_native') or _cooling(model_id)):
             continue
@@ -1010,6 +1013,74 @@ def _read_page(valid_images, sheet_key, shift_hint, target_date, cfg, model):
     if isinstance(out, dict):
         out['read_log'] = read_log  # per-attempt model, output mode and seconds: where a slow read spent its time
     return out
+
+
+# Hedged reading: when the first model has not answered after OCR_HEDGE_SECONDS, the next one is asked too, and the first
+# good answer wins. Gemini models hang under load (measured: 25-60 s with no answer, while a healthy reply takes 3-12 s),
+# so waiting for each to time out in turn made one photo take a minute.
+OCR_HEDGE_SECONDS = float(os.environ.get('OCR_HEDGE_SECONDS') or 7)
+OCR_DEADLINE_SECONDS = float(os.environ.get('OCR_DEADLINE_SECONDS') or 40)
+_RACE_POOL = ThreadPoolExecutor(max_workers=12, thread_name_prefix='ocr-race')
+
+
+def _race_native(valid_images, cfg, shift_hint, target_date, read_log, attempts):
+    """Ask the model chain through Gemini's native endpoint with staggered starts; return the first good answer."""
+    import concurrent.futures as cf
+    chain = ocr_model_chain(cfg)
+    order = [m for m in chain if not _cooling(m)] + [m for m in chain if _cooling(m)]  # resting models last, not never
+    started = time.monotonic()
+    running: dict[Any, tuple[str, float, int]] = {}
+    last_error: Any = None
+    next_idx = 0
+
+    def launch():
+        nonlocal next_idx
+        model_id = order[next_idx]
+        next_idx += 1
+        remaining = max(5.0, OCR_DEADLINE_SECONDS - (time.monotonic() - started))
+        t0 = time.monotonic()
+        fut = _RACE_POOL.submit(_read_with_mode, valid_images, 'gemini_native', None, cfg, shift_hint, target_date,
+                                model_id, remaining)
+        read_log.append({'model': model_id, 'mode': 'gemini_native', 'at': round(t0 - started, 1), 'seconds': None,
+                         'ok': None})
+        running[fut] = (model_id, t0, len(read_log) - 1)
+
+    launch()
+    while running:
+        elapsed = time.monotonic() - started
+        if elapsed >= OCR_DEADLINE_SECONDS:
+            break
+        wait = OCR_HEDGE_SECONDS if next_idx < len(order) else OCR_DEADLINE_SECONDS - elapsed
+        done, _ = cf.wait(list(running), timeout=max(0.05, min(wait, OCR_DEADLINE_SECONDS - elapsed)),
+                          return_when=cf.FIRST_COMPLETED)
+        if not done:
+            if next_idx < len(order):
+                launch()  # the running model is slow: ask the next one too
+            continue
+        for fut in done:
+            model_id, t0, pos = running.pop(fut)
+            outcome = fut.result()
+            read_log[pos].update(seconds=round(time.monotonic() - t0, 1), ok=not isinstance(outcome, Exception))
+            if not isinstance(outcome, Exception):
+                logger.info('OCR read: %s / gemini_native in %.1fs (hedged)', model_id, time.monotonic() - t0)
+                for other in running:  # the losers finish in the background; their answers are ignored
+                    read_log[running[other][2]].update(seconds=round(time.monotonic() - running[other][1], 1),
+                                                       ok=False, note='bỏ qua (đã có kết quả)')
+                return outcome
+            last_error = outcome
+            status = getattr(outcome, 'status_code', None)
+            attempts.append(f'{model_id} / gemini_native: ' + (f'HTTP {status} ' if status else '') + type(outcome).__name__)
+            logger.warning('OCR provider call failed (mode=gemini_native, model=%s): %s', model_id, _provider_detail(outcome))
+            if status in {401, 403}:
+                return outcome  # key problem: no other model will fix it
+            if status == 429 or status == 503 or isinstance(outcome, TimeoutError):
+                _cool_down(model_id, outcome)
+            if next_idx < len(order):
+                launch()  # failed fast: go to the next model now
+    for fut, (model_id, t0, pos) in running.items():
+        read_log[pos].update(seconds=round(time.monotonic() - t0, 1), ok=False, note='quá hạn chờ')
+        attempts.append(f'{model_id} / gemini_native: quá {OCR_DEADLINE_SECONDS:.0f} s')
+    return last_error or TimeoutError(f'Không mô hình nào trả lời trong {OCR_DEADLINE_SECONDS:.0f} giây')
 
 
 # Models that just answered 429 (quota or rate limit) are skipped for a while instead of costing every photo a call.

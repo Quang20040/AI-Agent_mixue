@@ -149,3 +149,54 @@ def test_a_model_out_of_quota_is_skipped_for_the_next_photos(monkeypatch):
     urls.clear()
     extract_image(image_path=PHOTOS[0], shift_hint='CA_SANG', target_date='2026-10-14', settings=gemini())
     assert urls == ['gemini-3.5-flash-lite:generateContent']  # no second call to the model that just said 429
+
+
+def test_a_hanging_model_does_not_hold_the_photo_the_next_model_is_asked_too(monkeypatch):
+    """Measured live: an overloaded model hangs 25-60 s. After OCR_HEDGE_SECONDS the next model is asked in parallel
+    and the first good answer wins, so one photo no longer takes a minute."""
+    import json
+    import time as _t
+    import httpx
+    from src.engine.ocr_evaluation import benchmark_cases
+    reading = json.dumps(benchmark_cases()[0]['reading'], ensure_ascii=False)
+    monkeypatch.setenv('OCR_NATIVE_FIRST', '1')
+    monkeypatch.setenv('OCR_FALLBACK_MODELS', 'gemini-3.5-flash-lite')
+    monkeypatch.delenv('OCR_MODEL', raising=False)
+    monkeypatch.setattr(vision_ocr, 'OCR_HEDGE_SECONDS', 0.3)
+    monkeypatch.setattr(vision_ocr, '_DAY_SHEETS', {})
+    vision_ocr._COOLDOWN.clear()
+
+    def post(url, json=None, timeout=None, headers=None):
+        if 'gemini-3.8-flash:' in url:
+            _t.sleep(3)  # hangs
+            raise httpx.ReadTimeout('slow')
+        return _native_answer(reading)
+
+    monkeypatch.setattr(httpx, 'post', post)
+    t0 = _t.monotonic()
+    result = extract_image(image_path=PHOTOS[0].parent / '20261014_pos_slip.jpg', shift_hint='CA_TOI',
+                           target_date='2026-10-14', settings=gemini())
+    assert result['status'] == 'NEEDS_REVIEW'
+    assert _t.monotonic() - t0 < 2.5
+    assert [e['model'] for e in result['read_log']] == ['gemini-3.8-flash', 'gemini-3.5-flash-lite']
+    assert result['read_log'][1]['ok'] is True
+    vision_ocr._COOLDOWN.clear()
+
+
+def test_every_model_resting_is_still_tried_rather_than_failing_at_once(monkeypatch):
+    import json
+    import httpx
+    from src.engine.ocr_evaluation import benchmark_cases
+    reading = json.dumps(benchmark_cases()[0]['reading'], ensure_ascii=False)
+    monkeypatch.setenv('OCR_NATIVE_FIRST', '1')
+    monkeypatch.setenv('OCR_FALLBACK_MODELS', 'gemini-3.5-flash-lite')
+    monkeypatch.delenv('OCR_MODEL', raising=False)
+    monkeypatch.setattr(vision_ocr, '_DAY_SHEETS', {})
+    vision_ocr._COOLDOWN.clear()
+    vision_ocr._cool_down('gemini-3.8-flash')
+    vision_ocr._cool_down('gemini-3.5-flash-lite')
+    monkeypatch.setattr(httpx, 'post', lambda url, json=None, timeout=None, headers=None: _native_answer(reading))
+    result = extract_image(image_path=PHOTOS[0].parent / '20261014_pos_slip.jpg', shift_hint='CA_TOI',
+                           target_date='2026-10-14', settings=gemini())
+    assert result['status'] == 'NEEDS_REVIEW'
+    vision_ocr._COOLDOWN.clear()

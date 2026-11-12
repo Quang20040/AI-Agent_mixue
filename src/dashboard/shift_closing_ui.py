@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from src.dashboard.photo_viewer import show_photo
 from src.engine.image_upload import UploadError, save_photo, thumbnail
 from src.engine.vision_ocr import prefetch_reading
 
@@ -112,10 +113,12 @@ def _render_day_images(day_images, chosen_d_str, chosen_date, shift_code, covera
                     tags += ' <span class="vocr-badge vocr-pos">Phiếu POS</span>'
                 if not has_shift:
                     tags += f' <small>· không có {SHIFT_SHORT[shift_code]}</small>'
-            name_col, rm_col = st.columns([4, 1], vertical_alignment='center')
+            name_col, view_col, rm_col = st.columns([3, 1, 1], vertical_alignment='center')
             shown_name = '' if re.fullmatch(r'[0-9a-f]{64}', Path(p).stem) else f' · {escape(Path(p).name[:28])}'
             name_col.markdown(f'<small>Ảnh {idx + 1}{shown_name}</small><br>{tags or "—"}',
                               unsafe_allow_html=True)
+            if view_col.button('🔍', key=f'ocr_view_{idx}_{sha[:8]}', help='Xem ảnh to, phóng to – thu nhỏ'):
+                show_photo(p, f'Ảnh {idx + 1} · ngày {chosen_date:%d/%m/%Y}')
             rm_col.button('✕', key=f'ocr_rm_{idx}_{sha[:8]}', help='Bỏ ảnh này khỏi ngày',
                           on_click=remove_image, args=(p,))
 
@@ -659,7 +662,10 @@ def render_day_reports(day_reports, chosen_date, is_admin):
                     st.caption(f"Ký bởi: **{rep.get('signed_by')}** | Thu về: **{rep.get('total_collected_vnd', 0):,.0f} đ**")
                     img_p = rep.get("image_path")
                     if img_p and Path(img_p).exists():
-                        st.image(thumbnail(img_p), use_container_width=True)
+                        with st.container(key=f"ocr_img_rep_{rep.get('id')}"):
+                            st.image(thumbnail(img_p), use_container_width=True)
+                        if st.button('🔍 Xem ảnh gốc', key=f"view_shift_{rep.get('id')}", use_container_width=True):
+                            show_photo(img_p, f"{rep.get('shift_name')} · ngày {chosen_date:%d/%m/%Y}")
                     else:
                         st.caption("*(Không có ảnh chứng từ)*")
 

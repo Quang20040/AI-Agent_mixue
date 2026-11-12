@@ -309,6 +309,9 @@ html.mixue-motion-paused .vocr-badge, html.mixue-motion-paused .px-trace .dot { 
 /* Day photos: small previews; the full photo is in the evidence popup and the image itself. */
 [class*="st-key-ocr_img_"] [data-testid="stImage"] img { max-height: 190px; object-fit: cover; object-position: top; border-radius: 10px; }
 @media (max-width: 760px) { [class*="st-key-ocr_img_"] [data-testid="stImage"] img { max-height: 140px; } }
+/* The cropped preview is not a viewer: the 🔍 button opens the full photo with zoom; hide Streamlit's full-screen toggle,
+   which kept the 140-190 px crop and the low-resolution thumbnail. */
+[class*="st-key-ocr_img_"] [data-testid="stElementToolbar"], [class*="st-key-ocr_img_"] [data-testid="stImageToolbar"] { display: none !important; }
 /* Motion paused (default on phones): looping CSS animations play once and stop, entrances still finish. */
 html.mixue-motion-paused *, html.mixue-motion-paused *::before, html.mixue-motion-paused *::after { animation-iteration-count: 1 !important; }
 /* ---------- Tuyết Vương mascot: small corner button on every page except the assistant ---------- */
