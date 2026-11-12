@@ -1,0 +1,37 @@
+name: tmp live OCR timing
+on:
+  push:
+    branches: ['tmp/checkin-ai-live']
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12', cache: pip}
+      - run: pip install -r requirements.txt
+      - name: Read the sample shift photos with Gemini
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          LLM_ENABLED: 'true'
+          LLM_PROVIDER: gemini
+          LLM_MODEL: gemini-3.5-flash
+          ALLOW_EXTERNAL_DATA_TRANSFER: 'true'
+        run: |
+          python - <<'PY'
+          import time, logging, json
+          logging.basicConfig(level=logging.INFO)
+          from src.engine import vision_ocr as v
+          from src.engine.shift_service import extract_shift_data_from_image as ex
+          P='data/shift_photos/'
+          for name, paths, shift in [('single again', [P+'20261101_ca_toi_tong_ket.jpg'], 'CA_TOI'), ('single sang_chieu', [P+'20261101_ca_sang_chieu.jpg'], 'CA_SANG'),
+                                     ('three photos', [P+'20261101_ca_sang_chieu.jpg', P+'20261101_ca_toi_tong_ket.jpg', P+'20261101_ca_toi_pos_slip.jpg'], 'CA_TOI')]:
+              t=time.monotonic()
+              r = ex(image_paths=paths if len(paths)>1 else None, image_path=paths[0] if len(paths)==1 else None,
+                                                  shift_hint=shift, target_date='2026-11-09')
+              print('=====', name, round(time.monotonic()-t,1), 's status', r.get('status'), 'document_date', r.get('document_date'))
+              print('read_log', json.dumps(r.get('read_log'), ensure_ascii=False))
+              print('warnings', r.get('warnings'))
+              print('per-image', [(x.get('image'), x.get('document_date')) for x in (r.get('image_results') or [])])
+              v._DAY_SHEETS.clear()
+          PY
